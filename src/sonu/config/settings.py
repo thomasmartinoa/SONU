@@ -24,6 +24,10 @@ class _Section(BaseModel):
 class OllamaSettings(_Section):
     host: str = "http://127.0.0.1:11434"
     timeout_s: float = Field(default=10.0, gt=0, le=600)
+    # Generation can include loading the model into GPU memory on first use.
+    chat_timeout_s: float = Field(default=120.0, gt=0, le=1800)
+    keep_alive: str = "10m"
+    num_ctx: int = Field(default=8192, ge=2048, le=262144)
 
 
 class ModelRole(_Section):
@@ -138,6 +142,9 @@ DEFAULT_CONFIG_TEMPLATE = """\
 [ollama]
 # host = "http://127.0.0.1:11434"
 # timeout_s = 10.0
+# chat_timeout_s = 120.0
+# keep_alive = "10m"
+# num_ctx = 8192
 
 [models.planner]
 # Understands requests and proposes plans. Must support tool calling.
