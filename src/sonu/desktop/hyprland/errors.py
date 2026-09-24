@@ -12,3 +12,7 @@ class HyprlandRequestError(HyprlandError):
 
 class HyprlandProtocolError(HyprlandError):
     """Hyprland answered with something SONU could not understand."""
+
+
+class HyprlandDispatchError(HyprlandError):
+    """Hyprland refused or failed a dispatch; the message is Hyprland's own reply."""

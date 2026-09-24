@@ -23,7 +23,11 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from sonu.desktop.hyprland.errors import HyprlandProtocolError, HyprlandRequestError
+from sonu.desktop.hyprland.errors import (
+    HyprlandDispatchError,
+    HyprlandProtocolError,
+    HyprlandRequestError,
+)
 from sonu.desktop.hyprland.instance import HyprlandInstance
 from sonu.desktop.hyprland.models import (
     ConfigProvider,
@@ -124,6 +128,18 @@ class HyprlandClient:
             raise HyprlandProtocolError(
                 f"unexpected shape for {command!r}: {exc.errors()[0]['msg']}"
             ) from exc
+
+    async def dispatch(self, request: str) -> None:
+        """Send a request built by a :mod:`~sonu.desktop.hyprland.dialect` and check the reply.
+
+        "ok" only means Hyprland accepted the request — a selector that matched no window also
+        answers "ok". Callers must verify the effect on the desktop.
+        """
+        if not request.startswith("dispatch "):
+            raise HyprlandRequestError("dispatch requests must start with 'dispatch '")
+        reply = (await self.request(request)).strip()
+        if reply != "ok":
+            raise HyprlandDispatchError(reply or "empty reply")
 
     # ------------------------------------------------------------------ queries
     async def version(self) -> HyprlandVersion:
