@@ -456,7 +456,7 @@ and processes and asks first.
 | `sonu doctor`, `sonu desktop …`, `sonu audit …`, `sonu config …` | **M0 ✅** | Read-only diagnostics and views |
 | `sonu "<request>"`, `sonu chat`, `--dry-run`, `--explain`, `--json` | M1 | Terminal confirmations |
 | **Quickshell menu row** "Ask SONU" in `SUPER+SPACE` | M1 | Your menu already supports `"input": true` rows and single-quotes `{}` safely; SONU ships a `menu.local.jsonc` snippet |
-| Keybind for a SONU prompt (`SUPER+A` is free in your `binds.lua`) | M1 | Later the same key becomes push-to-talk |
+| **SONU key**: the laptop's NitroSense key (fallback: `SUPER+A`, free in your `binds.lua`) | M1 | Opens a prompt in M1; becomes push-to-talk in M3 (see §10) |
 | Notifications through your shell's notification server (`notify-send`) | M1 | Results and confirmations |
 | `sonud` daemon (systemd user service) + JSON-RPC over `$XDG_RUNTIME_DIR/sonu/sonud.sock` (`0600`, peer-UID check) | M2 | Needed for the journal and voice |
 | Voice: push-to-talk, then "Hey Sonu" wake word; spoken replies | M3 | English |
@@ -629,18 +629,33 @@ Answered by the author on 2026-09-24:
 | 7 | Cloud models | Local first. No paid API credit → free tiers in M5; Claude Pro via Claude Code + MCP; ChatGPT Go unusable ([ADR 0003](adr/0003-no-subscription-token-extraction.md)) |
 | 8 | Spoken language | **English** |
 | 9 | Wake word | **"Hey Sonu"** |
-| 10 | Workflow | Feature branches → pull requests into `main`, CI required |
+| 10 | Workflow | Feature branches → pull requests into `main`, CI required; `main` created from the first commit, M0 arrives by PR |
+| 11 | Local models | Pull **`qwen3.5:4b`** (planner) and **`qwen3.5:9b`** (deep planner); the M1 eval suite confirms or replaces them |
+| 12 | SONU key | The **NitroSense key** of the Acer Nitro (see below) |
 
-### Still open (not blocking M1)
+### The SONU key (NitroSense key)
 
-1. **Default local planner.** You don't have `qwen3.5:4b` yet. Options: pull it (3.4 GB, recommended), or start with
-   `qwen3:8b` (installed, tool-capable, fits in VRAM). M1's eval suite will compare `qwen3.5:4b`, `qwen3.5:9b`,
-   `qwen3:8b`, `gemma4:e4b`, and — interesting on 32 GB RAM — the mixture-of-experts models you have
-   (`qwen3.6:35b-a3b`, `gpt-oss:20b`), which only activate ~3–4B parameters per token and may be usable with CPU
-   offload. Numbers, not guesses, will pick the default.
-2. **Uncensored models** (`…-Uncensored-HauhauCS-…`) should not be used as the planner: SONU's safety never *relies* on
-   a model refusing, but a model tuned to never refuse removes one layer of defence. They're fine for chat.
-3. **`main` branch.** The repo has no `main` yet; say the word and a PR from the working branch will create it.
+The NitroSense key sends keyboard scancode `0xf5`. What Linux turns it into depends on the model: the generic Acer
+rule maps it to **`XF86Presentation`** (keycode 425); models with a specific systemd hwdb entry (e.g. ANV15-51) map it
+to **`XF86Launch1`** (`prog1`); on some models it only reaches Linux through a vendor driver. So the first step is to
+see what yours sends, with `wev` (press the key, read the `sym:` line). Then, in `binds.lua`:
+
+```lua
+hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu prompt"))                       -- M1: open the SONU prompt
+-- M3 push-to-talk: start on press, stop on release
+-- hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu listen start"))
+-- hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu listen stop"), { release = true })
+```
+
+Some special keys send press and release together no matter how long they are held; if yours does, voice uses
+**toggle mode** instead (press once, speak, SONU stops listening when you stop talking). SONU will support both.
+
+### Still open
+
+Nothing blocking. The M1 eval suite will report how the installed models compare (including the mixture-of-experts
+models `qwen3.6:35b-a3b` and `gpt-oss:20b`, which only activate ~3–4B parameters per token and may be usable with CPU
+offload on 32 GB RAM). Models tuned to never refuse (`…Uncensored…`) are not suggested for planning — SONU's safety
+never relies on refusals, but they remove a layer of defence; `sonu doctor` now says so.
 
 ---
 

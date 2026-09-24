@@ -16,6 +16,7 @@ from sonu.testing.fake_ollama import FakeOllama
 
 NVIDIA_SMI = "NVIDIA GeForce RTX 3070 Ti Laptop GPU, 8192, 512, 615.71.09\n"
 SECRET_TITLE = "Inbox (3) - private@example.com - Zen"
+UNCENSORED = "hf.co/HauhauCS/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive:Q4_K_M"
 
 
 def authors_ollama() -> FakeOllama:
@@ -29,8 +30,10 @@ def authors_ollama() -> FakeOllama:
     fake.add_model(
         "qwen3.6:35b-a3b", size_gib=20.5, capabilities=["completion", "tools", "thinking", "vision"]
     )
-    fake.add_model("qwen3-embedding:0.6b", size_gib=0.6, capabilities=["embedding"])
+    # Seen on the author's machine: this embedding model also reports "tools".
+    fake.add_model("qwen3-embedding:0.6b", size_gib=0.6, capabilities=["embedding", "tools"])
     fake.add_model("nomic-embed-text:latest", size_gib=0.3, capabilities=["embedding"])
+    fake.add_model(UNCENSORED, size_gib=5.9, capabilities=["completion", "tools", "vision"])
     return fake
 
 
@@ -92,8 +95,16 @@ async def test_machine_like_the_authors(xdg_env: dict[str, str], fake_hypr: Fake
     planner = results["ollama.model.planner"]
     assert planner.status == "warn"
     assert "ollama pull qwen3.5:4b" in (planner.hint or "")
-    # Only tool-capable models that fit in 8 GiB are suggested, biggest first.
+    # Only chat models with tool calling that fit in 8 GiB are suggested, biggest first —
+    # never embedding models (even if they report "tools") and never never-refuse fine-tunes.
     assert planner.details["alternatives"] == ["qwen3:8b", "llama3.1:8b"]
+    assert results["ollama.models"].details["tool_capable"] == [
+        "gemma4:e4b",
+        UNCENSORED,
+        "llama3.1:8b",
+        "qwen3.6:35b-a3b",
+        "qwen3:8b",
+    ]
 
     assert results["ollama.model.embed"].status == "ok"
     # wtype is missing, but it's only needed in a later milestone, so this is still "ok".
@@ -200,8 +211,45 @@ async def test_hypr_theme_rice_is_detected(xdg_env: dict[str, str], fake_hypr: F
     results = by_id(await run_checks(make_context(xdg_env, hypr=fake_hypr, ollama=authors_ollama())))
     rice = results["integration.hypr_theme"]
     assert rice.status == "info"
-    assert rice.details["defaults"] == {"browser": "zen-browser", "terminal": "kitty"}
+    assert rice.details["defaults"] == {
+        "browser": {"command": "zen-browser", "source": "file"},
+        "terminal": {"command": "kitty", "source": "file"},
+    }
     assert rice.details["quickshell"] is True
+
+
+@pytest.mark.anyio
+async def test_rice_without_default_files_uses_the_rices_fallbacks(
+    xdg_env: dict[str, str], fake_hypr: FakeHyprland
+) -> None:
+    """The author's actual setup: hypr-theme installed, no defaults/ files yet."""
+    home = Path(xdg_env["HOME"])
+    (home / ".config" / "hypr-theme").mkdir(parents=True)
+    results = by_id(await run_checks(make_context(xdg_env, hypr=fake_hypr, ollama=authors_ollama())))
+    rice = results["integration.hypr_theme"]
+    assert rice.details["defaults"] == {
+        "browser": {"command": "zen-browser", "source": "rice-fallback"},
+        "terminal": {"command": "kitty", "source": "rice-fallback"},
+    }
+    assert "zen-browser (rice default)" in rice.summary
+
+
+@pytest.mark.anyio
+async def test_embedding_model_as_planner_fails(xdg_env: dict[str, str], fake_hypr: FakeHyprland) -> None:
+    settings = Settings(models=ModelsSettings(planner=PlannerRole(model="qwen3-embedding:0.6b")))
+    context = make_context(xdg_env, hypr=fake_hypr, ollama=authors_ollama(), settings=settings)
+    results = by_id(await run_checks(context))
+    assert results["ollama.model.planner"].status == "fail"
+    assert "embedding model" in results["ollama.model.planner"].summary
+
+
+@pytest.mark.anyio
+async def test_never_refuse_model_as_planner_warns(xdg_env: dict[str, str], fake_hypr: FakeHyprland) -> None:
+    settings = Settings(models=ModelsSettings(planner=PlannerRole(model=UNCENSORED)))
+    context = make_context(xdg_env, hypr=fake_hypr, ollama=authors_ollama(), settings=settings)
+    results = by_id(await run_checks(context))
+    assert results["ollama.model.planner"].status == "warn"
+    assert "never refuse" in results["ollama.model.planner"].summary
 
 
 @pytest.mark.anyio

@@ -12,6 +12,7 @@ Rules for every check:
 from __future__ import annotations
 
 import asyncio
+import re
 import stat
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -397,6 +398,22 @@ async def check_hyprland(ctx: DoctorContext) -> list[CheckResult]:
 
 # ---------------------------------------------------------------------------- Ollama
 _ROLE_NEEDS = {"planner": "tools", "planner_deep": "tools", "embed": "embedding"}
+# Models fine-tuned to never refuse. SONU's safety never *relies* on a model refusing, but these
+# remove one layer of defence, so SONU never suggests them for planning actions.
+_NO_REFUSAL_TUNED = re.compile(r"uncensored|abliterat", re.IGNORECASE)
+
+
+def _unsuitable_reason(role_name: str, capabilities: tuple[str, ...]) -> str | None:
+    """Why a model can't serve a role, or None. Unknown capabilities are not judged."""
+    if not capabilities:
+        return None
+    needed = _ROLE_NEEDS[role_name]
+    if needed not in capabilities:
+        return f"does not support {needed}"
+    # Some embedding models inherit a chat template and report "tools" too (seen with qwen3-embedding).
+    if needed == "tools" and "embedding" in capabilities:
+        return "is an embedding model, not a chat model"
+    return None
 
 
 def _fits(size_bytes: int, vram_mib: int | None) -> bool | None:
@@ -407,14 +424,17 @@ def _fits(size_bytes: int, vram_mib: int | None) -> bool | None:
 
 
 def _alternatives(
-    installed: list[InstalledModel], infos: dict[str, ModelInfo], capability: str, vram_mib: int | None
+    role_name: str, installed: list[InstalledModel], infos: dict[str, ModelInfo], vram_mib: int | None
 ) -> list[str]:
-    candidates = [
-        model
-        for model in installed
-        if capability in infos.get(model.name, ModelInfo()).capabilities
-        and _fits(model.size, vram_mib) is not False
-    ]
+    def suitable(model: InstalledModel) -> bool:
+        capabilities = infos.get(model.name, ModelInfo()).capabilities
+        if not capabilities or _unsuitable_reason(role_name, capabilities) is not None:
+            return False
+        if role_name != "embed" and _NO_REFUSAL_TUNED.search(model.name):
+            return False
+        return _fits(model.size, vram_mib) is not False
+
+    candidates = [model for model in installed if suitable(model)]
     return [model.name for model in sorted(candidates, key=lambda model: model.size, reverse=True)]
 
 
@@ -430,7 +450,7 @@ def _role_result(
     check_id = f"ollama.model.{role_name}"
     needed = _ROLE_NEEDS[role_name]
     match = next((model for model in installed if same_model(model.name, role.model)), None)
-    alternatives = _alternatives(installed, infos, needed, vram_mib)
+    alternatives = _alternatives(role_name, installed, infos, vram_mib)
 
     if match is None:
         hint = f"Install it with `ollama pull {role.model}`"
@@ -448,15 +468,27 @@ def _role_result(
 
     capabilities = infos.get(match.name, ModelInfo()).capabilities
     size_gib = match.size / GIB
-    if capabilities and needed not in capabilities:
+    reason = _unsuitable_reason(role_name, capabilities)
+    if reason is not None:
         return CheckResult(
             check_id,
             group,
             title,
             "fail",
-            f"{match.name} does not support {needed}",
+            f"{match.name} {reason}",
             hint=f"Pick a model with '{needed}' capability"
             + (f": {', '.join(alternatives[:5])}" if alternatives else "."),
+            details={"capabilities": list(capabilities)},
+        )
+    if role_name != "embed" and _NO_REFUSAL_TUNED.search(match.name):
+        return CheckResult(
+            check_id,
+            group,
+            title,
+            "warn",
+            f"{match.name} is tuned to never refuse — not recommended for planning actions",
+            hint="SONU's safety doesn't rely on refusals, but this removes a layer of defence."
+            + (f" Consider: {', '.join(alternatives[:5])}." if alternatives else ""),
             details={"capabilities": list(capabilities)},
         )
 
@@ -521,7 +553,11 @@ async def check_ollama(ctx: DoctorContext) -> list[CheckResult]:
                         continue
         except TimeoutError:
             pass  # report with the capabilities gathered so far
-        tool_capable = sorted(name for name, info in infos.items() if info.supports_tools)
+        tool_capable = sorted(
+            name
+            for name, info in infos.items()
+            if info.capabilities and _unsuitable_reason("planner", info.capabilities) is None
+        )
         results.append(
             CheckResult(
                 "ollama.models",
@@ -627,10 +663,22 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
             )
         ]
     parts = []
-    if info.defaults:
-        parts.append(", ".join(f"default {kind}: {value}" for kind, value in sorted(info.defaults.items())))
+    if info.theme_dir_present:
+        parts.append("hypr-theme rice")
+    for kind in ("browser", "terminal", "agent"):
+        app = info.defaults.get(kind)
+        if app:
+            note = " (rice default)" if app.source == "rice-fallback" else ""
+            parts.append(f"{kind}: {app.command}{note}")
     if info.quickshell_config:
-        parts.append("Quickshell shell present")
+        parts.append("Quickshell shell")
+    hint = (
+        "SONU will use these apps for 'open my browser/terminal'."
+        if info.defaults
+        else "No default apps found; SONU will ask which browser/terminal you mean."
+    )
+    if info.quickshell_config:
+        hint += " A SUPER+SPACE menu entry and a bar widget are planned (M1/M3)."
     return [
         CheckResult(
             "integration.hypr_theme",
@@ -638,11 +686,14 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
             "Rice",
             "info",
             " · ".join(parts),
-            hint=(
-                "SONU will use these defaults for 'open my browser/terminal' "
-                "and can add a menu entry + bar widget."
-            ),
-            details={"defaults": info.defaults, "quickshell": info.quickshell_config},
+            hint=hint,
+            details={
+                "defaults": {
+                    kind: {"command": app.command, "source": app.source}
+                    for kind, app in info.defaults.items()
+                },
+                "quickshell": info.quickshell_config,
+            },
         )
     ]
 
