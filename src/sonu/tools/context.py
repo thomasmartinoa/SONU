@@ -31,6 +31,8 @@ class ToolContext:
     which: Callable[[str], str | None] = shutil.which
     # Window classes observed for an app (desktop id -> classes), used when names don't match.
     learned_classes: dict[str, set[str]] = field(default_factory=dict)
+    # The user's request for the task being run (trusted text), set by the engine.
+    request_text: str = ""
 
     def learned(self, entry: AppEntry) -> set[str]:
         return self.learned_classes.get(entry.desktop_id, set())

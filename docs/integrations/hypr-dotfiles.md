@@ -80,7 +80,20 @@ if it doesn't exist; it is merged by id and hot-reloaded):
 }
 ```
 
-## 5. What SONU uses from the rice
+## 5. Settle names that match several apps
+
+With both Code - OSS and VSCodium installed, "open VS Code" is ambiguous, so SONU asks which one you mean instead of
+guessing. To decide once, add an alias to `~/.config/sonu/config.toml` (`sonu config init` creates the file):
+
+```toml
+[apps]
+aliases = { "vs code" = "code-oss.desktop", "vscode" = "code-oss.desktop" }
+```
+
+Desktop-file IDs are the file names in `/usr/share/applications` (or `~/.local/share/applications`).
+Remembering this automatically when you answer ("use Code - OSS from now on") is part of milestone 2 (memory).
+
+## 6. What SONU uses from the rice
 
 | Rice file | SONU uses it for |
 |---|---|
@@ -88,7 +101,7 @@ if it doesn't exist; it is merged by id and hot-reloaded):
 | `~/.config/hypr-theme/defaults/terminal` (fallback: `kitty`) | "open a terminal", terminal apps like btop |
 | `~/.config/quickshell/shell.qml` present | detection only (bar widget planned for M3) |
 
-## 6. Try it
+## 7. Try it
 
 ```sh
 sonu --dry-run open kitty on workspace 2          # shows the plan, changes nothing

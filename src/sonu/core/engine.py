@@ -111,10 +111,12 @@ class Engine:
                 )
                 return report
         self._audit("task.start", {"request": request, "dry_run": dry_run})
+        self.ctx.request_text = request
 
         try:
             snapshot = await self.ctx.desktop.snapshot()
-            plan = await self.planner.plan(request, snapshot, self.registry)
+            labels = self.ctx.resolver.labels_for_classes(w.window_class for w in snapshot.windows)
+            plan = await self.planner.plan(request, snapshot, self.registry, app_labels=labels)
         except (HyprlandError, PlanningError) as exc:
             report.error = str(exc)
             self._audit("task.end", {"status": "error", "error": str(exc)})

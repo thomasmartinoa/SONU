@@ -78,3 +78,29 @@ async def test_wrong_plans_fail_with_reasons(tmp_path: Path) -> None:
     result = await run_case(vs_code, ScriptedChatModel({vs_code.request: guess}), tmp_path / "b")
     assert not result.passed
     assert any("VSCodium should not be open" in failure for failure in result.failures)
+
+
+def test_eval_cli_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, xdg_env: dict[str, str]) -> None:
+    import json
+
+    from typer.testing import CliRunner
+
+    from sonu.cli.app import app
+    from sonu.llm import OllamaClient
+    from sonu.testing.fake_ollama import FakeOllama
+
+    cases = {case.id: case for case in load_cases()}
+    fake = FakeOllama()
+    fake.add_model("qwen3.5:4b", size_gib=3.2, capabilities=["completion", "tools"])
+    fake.chat_responder = lambda body: json.dumps(GOLDEN["launch-one"])
+
+    def client(host: str, timeout_s: float) -> OllamaClient:
+        return OllamaClient(host, timeout_s=timeout_s, transport=fake.transport)
+
+    monkeypatch.setattr("sonu.cli.eval_cmd.OllamaClient", client)
+    result = CliRunner().invoke(app, ["eval", "--json", "-c", "launch-one"], env=xdg_env)
+    assert result.exit_code == 0, result.output
+    [summary] = json.loads(result.stdout)
+    assert summary["model"] == "qwen3.5:4b"
+    assert summary["passed"] == 1
+    assert summary["results"][0]["case_id"] == cases["launch-one"].id

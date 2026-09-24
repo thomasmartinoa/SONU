@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -80,6 +81,10 @@ def find_windows(target: WindowTarget, snapshot: WorldSnapshot, ctx: ToolContext
                 for window in candidates
                 if wanted and wanted in normalize(f"{window.window_class} {window.initial_class}")
             ]
+        if not by_entry and resolution.status == "not_found":
+            # Not an app at all ("the GitHub window"): treat the words as part of a title.
+            needle = target.app.casefold()
+            by_entry = [window for window in candidates if needle in window.title.casefold()]
         candidates = by_entry
 
     if target.title_contains:
@@ -89,6 +94,75 @@ def find_windows(target: WindowTarget, snapshot: WorldSnapshot, ctx: ToolContext
     if not candidates:
         return TargetMatch((), f"no open window matches {target.describe()}")
     return TargetMatch(tuple(snapshot.by_recency(candidates)))
+
+
+# Words that say nothing about *which* window the user means.
+_NOT_DISTINCTIVE = {
+    "window",
+    "windows",
+    "workspace",
+    "move",
+    "close",
+    "focus",
+    "switch",
+    "open",
+    "show",
+    "take",
+    "put",
+    "send",
+    "bring",
+    "please",
+    "this",
+    "that",
+    "these",
+    "those",
+    "with",
+    "from",
+    "into",
+    "onto",
+    "over",
+    "there",
+    "here",
+    "them",
+    "then",
+    "and",
+    "the",
+    "all",
+    "every",
+    "both",
+    "one",
+}
+_ALL = re.compile(r"\b(all|every|both)\b", re.IGNORECASE)
+
+
+def wants_all(request: str) -> bool:
+    """The user's own words ask for every matching window ("close all the kitty windows")."""
+    return bool(_ALL.search(request))
+
+
+def narrow_by_request(windows: tuple[Window, ...], request: str, target: WindowTarget) -> tuple[Window, ...]:
+    """Pick the one window whose title contains a distinctive word from the user's request.
+
+    Only ever *narrows* the windows the step already targeted, using the user's own (trusted)
+    words — e.g. "move the GitHub window" among two browser windows. If the words don't single
+    out exactly one window, nothing changes and SONU asks instead.
+    """
+    if len(windows) < 2 or not request:
+        return windows
+    app_words = set(normalize(target.app or "").split())
+    words = {
+        word
+        for word in re.findall(r"[a-z0-9]+", request.casefold())
+        if len(word) >= 4 and not word.isdigit() and word not in _NOT_DISTINCTIVE and word not in app_words
+    }
+    chosen: set[str] = set()
+    for word in words:
+        hits = [window for window in windows if word in window.title.casefold()]
+        if len(hits) == 1:
+            chosen.add(hits[0].address)
+    if len(chosen) == 1:
+        return tuple(window for window in windows if window.address in chosen)
+    return windows
 
 
 def ambiguity_question(target: WindowTarget, windows: tuple[Window, ...], verb: str) -> str:

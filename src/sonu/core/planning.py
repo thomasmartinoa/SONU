@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
@@ -33,4 +34,11 @@ class Plan:
 
 
 class Planner(Protocol):
-    async def plan(self, request: str, snapshot: WorldSnapshot, registry: ToolRegistry) -> Plan: ...
+    async def plan(
+        self,
+        request: str,
+        snapshot: WorldSnapshot,
+        registry: ToolRegistry,
+        *,
+        app_labels: Mapping[str, str] | None = None,
+    ) -> Plan: ...

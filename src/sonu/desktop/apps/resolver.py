@@ -8,12 +8,13 @@ ambiguous (e.g. both Code - OSS and VSCodium are installed) so SONU asks instead
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import Literal
 
 from sonu.desktop.apps.catalog import AppCatalog
+from sonu.desktop.apps.classes import window_matches
 from sonu.desktop.apps.entry import AppEntry
 
 ResolutionStatus = Literal["found", "ambiguous", "not_found"]
@@ -139,6 +140,25 @@ class AppResolver:
             return Resolution("ambiguous", text, candidates=best, reason="several installed apps match")
         near = tuple(entry for _, entry in scored[:3])
         return Resolution("ambiguous", text, candidates=near, reason="no exact match; closest installed apps")
+
+    def labels_for_classes(self, classes: Iterable[str]) -> dict[str, str]:
+        """App names for window classes, marking the user's default apps (for the planner's context)."""
+        defaults: dict[str, str] = {}
+        for role in ("browser", "terminal"):
+            resolution = self._resolve_role(role, role)
+            if resolution.entry is not None:
+                defaults[resolution.entry.desktop_id] = f"your default {role}"
+        labels: dict[str, str] = {}
+        for window_class in set(classes):
+            entry = next(
+                (e for e in self.catalog.entries if not e.no_display and window_matches(e, (window_class,))),
+                None,
+            )
+            if entry is None:
+                continue
+            note = defaults.get(entry.desktop_id)
+            labels[window_class] = f"{entry.name}, {note}" if note else entry.name
+        return labels
 
     def _resolve_role(self, text: str, query: str) -> Resolution:
         default_key, category = ROLES[query]

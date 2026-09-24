@@ -19,7 +19,14 @@ class ScriptedPlanner:
         self._plans = plans
         self.seen: list[tuple[str, WorldSnapshot]] = []
 
-    async def plan(self, request: str, snapshot: WorldSnapshot, registry: ToolRegistry) -> Plan:
+    async def plan(
+        self,
+        request: str,
+        snapshot: WorldSnapshot,
+        registry: ToolRegistry,
+        *,
+        app_labels: Mapping[str, str] | None = None,
+    ) -> Plan:
         self.seen.append((request, snapshot))
         if callable(self._plans):
             return self._plans(request, snapshot)

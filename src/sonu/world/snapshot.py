@@ -6,7 +6,7 @@ the desktop to look like after an action.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
 from sonu.desktop.hyprland.models import Monitor, Window, Workspace
@@ -76,8 +76,18 @@ class WorldSnapshot:
         """Most recently focused first (Hyprland's focusHistoryID: 0 = current)."""
         return sorted(windows, key=lambda w: w.focus_history_id if w.focus_history_id >= 0 else 1_000_000)
 
-    def describe(self, *, include_titles: bool = True, max_title: int = 60) -> str:
-        """Compact text for the planner. Titles are app/web content, so they're quoted as data."""
+    def describe(
+        self,
+        *,
+        include_titles: bool = True,
+        max_title: int = 60,
+        labels: Mapping[str, str] | None = None,
+    ) -> str:
+        """Compact text for the planner. Titles are app/web content, so they're quoted as data.
+
+        ``labels`` maps window classes to app names ("zen" → "Zen Browser, your default browser").
+        """
+        labels = labels or {}
         lines: list[str] = []
         active_ws = self.active_workspace_id
         lines.append(f"focused workspace: {active_ws if active_ws is not None else 'unknown'}")
@@ -96,14 +106,17 @@ class WorldSnapshot:
         for workspace in sorted(by_ws, key=sort_key):
             parts = []
             for window in by_ws[workspace]:
+                name = window.window_class
+                if name in labels:
+                    name += f" [{labels[name]}]"
                 if include_titles and window.title:
                     title = (
                         window.title
                         if len(window.title) <= max_title
                         else window.title[: max_title - 1] + "…"
                     )
-                    parts.append(f"{window.window_class} (title: {title!r})")
+                    parts.append(f"{name} (title: {title!r})")
                 else:
-                    parts.append(window.window_class)
+                    parts.append(name)
             lines.append(f"workspace {workspace}: " + "; ".join(parts))
         return "\n".join(lines)

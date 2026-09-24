@@ -14,7 +14,14 @@ from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.models import Window
 from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome, outcome_from_checks
 from sonu.tools.context import ToolContext
-from sonu.tools.targets import WindowTarget, ambiguity_question, find_windows, window_label
+from sonu.tools.targets import (
+    WindowTarget,
+    ambiguity_question,
+    find_windows,
+    narrow_by_request,
+    wants_all,
+    window_label,
+)
 from sonu.verify.checks import (
     Check,
     window_exists,
@@ -35,6 +42,15 @@ def _workspace(value: WorkspaceArg | None) -> WorkspaceTarget | ToolOutcome | No
         return WorkspaceTarget.of(value)
     except ValueError as exc:
         return ToolOutcome(StepStatus.FAILED, f"can't use workspace {value!r}: {exc}")
+
+
+def _pick(
+    windows: tuple[Window, ...], target: WindowTarget, all_: bool, ctx: ToolContext
+) -> tuple[Window, ...]:
+    """Narrow several matches with the user's own words, unless every match was asked for."""
+    if all_ or len(windows) < 2:
+        return windows
+    return narrow_by_request(windows, ctx.request_text, target)
 
 
 def _failed_dispatch(action: str, exc: HyprlandError) -> ToolOutcome:
@@ -251,7 +267,9 @@ class MoveArgs(BaseModel):
 
 class MoveWindow(Tool):
     name = "windows.move"
-    description = "Move an open window to a workspace (without following it)."
+    description = (
+        "Move an open window to another workspace ('move/put/send X to N'); the user stays where they are."
+    )
     risk = Risk.LOW
     effects = frozenset({Effect.WINDOW_MOVE})
     Args = MoveArgs
@@ -267,8 +285,8 @@ class MoveWindow(Tool):
         match = find_windows(a.window, snapshot, ctx)
         if match.problem:
             return ToolOutcome(StepStatus.FAILED, match.problem.capitalize())
-        windows = match.windows
-        if len(windows) > 1 and not a.all:
+        windows = _pick(match.windows, a.window, a.all, ctx)
+        if len(windows) > 1 and not (a.all or wants_all(ctx.request_text)):
             return ToolOutcome(
                 StepStatus.NEEDS_INPUT,
                 f"several windows match {a.window.describe()}",
@@ -302,7 +320,7 @@ class FocusArgs(BaseModel):
 
 class FocusWindow(Tool):
     name = "windows.focus"
-    description = "Switch to (focus) an open window, going to its workspace."
+    description = "Go to an open window: shows its workspace and focuses it ('take me to X', 'switch to X')."
     risk = Risk.LOW
     effects = frozenset({Effect.WINDOW_FOCUS, Effect.WORKSPACE_SHOW})
     Args = FocusArgs
@@ -314,7 +332,8 @@ class FocusWindow(Tool):
         match = find_windows(a.window, snapshot, ctx)
         if match.problem:
             return ToolOutcome(StepStatus.FAILED, match.problem.capitalize())
-        window = match.windows[0]  # focusing is harmless: take the most recently used match
+        # Prefer the window the user's words point at; otherwise the most recently used match.
+        window = narrow_by_request(match.windows, ctx.request_text, a.window)[0]
         return Prepared(f"Focus {window_label(window)}", window)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
@@ -395,8 +414,8 @@ class CloseWindow(Tool):
         match = find_windows(a.window, snapshot, ctx)
         if match.problem:
             return ToolOutcome(StepStatus.FAILED, match.problem.capitalize())
-        windows = match.windows
-        if len(windows) > 1 and not a.all:
+        windows = _pick(match.windows, a.window, a.all, ctx)
+        if len(windows) > 1 and not (a.all or wants_all(ctx.request_text)):
             return ToolOutcome(
                 StepStatus.NEEDS_INPUT,
                 f"several windows match {a.window.describe()}",

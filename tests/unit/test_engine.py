@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -360,3 +361,76 @@ def test_done_without_evidence_is_downgraded() -> None:
     failing = ToolOutcome(StepStatus.DONE, "Opened kitty", (Check("kitty is open", False),))
     assert enforce_verification(launch, failing).status is StepStatus.FAILED
     assert enforce_verification(describe, claimed).status is StepStatus.DONE  # read-only
+
+
+# ---------------------------------------------------------------- safety nets for small-model slips
+@pytest.mark.anyio
+async def test_users_words_pick_the_window_the_model_left_vague(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "zen", "GitHub - SONU", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "zen", "YouTube", workspace_id=1, stable_id="b2"),
+    ]
+    request = "move the GitHub window to workspace 4"
+    plans = {request: steps_plan(("windows.move", {"window": {"app": "zen"}, "workspace": 4}))}  # no title
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert sorted((w["title"], w["workspace"]["id"]) for w in harness.fake.windows) == [
+        ("GitHub - SONU", 4),
+        ("YouTube", 1),
+    ]
+
+
+@pytest.mark.anyio
+async def test_all_in_the_request_means_all(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "kitty", "zsh", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "kitty", "btop", workspace_id=2, stable_id="b2"),
+    ]
+    request = "close all the kitty windows"
+    plans = {request: steps_plan(("windows.close", {"window": {"app": "kitty"}}))}  # model forgot all=true
+    confirmations = Confirmations(True)
+    report = await harness.engine(plans).run(request, confirm=confirmations)
+    assert report.status == "done", report.lines()
+    assert harness.fake.windows == []
+    assert "kitty (workspace 1), kitty (workspace 2)" in confirmations.seen[0].description
+
+
+@pytest.mark.anyio
+async def test_title_words_passed_as_app_still_find_the_window(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "zen", "GitHub - SONU", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "zen", "YouTube", workspace_id=1, stable_id="b2"),
+    ]
+    plans = {"r": steps_plan(("windows.move", {"window": {"app": "GitHub"}, "workspace": 2}))}
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert [w["workspace"]["id"] for w in harness.fake.windows if w["title"] == "GitHub - SONU"] == [2]
+
+
+@pytest.mark.anyio
+async def test_ambiguous_words_still_ask(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "zen", "GitHub - SONU", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "zen", "GitHub - other", workspace_id=1, stable_id="b2"),
+    ]
+    request = "move the github window to 4"
+    plans = {request: steps_plan(("windows.move", {"window": {"app": "zen"}, "workspace": 4}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "needs-input"
+
+
+@pytest.mark.anyio
+async def test_planner_gets_app_labels(harness: Harness) -> None:
+    harness.fake.windows = [make_window("0xa1", "zen", "GitHub", stable_id="a1")]
+    captured: dict[str, Any] = {}
+
+    class Capture(ScriptedPlanner):
+        async def plan(self, request: str, snapshot: Any, registry: Any, *, app_labels: Any = None) -> Plan:
+            captured["labels"] = app_labels
+            return Plan("reply", "ok")
+
+    engine = Engine(
+        planner=Capture({}), registry=ToolRegistry(), ctx=harness.ctx, policy=Policy("confirm-risky")
+    )
+    await engine.run("hi", confirm=Confirmations(False))
+    assert captured["labels"] == {"zen": "Zen Browser, your default browser"}

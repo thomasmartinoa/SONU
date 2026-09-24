@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import tempfile
 from pathlib import Path
@@ -72,7 +73,7 @@ def eval_cmd(
                         "total": len(summary.results),
                         "score": round(summary.score, 3),
                         "mean_planning_s": round(summary.mean_planning_s, 3),
-                        "results": [vars(result) for result in summary.results],
+                        "results": [dataclasses.asdict(result) for result in summary.results],
                     }
                     for summary in summaries
                 ],
