@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from pathlib import Path
 
 import typer
@@ -12,7 +13,7 @@ from rich.markup import escape
 
 from sonu import __version__
 from sonu.audit import AuditError, AuditLog
-from sonu.cli import audit_cmd, config_cmd, desktop_cmd
+from sonu.cli import ask_cmd, audit_cmd, config_cmd, desktop_cmd, eval_cmd
 from sonu.cli.state import AppState, env_snapshot, get_state
 from sonu.doctor import DoctorContext, as_json, render_console, run_checks, summarize
 from sonu.logs import setup_logging
@@ -26,6 +27,9 @@ app = typer.Typer(
     add_completion=False,
     pretty_exceptions_enable=False,
 )
+app.command("ask")(ask_cmd.ask)
+app.command("prompt")(ask_cmd.prompt)
+app.command("eval")(eval_cmd.eval_cmd)
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(audit_cmd.app, name="audit")
 app.add_typer(desktop_cmd.app, name="desktop")
@@ -85,7 +89,22 @@ def doctor(
         raise typer.Exit(code=1)
 
 
+COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop"}
+_GLOBAL_FLAGS = {"-v", "-vv", "-vvv", "--verbose"}
+
+
+def rewrite_bare_request(args: list[str]) -> list[str]:
+    """`sonu open kitty on 3` → `sonu ask open kitty on 3` (global -v flags may come first)."""
+    index = 0
+    while index < len(args) and args[index] in _GLOBAL_FLAGS:
+        index += 1
+    if index < len(args) and not args[index].startswith("-") and args[index] not in COMMANDS:
+        return [*args[:index], "ask", *args[index:]]
+    return args
+
+
 def main() -> None:
+    sys.argv = [sys.argv[0], *rewrite_bare_request(sys.argv[1:])]
     try:
         app()
     except KeyboardInterrupt:

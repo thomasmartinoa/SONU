@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import Any, Protocol
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -37,10 +37,17 @@ class ConfirmRequest:
 Confirmer = Callable[[ConfirmRequest], Awaitable[bool]]
 
 
-class Observer(Protocol):
-    def on_plan(self, plan: Plan) -> None: ...
+class Observer:
+    """Receives progress while a task runs (the terminal UI subclasses this). Defaults do nothing."""
 
-    def on_step(self, record: StepRecord) -> None: ...
+    def on_plan(self, plan: Plan) -> None:
+        """The planner produced a plan."""
+
+    def on_step_start(self, index: int, description: str) -> None:
+        """A step is about to run (after any confirmation)."""
+
+    def on_step(self, record: StepRecord) -> None:
+        """A step finished (or was stopped before running)."""
 
 
 def enforce_verification(tool: Tool, outcome: ToolOutcome) -> ToolOutcome:
@@ -129,7 +136,9 @@ class Engine:
 
         if plan.kind == "steps":
             for index, step in enumerate(plan.steps[:MAX_STEPS]):
-                record = await self._run_step(index, step.tool, step.args, confirm=confirm, dry_run=dry_run)
+                record = await self._run_step(
+                    index, step.tool, step.args, confirm=confirm, dry_run=dry_run, observer=observer
+                )
                 report.steps.append(record)
                 self._audit("step.result", record.audit_data())
                 if observer:
@@ -139,7 +148,14 @@ class Engine:
         return report
 
     async def _run_step(
-        self, index: int, tool_name: str, raw_args: dict[str, Any], *, confirm: Confirmer, dry_run: bool
+        self,
+        index: int,
+        tool_name: str,
+        raw_args: dict[str, Any],
+        *,
+        confirm: Confirmer,
+        dry_run: bool,
+        observer: Observer | None,
     ) -> StepRecord:
         def record(outcome: ToolOutcome, description: str = "", decision: Any = None) -> StepRecord:
             return StepRecord(index, tool_name, raw_args, description or tool_name, outcome, decision)
@@ -162,16 +178,20 @@ class Engine:
             return record(ToolOutcome(StepStatus.FAILED, f"couldn't read the desktop: {exc}"))
         if isinstance(prepared, ToolOutcome):
             return record(prepared)
-        return await self._decide_and_execute(tool, prepared, record, confirm=confirm, dry_run=dry_run)
+        return await self._decide_and_execute(
+            index, tool, prepared, record, confirm=confirm, dry_run=dry_run, observer=observer
+        )
 
     async def _decide_and_execute(
         self,
+        index: int,
         tool: Tool,
         prepared: Prepared,
         record: Callable[..., StepRecord],
         *,
         confirm: Confirmer,
         dry_run: bool,
+        observer: Observer | None,
     ) -> StepRecord:
         decision = self.policy.decide(tool, tainted=True)
         if dry_run:
@@ -189,6 +209,8 @@ class Engine:
             if not approved:
                 outcome = ToolOutcome(StepStatus.DENIED, f"Skipped (not approved): {prepared.description}")
                 return record(outcome, prepared.description, decision)
+        if observer:
+            observer.on_step_start(index, prepared.description)
         try:
             outcome = await tool.execute(prepared, self.ctx)
         except HyprlandError as exc:

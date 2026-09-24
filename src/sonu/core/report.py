@@ -100,6 +100,38 @@ class TaskReport:
         out.extend(f"? {question}" for question in self.questions)
         return out
 
+    def as_dict(self) -> dict[str, Any]:
+        plan = self.plan
+        return {
+            "request": self.request,
+            "status": self.status,
+            "headline": self.headline(),
+            "dry_run": self.dry_run,
+            "error": self.error,
+            "plan": None
+            if plan is None
+            else {
+                "kind": plan.kind,
+                "message": plan.message,
+                "model": plan.model,
+                "duration_s": round(plan.duration_s, 3),
+                "attempts": plan.attempts,
+            },
+            "steps": [
+                {
+                    "tool": record.tool,
+                    "args": record.args,
+                    "description": record.description,
+                    "status": record.outcome.status.value,
+                    "summary": record.outcome.summary,
+                    "question": record.outcome.question,
+                    "checks": [check.as_dict() for check in record.outcome.checks],
+                }
+                for record in self.steps
+            ],
+            "questions": self.questions,
+        }
+
     def headline(self) -> str:
         if self.dry_run and self.status == "failed":
             return "Dry run — some steps would fail"
