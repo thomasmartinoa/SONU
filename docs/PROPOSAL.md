@@ -1,9 +1,9 @@
 # SONU — Design Proposal
 
-> **Status:** Draft v0.1 — waiting for decisions (see [§10 Open questions](#10-open-questions-decisions-needed)).
+> **Status:** v0.2 — decisions recorded ([§10](#10-decisions)); milestone **M0 implemented**.
 > **Date:** 2026-09-24
 > **Scope:** Architecture, research findings, security model, and roadmap for SONU (System-Oriented Neural Utility).
-> Nothing here is final until the open questions are answered.
+> Decisions are also recorded as ADRs in [`docs/adr/`](adr/); the threat model lives in [`threat-model.md`](threat-model.md).
 
 ---
 
@@ -72,8 +72,13 @@ verified, it is marked **(to verify on your machine)**.
 output or window titles into Lua. Dialects build commands from **typed, validated values only**
 (workspace ids as ints, window addresses as `0x[0-9a-f]+`, everything else escaped or rejected).
 
-Exactly how legacy `dispatch` behaves on 0.55/0.56 when the user still has a hyprlang config is **(to verify on your
-machine)** — the adapter will probe rather than assume.
+**Verified against the Hyprland 0.56.2 source** (tag `v0.56.2`, commit `efb5099` — the exact build on the author's
+machine): the dispatcher syntax depends on the **config system in use**, not only on the version. With a Lua config,
+`dispatch <x>` runs as `return hl.dispatch(<x>)`; with a hyprlang config (still accepted on 0.55/0.56) the classic
+`dispatch <name> <args>` form applies. Since 0.55, `j/status` reports `"configProvider": "lua" | "hyprlang"`, so SONU
+detects the dialect with one read-only request (implemented in M0 — `sonu doctor` shows it). Also verified: `eval` is
+refused under hyprlang, and every window has a `stableId` that dispatchers accept as `stableid:<id>` — a better
+identity than memory addresses, which get reused after a window closes.
 
 ### 2.2 "Launch on workspace N" is harder than it looks
 
@@ -107,6 +112,13 @@ machine)** — the adapter will probe rather than assume.
 **Design consequence:** SONU talks to the sockets directly (no spawning `hyprctl`, no shell), opens the request socket
 per request and always closes it (with a hard client-side timeout), batches where possible, and keeps a live
 **world model** updated from the event socket instead of polling.
+
+**Verified in the 0.56.2 source:** the compositor reads a request in 1023-byte chunks and stops at the first short
+read. A client that sent exactly 1023 bytes and kept the socket open would make the compositor's main thread wait. SONU
+therefore caps requests at 1000 bytes, sends them in one write, and half-closes its side (`shutdown(SHUT_WR)`) —
+implemented in M0 and covered by a test that only answers clients which half-close. Event data is truncated to 1024
+characters with newlines replaced by spaces, and event addresses carry no `0x` prefix (JSON replies do); SONU
+normalises both.
 
 ### 2.4 Input injection and screenshots on Hyprland
 
@@ -185,6 +197,18 @@ I checked each provider's current rules — **this matters because breaking them
 | **Ollama Cloud** | ✅ Account sign-in is the official mechanism (free tier exists, usage-limited) | ✅ Allowed (it's Ollama's own product) | Same Ollama adapter; treated as **cloud** for privacy rules |
 | **llama.cpp / LM Studio / vLLM** | Local OpenAI-compatible servers | n/a | Same adapter |
 
+**What this means for the author's plans** (Claude Pro, ChatGPT Go, no API credit — verified 2026-09-24):
+
+- **Claude Pro** includes Claude Code. Claude Code supports MCP servers, so **SONU-as-MCP-server** (M5) lets you drive
+  SONU's verified desktop tools from Claude Code with your Pro plan — legitimately.
+- **ChatGPT Go** only includes Codex *in OpenAI's desktop app* — no Codex CLI, no API access. There is no legitimate way
+  for SONU to use it, so the "experimental ChatGPT-subscription adapter" idea is **dropped**.
+- **Free API tiers** that need no card (limits change often — SONU will show live limits, not promises): Google Gemini
+  API (Flash models), Groq, OpenRouter's free models (~50 requests/day), Cerebras, Mistral (requires opting into
+  training on your data), Ollama Cloud (your existing Ollama account). Free tiers generally have weaker privacy terms
+  than paid ones, which is one more reason `privacy.cloud` defaults to `never` and every cloud call goes through the
+  egress guard.
+
 **The clean way to use your Claude/ChatGPT/Gemini subscriptions with SONU:** make SONU an **MCP server** (§3.10).
 Official tools you're already logged into — Claude Code, Codex CLI, Gemini CLI — support MCP servers as a normal,
 documented feature. They could then drive SONU's *safe, verified* desktop tools. That is ordinary use of those
@@ -199,8 +223,8 @@ and never ship a login method that is known to violate them.
 |---|---|---|
 | Wake word | **openWakeWord** (Apache-2.0, custom words trainable), livekit-wakeword | "Hey Sonu" (2+ syllables) will false-trigger far less than "Sonu" alone |
 | VAD | Silero VAD | Standard choice for end-of-speech detection |
-| STT | **faster-whisper** (CPU/CUDA), **whisper.cpp** (CPU/CUDA/Vulkan), **Parakeet** (NVIDIA, very fast), **Moonshine** (CPU-first, low latency) | Some of the fastest models are English/European-only — depends on which languages you'll speak (§10) |
-| TTS | **Kokoro-82M** (Apache-2.0, higher quality), **Piper** (fastest; active fork `OHF-Voice/piper1-gpl` is **GPL-3.0**) | Piper's GPL matters for licensing (§10) — keep it an optional, separate-process plugin |
+| STT | **faster-whisper** (CPU/CUDA), **whisper.cpp** (CPU/CUDA/Vulkan), **Parakeet** (NVIDIA, very fast), **Moonshine** (CPU-first, low latency) | Decided: **English** — so English-optimised fast models (Parakeet, Moonshine, distil-Whisper) are all candidates |
+| TTS | **Kokoro-82M** (Apache-2.0, higher quality), **Piper** (fastest; active fork `OHF-Voice/piper1-gpl` is **GPL-3.0**) | SONU is Apache-2.0, so GPL Piper stays an optional, separate-process plugin |
 | Trigger | Push-to-talk via a Hyprland keybind first; wake word later | Push-to-talk is simpler, more private, and has no false triggers |
 
 ### 2.9 Security lessons from 2026 (why SONU is strict)
@@ -320,9 +344,9 @@ class LaunchApp(Tool):
     effects = {Effect.PROCESS_SPAWN, Effect.WINDOW_CREATE}
 
     class Args(BaseModel):
-        app: str                     # user phrase or desktop id; resolved deterministically
+        app: str  # user phrase or desktop id; resolved deterministically
         workspace: int | None = None
-        reuse_existing: bool | None = None   # None → use stored preference
+        reuse_existing: bool | None = None  # None → use stored preference
 
     async def run(self, args: Args, ctx: ToolContext) -> LaunchResult: ...
 
@@ -429,14 +453,20 @@ and processes and asks first.
 
 | Interface | Milestone | Notes |
 |---|---|---|
+| `sonu doctor`, `sonu desktop …`, `sonu audit …`, `sonu config …` | **M0 ✅** | Read-only diagnostics and views |
 | `sonu "<request>"`, `sonu chat`, `--dry-run`, `--explain`, `--json` | M1 | Terminal confirmations |
-| `sonu doctor` | M0/M1 | Checks Hyprland version/dialect, sockets, Ollama, models, VRAM, optional tools (`grim`, `wtype`, `uwsm`) |
-| Hyprland keybind → prompt (fuzzel/wofi/rofi dmenu) → notification | M1/M2 | Zero-UI quick access |
+| **Quickshell menu row** "Ask SONU" in `SUPER+SPACE` | M1 | Your menu already supports `"input": true` rows and single-quotes `{}` safely; SONU ships a `menu.local.jsonc` snippet |
+| Keybind for a SONU prompt (`SUPER+A` is free in your `binds.lua`) | M1 | Later the same key becomes push-to-talk |
+| Notifications through your shell's notification server (`notify-send`) | M1 | Results and confirmations |
 | `sonud` daemon (systemd user service) + JSON-RPC over `$XDG_RUNTIME_DIR/sonu/sonud.sock` (`0600`, peer-UID check) | M2 | Needed for the journal and voice |
-| Voice (push-to-talk → wake word) | M4 | |
-| **MCP server mode** (SONU's safe tools for Claude Code / Codex CLI / Gemini CLI) | M6 | Legit way to use your subscriptions (§2.7) |
-| **MCP client** (import external tools, untrusted by default, policy-wrapped) | M6 | |
-| Overlay panel (GTK4 layer-shell or Quickshell) showing live plan + confirm buttons | Later | |
+| Voice: push-to-talk, then "Hey Sonu" wake word; spoken replies | M3 | English |
+| **Bar widget** (Quickshell command module or QML plugin): idle / listening / thinking / acting | M3 | Your bar already loads command modules and QML plugins |
+| **MCP server mode** (SONU's safe tools for Claude Code / Codex CLI / Gemini CLI) | M5 | Legit way to use your Claude Pro plan (§2.7) |
+| **MCP client** (import external tools, untrusted by default, policy-wrapped) | M5 | |
+| Overlay panel (Quickshell) showing the live plan + confirm buttons | M3+ | Matches your rice's look via `colors.json` |
+
+SONU also reads (never writes) your rice's defaults in `~/.config/hypr-theme/defaults/` so "open my browser" means
+Zen and "open a terminal" means kitty — implemented in M0 detection, used from M1.
 
 ---
 
@@ -470,11 +500,11 @@ Autonomy modes: `suggest` (dry-run only) · `confirm-each` · `confirm-risky` (d
 | Secrets leakage | API keys in logs | Keyring/env only; log redaction; secrets never enter prompts |
 | Untrusted extensions | Malicious MCP server | MCP untrusted by default, per-server allowlist, all MCP tools policy-wrapped as high risk until approved |
 
-A full `docs/threat-model.md` will be written in M0.
+The full threat model is in [`threat-model.md`](threat-model.md).
 
 ---
 
-## 5. Why Python (recommendation — needs your confirmation)
+## 5. Why Python (decided)
 
 - The voice/ML ecosystem (faster-whisper, openWakeWord, Kokoro, sherpa-onnx), provider SDKs and the MCP SDK are
   Python-first; contributors can read and extend it easily.
@@ -482,9 +512,10 @@ A full `docs/threat-model.md` will be written in M0.
 - Rust would give a single static binary and stronger guarantees, but would slow down iteration and make the voice/ML
   parts harder. A Rust rewrite of a hot component (e.g. the IPC/event layer) is possible later if profiling says so.
 
-Stack: Python ≥ 3.12, `uv`, `pydantic` v2, `httpx` (async), `asyncio`, `typer` + `rich` (CLI), `platformdirs`,
-stdlib `sqlite3` (+ `sqlite-vec` later), `pytest` + `pytest-asyncio` + `hypothesis`, `ruff`, `pyright` (strict).
-Optional extras: `sonu[voice]`, `sonu[cloud]`, `sonu[vision]`.
+Stack (as built in M0): Python ≥ 3.12 (CI: 3.12, 3.13, 3.14), `uv` + `uv.lock`, `pydantic` v2, `httpx` (async),
+`asyncio`, `typer` + `rich` (CLI), stdlib `tomllib`/`sqlite3`, `pytest` (+ anyio's plugin for async tests),
+`ruff` (lint + format), `mypy --strict`. Only four runtime dependencies. Later: `sqlite-vec`, `hypothesis`, and
+optional extras `sonu[voice]`, `sonu[cloud]`, `sonu[vision]`.
 
 ---
 
@@ -505,38 +536,44 @@ Optional extras: `sonu[voice]`, `sonu[cloud]`, `sonu[vision]`.
 
 ---
 
-## 7. Proposed repository layout
+## 7. Repository layout
+
+✅ = exists after M0 · everything else is planned.
 
 ```
 sonu/
-├── README.md  LICENSE  SECURITY.md  CONTRIBUTING.md  pyproject.toml  uv.lock
+├── README.md  LICENSE  SECURITY.md  CONTRIBUTING.md  pyproject.toml  uv.lock   ✅
+├── .github/workflows/ci.yml  .github/dependabot.yml                            ✅
 ├── docs/
-│   ├── PROPOSAL.md            # this document
-│   ├── architecture.md
-│   ├── threat-model.md
-│   └── adr/                   # Architecture Decision Records (0001-language.md, …)
+│   ├── PROPOSAL.md            # this document                                   ✅
+│   ├── threat-model.md                                                          ✅
+│   └── adr/                   # Architecture Decision Records                   ✅
 ├── src/sonu/
-│   ├── cli/                   # typer app, rendering, confirmations
-│   ├── core/                  # engine/state machine, plan models, executor, recovery, report
-│   ├── llm/                   # ChatModel protocol, ollama adapter, prompts, schemas
-│   ├── tools/                 # Tool base, registry, built-in tools
+│   ├── cli/                   # typer app: doctor, config, audit, desktop       ✅
+│   ├── config/                # settings (TOML + pydantic), XDG paths           ✅
+│   ├── audit/                 # append-only, hash-chained log                   ✅
+│   ├── doctor/                # read-only system checks                         ✅
 │   ├── desktop/
-│   │   ├── hyprland/          # IPC client, event stream, dialects (legacy/lua), models
-│   │   └── apps/              # XDG desktop entries, resolver, launcher
-│   ├── world/                 # world model, snapshots, diffs
-│   ├── verify/                # predicates, event-driven waiter
-│   ├── policy/                # risk tiers, rules, autonomy modes, taint
-│   ├── memory/                # SQLite store (M2)
-│   ├── audit/                 # append-only log
-│   ├── config/                # settings, XDG paths, secrets
-│   └── daemon/                # sonud + JSON-RPC (M2)
+│   │   ├── hyprland/          # IPC client, event stream, models                ✅ (dialects: M1)
+│   │   └── apps/              # XDG desktop entries, resolver, launcher         (M1)
+│   ├── llm/                   # Ollama client ✅; ChatModel protocol, prompts    (M1)
+│   ├── integrations/          # read-only hypr-theme / Quickshell detection     ✅
+│   ├── testing/               # FakeHyprland, FakeOllama (shipped for evals)    ✅
+│   ├── logs.py  redact.py     # private logging, secret redaction               ✅
+│   ├── core/                  # engine/state machine, plans, executor, report   (M1)
+│   ├── tools/                 # Tool base, registry, built-in tools             (M1)
+│   ├── world/                 # world model, snapshots, diffs                   (M1)
+│   ├── verify/                # predicates, event-driven waiter                 (M1)
+│   ├── policy/                # risk tiers, rules, autonomy modes, taint        (M1)
+│   ├── memory/                # SQLite store                                    (M2)
+│   └── daemon/                # sonud + JSON-RPC                                (M2)
 ├── tests/
-│   ├── fakes/                 # FakeHyprland, ScriptedModel
-│   ├── unit/  integration/
-│   └── evals/                 # eval cases
+│   ├── unit/                  # fast, hermetic                                  ✅
+│   ├── integration/           # opt-in: real Hyprland / Ollama (-m hyprland)    ✅
+│   └── evals/                 # natural-language task cases                     (M1)
 └── packaging/
-    ├── systemd/sonu.service
-    └── arch/PKGBUILD          # AUR package later
+    ├── systemd/sonu.service                                                     (M2)
+    └── arch/PKGBUILD          # AUR package                                     (later)
 ```
 
 ---
@@ -545,16 +582,19 @@ sonu/
 
 Milestones are ordered by dependency. Each has **exit criteria** so "done" is measurable.
 
+Order changed after the decisions: voice moves up to **M3** (right after the daemon it needs), and cloud providers
++ MCP are merged into one "Connect" milestone.
+
 | # | Milestone | Scope | Exit criteria |
 |---|---|---|---|
-| **M0** | Foundations | Repo scaffold, license, CI, config/paths, logging, audit log, `sonu doctor`, ADRs, threat model | `uv run sonu doctor` reports Hyprland/Ollama/GPU status correctly on your machine; CI green |
+| **M0 ✅** | Foundations | Repo scaffold, Apache-2.0, CI, config/paths, logging, hash-chained audit log, Hyprland IPC client + event stream (read-only), Ollama inventory client, FakeHyprland, `sonu doctor`, ADRs, threat model | `uv run sonu doctor` reports Hyprland/Ollama/GPU status correctly on your machine; CI green |
 | **M1** | Verified window operator | Hyprland adapter (IPC, events, dialects), XDG app catalog + launcher, world model, M1 tools, verifier, policy engine + confirmations, Ollama provider with schema-constrained plans, CLI (`--dry-run`, `--explain`), FakeHyprland e2e tests, eval set v1 | The VS Code/Chromium example succeeds with verified placement in ≥ 9/10 runs with the default local model; wrong-workspace placement auto-corrected; missing apps reported honestly; every action in the audit log |
-| **M2** | Daemon + memory | `sonud` service, activity journal, preferences ("remember …"), episodes, layout save/restore, routines, privacy controls, keybind prompt | "What was I working on yesterday?" answered from the journal; `sonu layout save/restore` verified; retention/forget work |
-| **M3** | Projects & dev workflows | Project discovery, open project in VS Code, dev-server tool (allowlisted scripts from `package.json`/`Makefile`, port detection, `HttpOk` verification), open URL, side-by-side layouts, close-by-project | "Open my AI Shop Assistant project and start the dev server" works end-to-end with verification |
-| **M4** | Voice | Push-to-talk, STT, TTS, then wake word; latency budget; VRAM scheduling | Spoken M1–M3 commands with measured end-to-end latency; no high-risk confirmation by voice alone |
-| **M5** | More model providers | OpenAI-compatible (OpenAI, xAI, Groq, OpenRouter, llama.cpp, LM Studio, vLLM, Ollama Cloud), Anthropic, Gemini; egress guard; cost tracking | Same eval suite runs across providers; egress audited |
-| **M6** | Extensibility | MCP server mode, MCP client, plugin API | Claude Code / Codex CLI can drive SONU's tools via MCP with policy enforced |
-| **M7** | Perception & GUI control | Screenshots + vision model, AT-SPI reading, virtual keyboard/pointer input (high-risk tier) | Can operate a GUI app with no API, with confirmation and verification |
+| **M2** | Daemon + memory | `sonud` service, activity journal (30-day default retention), preferences ("remember …"), episodes, layout save/restore, routines, privacy controls | "What was I working on yesterday?" answered from the journal; `sonu layout save/restore` verified; retention/forget work |
+| **M3** | Voice | Push-to-talk, STT, TTS, then the "Hey Sonu" wake word; latency budget; VRAM scheduling; Quickshell bar widget | Spoken M1–M2 commands with measured end-to-end latency; no high-risk confirmation by voice alone |
+| **M4** | Projects & dev workflows | Project discovery, open project in VS Code / VSCodium, dev-server tool (allowlisted scripts from `package.json`/`Makefile`, port detection, `HttpOk` verification), open URL, side-by-side layouts, close-by-project | "Open my AI Shop Assistant project and start the dev server" works end-to-end with verification |
+| **M5** | Connect | Free-tier-friendly cloud providers (OpenAI-compatible: Groq, OpenRouter, Cerebras, xAI, llama.cpp, Ollama Cloud; Gemini; Anthropic/OpenAI API keys), egress guard, cost/limit tracking; **MCP server** (Claude Code), MCP client | Same eval suite runs across providers; egress audited; Claude Code drives SONU's tools with policy enforced |
+| **M6** | Perception & GUI control | Screenshots + vision model, AT-SPI reading, virtual keyboard/pointer input (high-risk tier) | Can operate a GUI app with no API, with confirmation and verification |
+| **M7** | Beyond the desktop | Skill packs on the same policy engine: files, notes & reminders, media, system health, research, coding hand-off (§12) | Each skill has typed tools, verifiers, evals and a documented risk profile |
 
 ---
 
@@ -574,34 +614,82 @@ Milestones are ordered by dependency. Each has **exit criteria** so "done" is me
 
 ---
 
-## 10. Open questions (decisions needed)
+## 10. Decisions
 
-1. **Language:** Python (recommended, §5), or do you prefer Rust/Go for portfolio reasons?
-2. **License:** Apache-2.0 (recommended: permissive + patent grant), MIT, or GPL-3.0/AGPL-3.0 (forks must stay open)?
-3. **Your system facts** (please paste output; redact personal window titles):
-   ```sh
-   hyprctl version
-   ls ~/.config/hypr/                          # hyprland.lua or hyprland.conf?
-   hyprctl clients -j | jq '.[] | {class, initialClass, workspace: .workspace.name}'   # with VS Code + Chromium open
-   ollama --version && ollama list
-   nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv
-   python --version
-   for t in uwsm grim wtype ydotool jq fuzzel wofi rofi; do command -v $t; done
-   ```
-   Also: which VS Code build (Code-OSS / Microsoft AUR / VSCodium), which browser(s), which terminal?
-4. **Interface order:** text CLI first (M1), voice in M4 — OK, or do you want push-to-talk voice earlier?
-5. **Autonomy default:** `confirm-risky` OK?
-6. **Activity journal:** OK to record window titles locally? Default retention (7/30/90 days)? Anything to always exclude?
-7. **Cloud providers:** which API keys do you actually have/plan to use? Do you want the experimental ChatGPT-subscription
-   adapter at all, given it's tolerated but not contractual? (Claude/Gemini subscription login will not be built — it
-   violates their terms.)
-8. **Spoken languages:** English only, or others / mixed? (This decides the STT model.)
-9. **Wake word:** "Hey Sonu"?
-10. **Contribution workflow:** PRs from feature branches into `main` with CI required — OK?
+Answered by the author on 2026-09-24:
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Language | **Python** ([ADR 0001](adr/0001-python.md)) |
+| 2 | License | **Apache-2.0** — permissive, with an explicit patent grant ([ADR 0002](adr/0002-apache-2.0.md)) |
+| 3 | Target system | Arch · Hyprland **0.56.2 with Lua config** · Quickshell shell (hypr-dotfiles) · kitty · Zen + Chromium · Code-OSS + VSCodium · RTX 3070 Ti Laptop (8 GB) · 32 GB RAM · Ollama 0.34.3 · Python 3.14.7 · `uwsm`, `grim`, `jq`, `rofi` installed |
+| 4 | Interface order | **Text first** (M1), voice right after the daemon (**M3**) |
+| 5 | Autonomy default | **`confirm-risky`** ([ADR 0004](adr/0004-safety-defaults.md)) |
+| 6 | Activity journal | **Yes**, local only; default retention **30 days**; password managers and private-browsing windows excluded by default |
+| 7 | Cloud models | Local first. No paid API credit → free tiers in M5; Claude Pro via Claude Code + MCP; ChatGPT Go unusable ([ADR 0003](adr/0003-no-subscription-token-extraction.md)) |
+| 8 | Spoken language | **English** |
+| 9 | Wake word | **"Hey Sonu"** |
+| 10 | Workflow | Feature branches → pull requests into `main`, CI required |
+
+### Still open (not blocking M1)
+
+1. **Default local planner.** You don't have `qwen3.5:4b` yet. Options: pull it (3.4 GB, recommended), or start with
+   `qwen3:8b` (installed, tool-capable, fits in VRAM). M1's eval suite will compare `qwen3.5:4b`, `qwen3.5:9b`,
+   `qwen3:8b`, `gemma4:e4b`, and — interesting on 32 GB RAM — the mixture-of-experts models you have
+   (`qwen3.6:35b-a3b`, `gpt-oss:20b`), which only activate ~3–4B parameters per token and may be usable with CPU
+   offload. Numbers, not guesses, will pick the default.
+2. **Uncensored models** (`…-Uncensored-HauhauCS-…`) should not be used as the planner: SONU's safety never *relies* on
+   a model refusing, but a model tuned to never refuse removes one layer of defence. They're fine for chat.
+3. **`main` branch.** The repo has no `main` yet; say the word and a PR from the working branch will create it.
 
 ---
 
-## 11. Sources
+## 11. Portability: other distros and desktops
+
+SONU is layered so that only one layer is Hyprland-specific:
+
+| Layer | Portable? |
+|---|---|
+| Engine, planner, policy, memory, audit, voice, model providers | ✅ Any Linux distro (and mostly any Unix) |
+| App catalog (XDG `.desktop` files), notifications (freedesktop D-Bus), systemd scopes | ✅ Any modern Linux desktop |
+| **Compositor adapter** (windows, workspaces, events) | ⚠️ One adapter per compositor |
+| Package management (install/update, later) | ⚠️ One adapter per package manager (pacman, apt, dnf, …) or PackageKit |
+
+- **Hyprland on any distro** (Fedora, Debian, NixOS, openSUSE, …) works as-is — SONU depends on Hyprland, not Arch.
+- **Other compositors** need an adapter behind the same interface: Sway/i3 (i3 IPC), niri (JSON IPC socket), river,
+  KDE Plasma (KWin scripting / D-Bus), GNOME (restrictive; needs a Shell extension), X11 (EWMH via `xdotool`/`wmctrl`).
+  The FakeHyprland pattern makes each adapter testable without that desktop.
+- **Without an adapter**, SONU still runs in a reduced mode: launching apps, notifications, memory and voice work;
+  window placement and verification of window state don't.
+
+## 12. What SONU can grow into
+
+System control is the first *skill*, not the ceiling. The same loop (understand → plan → policy → act → verify →
+report), the same policy engine and the same audit log apply to any domain with typed tools. Realistic directions,
+roughly in order of risk:
+
+| Area | Examples | Notes |
+|---|---|---|
+| Conversation | "Explain this error", quick questions, summaries | Local model; no tools needed |
+| Your desktop | windows, workspaces, layouts, apps, projects, dev servers | M1–M4 |
+| System health | "Why is my fan loud?", battery, disk, GPU, failed services (read-only `journalctl`, `systemctl`) | Read-only first |
+| Media & settings | play/pause (MPRIS/`playerctl`), volume, brightness, night light, theme switch via `hypr-theme` | Low risk |
+| Notes & reminders | "Remind me in 15 minutes", daily summary | Your menu already has reminders (`hypr-remind`) |
+| Files | find, summarise, organise documents; read PDFs | Reads are fine; moves/deletes are confirmed |
+| Screen understanding | "What's on my screen?", "read this error dialog" | M6; screenshots never leave the machine unless allowed |
+| Research | web search + summarise | Web content is untrusted input (prompt-injection defences apply) |
+| Coding hand-off | "Ask Claude Code to fix the failing test" | Via official CLIs + MCP (§2.7) |
+| Proactive helpers | "Tell me when the build finishes", morning briefing | Needs the daemon; always opt-in |
+| Sub-agents | a research agent and a coding agent working for SONU | Each sub-agent gets its own narrow tool allowlist |
+
+**How far can it be pushed?** The honest limits are (1) **model quality on 8 GB of VRAM** — small models understand
+single requests well but plan long tasks poorly, which is why SONU leans on typed tools, routines and verification;
+(2) **safety** — every new capability widens what a mistake or a malicious web page could do, so capabilities are
+added one skill at a time with their own risk profile and evals; and (3) **latency** — voice feels good under ~1–2 s,
+which bounds how much thinking can happen per request. Within those limits, a "JARVIS-like" assistant for your own
+machine is realistic; an assistant that runs your whole digital life unattended is not something to build safely yet.
+
+## 13. Sources
 
 - Hyprland wiki (IPC, dispatchers, hyprctl, permissions): <https://wiki.hypr.land/IPC/>, <https://github.com/hyprwm/hyprland-wiki>
 - Hyprland Lua migration: <https://hypr.land/news/26_lua/>, <https://wiki.hypr.land/0.55.0/Configuring/Start/>, <https://hypr.land/news/update55/>

@@ -1,0 +1,157 @@
+"""SONU's configuration: a single TOML file validated by pydantic.
+
+Unknown keys are rejected (``extra="forbid"``) so a typo like ``autonmy = "trusted"``
+fails loudly instead of silently falling back to a default.
+"""
+
+from __future__ import annotations
+
+import tomllib
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+AutonomyMode = Literal["suggest", "confirm-each", "confirm-risky", "trusted"]
+CloudPolicy = Literal["never", "ask", "allow"]
+
+
+class _Section(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class OllamaSettings(_Section):
+    host: str = "http://127.0.0.1:11434"
+    timeout_s: float = Field(default=10.0, gt=0, le=600)
+
+
+class ModelRole(_Section):
+    """Which model serves a role. Only the Ollama provider exists in milestone 1."""
+
+    provider: Literal["ollama"] = "ollama"
+    model: str = Field(min_length=1)
+    think: bool = False
+
+
+# One class per role so a partial table (e.g. only `think = true`) keeps that role's defaults.
+class PlannerRole(ModelRole):
+    model: str = Field(default="qwen3.5:4b", min_length=1)
+
+
+class DeepPlannerRole(ModelRole):
+    model: str = Field(default="qwen3.5:9b", min_length=1)
+    think: bool = True
+
+
+class EmbedRole(ModelRole):
+    model: str = Field(default="qwen3-embedding:0.6b", min_length=1)
+
+
+class ModelsSettings(_Section):
+    planner: PlannerRole = PlannerRole()
+    planner_deep: DeepPlannerRole = DeepPlannerRole()
+    embed: EmbedRole = EmbedRole()
+
+
+class PolicySettings(_Section):
+    autonomy: AutonomyMode = "confirm-risky"
+
+
+class PrivacySettings(_Section):
+    cloud: CloudPolicy = "never"
+
+
+class HyprlandSettings(_Section):
+    request_timeout_s: float = Field(default=2.0, gt=0, le=30)
+
+
+class AuditSettings(_Section):
+    enabled: bool = True
+
+
+class Settings(_Section):
+    ollama: OllamaSettings = OllamaSettings()
+    models: ModelsSettings = ModelsSettings()
+    policy: PolicySettings = PolicySettings()
+    privacy: PrivacySettings = PrivacySettings()
+    hyprland: HyprlandSettings = HyprlandSettings()
+    audit: AuditSettings = AuditSettings()
+
+
+class ConfigError(Exception):
+    """The config file exists but cannot be used."""
+
+
+@dataclass(frozen=True, slots=True)
+class LoadedSettings:
+    settings: Settings
+    path: Path
+    from_file: bool
+
+
+def _format_validation_error(path: Path, error: ValidationError) -> str:
+    lines = [f"{path}: invalid configuration"]
+    for issue in error.errors():
+        location = ".".join(str(part) for part in issue["loc"]) or "(root)"
+        lines.append(f"  - {location}: {issue['msg']}")
+    return "\n".join(lines)
+
+
+def load_settings(path: Path) -> LoadedSettings:
+    """Load settings from ``path``; a missing file means "all defaults"."""
+    if not path.exists():
+        return LoadedSettings(settings=Settings(), path=path, from_file=False)
+    try:
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path}: not valid TOML: {exc}") from exc
+    except OSError as exc:
+        raise ConfigError(f"{path}: cannot read: {exc}") from exc
+    try:
+        settings = Settings.model_validate(raw)
+    except ValidationError as exc:
+        raise ConfigError(_format_validation_error(path, exc)) from exc
+    return LoadedSettings(settings=settings, path=path, from_file=True)
+
+
+DEFAULT_CONFIG_TEMPLATE = """\
+# SONU configuration — every value below is the built-in default.
+# Uncomment and change what you need. Unknown keys are rejected on purpose.
+
+[ollama]
+# host = "http://127.0.0.1:11434"
+# timeout_s = 10.0
+
+[models.planner]
+# Understands requests and proposes plans. Must support tool calling.
+# model = "qwen3.5:4b"
+# think = false
+
+[models.planner_deep]
+# Used for harder requests. Bigger and slower.
+# model = "qwen3.5:9b"
+# think = true
+
+[models.embed]
+# Embeddings for semantic memory (later milestones).
+# model = "qwen3-embedding:0.6b"
+
+[policy]
+# suggest       : only show plans, never act
+# confirm-each  : ask before every action
+# confirm-risky : act on low-risk steps, ask before medium/high-risk ones
+# trusted       : ask only for high-risk steps (forbidden actions are always denied)
+# autonomy = "confirm-risky"
+
+[privacy]
+# Whether any data may be sent to cloud models: never | ask | allow
+# cloud = "never"
+
+[hyprland]
+# request_timeout_s = 2.0
+
+[audit]
+# Append-only, hash-chained log of everything SONU does.
+# enabled = true
+"""

@@ -1,0 +1,54 @@
+"""An in-memory fake of the parts of Ollama's HTTP API that SONU uses, as an httpx transport."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import httpx
+
+GIB = 1024**3
+
+
+class FakeOllama:
+    def __init__(self, version: str = "0.34.3") -> None:
+        self.version = version
+        self.models: dict[str, dict[str, Any]] = {}
+        self.loaded: list[dict[str, Any]] = []
+        self.requests: list[str] = []
+
+    def add_model(self, name: str, *, size_gib: float, capabilities: list[str]) -> None:
+        self.models[name] = {"size": int(size_gib * GIB), "capabilities": capabilities}
+
+    def load(self, name: str, *, vram_gib: float) -> None:
+        size = self.models[name]["size"]
+        self.loaded.append({"name": name, "model": name, "size": size, "size_vram": int(vram_gib * GIB)})
+
+    @property
+    def transport(self) -> httpx.MockTransport:
+        return httpx.MockTransport(self._handle)
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        self.requests.append(f"{request.method} {path}")
+        if request.method == "GET" and path == "/api/version":
+            return httpx.Response(200, json={"version": self.version})
+        if request.method == "GET" and path == "/api/tags":
+            return httpx.Response(
+                200,
+                json={
+                    "models": [
+                        {"name": name, "model": name, "size": spec["size"], "digest": "0" * 64, "details": {}}
+                        for name, spec in self.models.items()
+                    ]
+                },
+            )
+        if request.method == "GET" and path == "/api/ps":
+            return httpx.Response(200, json={"models": self.loaded})
+        if request.method == "POST" and path == "/api/show":
+            name = json.loads(request.content).get("model", "")
+            spec = self.models.get(name)
+            if spec is None:
+                return httpx.Response(404, json={"error": f"model '{name}' not found"})
+            return httpx.Response(200, json={"capabilities": spec["capabilities"], "details": {}})
+        return httpx.Response(404, json={"error": "not found"})
