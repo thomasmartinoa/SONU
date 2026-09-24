@@ -59,6 +59,26 @@ class StepStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class Choice:
+    label: str  # shown to the user (may contain a window title)
+    value: str  # what the tool understands: a desktop id, a window address, or ALL_CHOICE
+
+
+ALL_CHOICE = "*all*"
+
+
+@dataclass(frozen=True, slots=True)
+class Choices:
+    """Answers SONU can offer when a step is ambiguous; the user picks one and the step runs again."""
+
+    prompt: str
+    options: tuple[Choice, ...]
+
+    def label_for(self, value: str) -> str | None:
+        return next((option.label for option in self.options if option.value == value), None)
+
+
+@dataclass(frozen=True, slots=True)
 class ToolOutcome:
     status: StepStatus
     summary: str
@@ -67,6 +87,8 @@ class ToolOutcome:
     data: dict[str, Any] = field(default_factory=dict)
     # True when the summary contains personal content (e.g. window titles): kept out of the audit log.
     private: bool = False
+    # With NEEDS_INPUT: the answers the user can pick from (built by SONU from the desktop, not the model).
+    choices: Choices | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,9 +108,13 @@ class Tool(ABC):
 
     @abstractmethod
     async def prepare(
-        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
-        """Resolve the step without changing anything; return an outcome to stop early."""
+        """Resolve the step without changing anything; return an outcome to stop early.
+
+        ``choice`` is the value of the option the user picked after this step asked (one of the
+        ``Choices`` it returned); the engine only passes values the tool itself offered.
+        """
 
     @abstractmethod
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:

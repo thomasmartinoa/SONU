@@ -19,7 +19,7 @@ from sonu.core.planning import Plan, Planner, PlanningError
 from sonu.core.report import StepRecord, TaskReport
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.policy.engine import Policy
-from sonu.tools.base import Prepared, Risk, StepStatus, Tool, ToolOutcome
+from sonu.tools.base import Choices, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import MAX_STEPS, ToolRegistry
 
@@ -35,6 +35,8 @@ class ConfirmRequest:
 
 
 Confirmer = Callable[[ConfirmRequest], Awaitable[bool]]
+# Asks the user to pick one of the choices; returns the picked value, or None if they didn't answer.
+Chooser = Callable[[Choices], Awaitable[str | None]]
 
 
 class Observer:
@@ -94,6 +96,7 @@ class Engine:
         request: str,
         *,
         confirm: Confirmer,
+        choose: Chooser | None = None,
         dry_run: bool = False,
         observer: Observer | None = None,
     ) -> TaskReport:
@@ -139,7 +142,13 @@ class Engine:
         if plan.kind == "steps":
             for index, step in enumerate(plan.steps[:MAX_STEPS]):
                 record = await self._run_step(
-                    index, step.tool, step.args, confirm=confirm, dry_run=dry_run, observer=observer
+                    index,
+                    step.tool,
+                    step.args,
+                    confirm=confirm,
+                    choose=choose,
+                    dry_run=dry_run,
+                    observer=observer,
                 )
                 report.steps.append(record)
                 self._audit("step.result", record.audit_data())
@@ -156,11 +165,14 @@ class Engine:
         raw_args: dict[str, Any],
         *,
         confirm: Confirmer,
+        choose: Chooser | None,
         dry_run: bool,
         observer: Observer | None,
     ) -> StepRecord:
+        chosen: str | None = None
+
         def record(outcome: ToolOutcome, description: str = "", decision: Any = None) -> StepRecord:
-            return StepRecord(index, tool_name, raw_args, description or tool_name, outcome, decision)
+            return StepRecord(index, tool_name, raw_args, description or tool_name, outcome, decision, chosen)
 
         tool = self.registry.get(tool_name)
         if tool is None:
@@ -178,6 +190,27 @@ class Engine:
             prepared = await tool.prepare(args, self.ctx, snapshot)
         except HyprlandError as exc:
             return record(ToolOutcome(StepStatus.FAILED, f"couldn't read the desktop: {exc}"))
+        if isinstance(prepared, ToolOutcome) and prepared.choices and choose is not None and not dry_run:
+            # The step is ambiguous: let the user pick, then resolve it again on a fresh snapshot.
+            choices = prepared.choices
+            try:
+                picked = await choose(choices)
+            except Exception:  # e.g. stdin closed: treat as "no answer", never as a pick
+                logger.exception("asking the user failed")
+                picked = None
+            if picked is None:
+                return record(replace(prepared, summary=f"{prepared.summary} — no answer given"))
+            if choices.label_for(picked) is None:  # only values SONU itself offered are accepted
+                return record(ToolOutcome(StepStatus.FAILED, "that answer wasn't one of the choices"))
+            chosen = picked
+            try:
+                snapshot = await self.ctx.desktop.snapshot()
+                prepared = await tool.prepare(args, self.ctx, snapshot, choice=picked)
+            except HyprlandError as exc:
+                return record(ToolOutcome(StepStatus.FAILED, f"couldn't read the desktop: {exc}"))
+            if isinstance(prepared, ToolOutcome) and prepared.status is StepStatus.NEEDS_INPUT:
+                # Never ask twice in a row for the same step.
+                prepared = replace(prepared, choices=None)
         if isinstance(prepared, ToolOutcome):
             return record(prepared)
         return await self._decide_and_execute(

@@ -72,6 +72,34 @@ Name=WhatsApp Desktop
 Exec=whatsapp-desktop
 Type=Application
 """,
+    # Installed by kitty itself (setup.py): a hidden URL handler that runs the same program.
+    "kitty-open.desktop": """[Desktop Entry]
+Version=1.0
+Type=Application
+Name=kitty URL Launcher
+GenericName=Terminal emulator
+Comment=Open URLs with kitty
+StartupNotify=true
+TryExec=kitty
+Exec=kitty +open %U
+Icon=kitty
+Categories=System;TerminalEmulator;
+NoDisplay=true
+""",
+    "thunar.desktop": """[Desktop Entry]
+Name=Thunar File Manager
+Exec=thunar %F
+Type=Application
+Categories=System;Utility;Core;GTK;FileTools;FileManager;
+StartupWMClass=Thunar
+""",
+    # Visible, and runs the same program as Thunar.
+    "thunar-bulk-rename.desktop": """[Desktop Entry]
+Name=Bulk Rename
+Exec=thunar --bulk-rename %F
+Type=Application
+Categories=System;Utility;Core;GTK;FileTools;
+""",
 }
 
 
@@ -189,7 +217,6 @@ def resolver(catalog: AppCatalog) -> AppResolver:
         ("my terminal", "kitty.desktop"),
         ("WhatsApp", "whatsapp.desktop"),
         ("dolphin", "org.kde.dolphin.desktop"),
-        ("file manager", "org.kde.dolphin.desktop"),  # the only FileManager
         ("kity", "kitty.desktop"),  # typo — but only if it's the single close match
     ],
 )
@@ -232,9 +259,36 @@ def test_browser_without_default_is_ambiguous(catalog: AppCatalog) -> None:
     assert {c.desktop_id for c in resolution.candidates} == {"chromium.desktop", "zen.desktop"}
 
 
+def test_role_candidates_skip_hidden_helpers(resolver: AppResolver) -> None:
+    resolution = resolver.resolve("file manager")
+    assert resolution.status == "ambiguous"
+    assert {c.desktop_id for c in resolution.candidates} == {"thunar.desktop", "org.kde.dolphin.desktop"}
+    terminal = AppResolver(resolver.catalog).resolve("terminal")  # no rice default
+    assert terminal.entry is not None and terminal.entry.desktop_id == "kitty.desktop"
+
+
 def test_no_display_entries_need_an_exact_name(resolver: AppResolver) -> None:
     resolution = resolver.resolve("url handler")
     assert resolution.status != "found"
+
+
+@pytest.mark.parametrize(
+    ("said", "desktop_id"),
+    [
+        # Found on real hardware: "open kitty" asked "kitty or kitty URL Launcher?"
+        ("kitty", "kitty.desktop"),
+        ("kitty terminal", "kitty.desktop"),
+        # A visible helper that runs the same program must not make the app's own name ambiguous.
+        ("thunar", "thunar.desktop"),
+        ("bulk rename", "thunar-bulk-rename.desktop"),
+        # A hidden helper can still be named exactly.
+        ("kitty URL Launcher", "kitty-open.desktop"),
+    ],
+)
+def test_helper_entries_do_not_shadow_the_app(resolver: AppResolver, said: str, desktop_id: str) -> None:
+    resolution = resolver.resolve(said)
+    assert resolution.status == "found", resolution
+    assert resolution.entry is not None and resolution.entry.desktop_id == desktop_id
 
 
 # ---------------------------------------------------------------- window classes

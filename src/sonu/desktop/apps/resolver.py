@@ -55,10 +55,16 @@ def _strip_fillers(text: str) -> str:
     return " ".join(words)
 
 
-def identifiers(entry: AppEntry) -> set[str]:
+def names(entry: AppEntry) -> set[str]:
+    """What an app is called: its name and desktop-file id ("org.gnome.Nautilus" → also "nautilus")."""
     stem = entry.stem
-    values = {entry.name, stem, stem.rsplit(".", 1)[-1], entry.executable, entry.startup_wm_class}
-    return {normalize(value) for value in values if value}
+    return {normalize(value) for value in (entry.name, stem, stem.rsplit(".", 1)[-1]) if value}
+
+
+def identifiers(entry: AppEntry) -> set[str]:
+    """Everything an app can be recognised by: its names, program and window class."""
+    extra = {normalize(value) for value in (entry.executable, entry.startup_wm_class) if value}
+    return names(entry) | extra
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,8 +81,12 @@ class Resolution:
 
 def _score(entry: AppEntry, query: str) -> int:
     ids = identifiers(entry)
-    if query in ids:
+    if query in names(entry):
         return 100
+    # Only the program or window class matches: helper entries such as "kitty URL Launcher"
+    # (Exec=kitty +open) share the program name with the app the user means.
+    if query in ids:
+        return 95
     alias_targets = BUILTIN_ALIASES.get(query)
     if alias_targets and ids & set(alias_targets):
         return 90
@@ -124,11 +134,13 @@ class AppResolver:
         if query in ROLES:
             return self._resolve_role(text, query)
 
-        scored = [
-            (score, entry)
-            for entry in self.catalog.entries
-            if (score := _score(entry, query)) and (not entry.no_display or score == 100)
-        ]
+        scored = [(score, entry) for entry in self.catalog.entries if (score := _score(entry, query))]
+        # NoDisplay entries are helpers (URL handlers, settings panels) that menus hide. They are
+        # only candidates when no visible app matches and they were named exactly.
+        visible = [(score, entry) for score, entry in scored if not entry.no_display]
+        if not any(score >= CONFIDENT for score, _ in visible):
+            visible += [(score, entry) for score, entry in scored if entry.no_display and score >= 95]
+        scored = visible
         if not scored:
             return Resolution("not_found", text, reason=f"no installed application matches '{text}'")
         scored.sort(key=lambda item: (-item[0], item[1].name.lower()))

@@ -91,15 +91,33 @@ def doctor(
 
 COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop"}
 _GLOBAL_FLAGS = {"-v", "-vv", "-vvv", "--verbose"}
+# `sonu ask` options that may come before a bare request: `sonu --dry-run open kitty`.
+_ASK_FLAGS = {"--dry-run", "--deep", "--json", "--notify"}
+_ASK_OPTIONS = {"--model", "--confirm"}  # these take a value
 
 
 def rewrite_bare_request(args: list[str]) -> list[str]:
-    """`sonu open kitty on 3` → `sonu ask open kitty on 3` (global -v flags may come first)."""
+    """`sonu open kitty on 3` → `sonu ask open kitty on 3`.
+
+    Global flags (-v) and `ask` options (--dry-run, --model X, …) may come before the request.
+    """
+    global_flags: list[str] = []
+    ask_options: list[str] = []
     index = 0
-    while index < len(args) and args[index] in _GLOBAL_FLAGS:
+    while index < len(args):
+        arg = args[index]
+        if arg in _GLOBAL_FLAGS:
+            global_flags.append(arg)
+        elif arg in _ASK_FLAGS or (arg.partition("=")[0] in _ASK_OPTIONS and "=" in arg):
+            ask_options.append(arg)
+        elif arg in _ASK_OPTIONS and index + 1 < len(args):
+            ask_options += args[index : index + 2]
+            index += 1
+        else:
+            break
         index += 1
     if index < len(args) and not args[index].startswith("-") and args[index] not in COMMANDS:
-        return [*args[:index], "ask", *args[index:]]
+        return [*global_flags, "ask", *ask_options, *args[index:]]
     return args
 
 

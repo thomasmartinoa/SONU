@@ -100,6 +100,24 @@ class Picker:
         result = await _run(self.choose_argv(prompt), stdin="No\nYes\n", timeout_s=PICKER_TIMEOUT_S)
         return result is not None and result[0] == 0 and result[1].strip() == "Yes"
 
+    async def choose(self, question: str, options: Sequence[str]) -> int | None:
+        """Pick one option; returns its index, or None if the user cancelled.
+
+        Lines are numbered ("1. kitty") and the answer is read back by number, so two options
+        with the same text can't be confused and free text typed into the box is ignored.
+        """
+        prompt = question.replace("\n", " ")[:160]
+        lines = [f"{number}. {' '.join(option.split())[:120]}" for number, option in enumerate(options, 1)]
+        result = await _run(
+            self.choose_argv(prompt), stdin="\n".join(lines) + "\n", timeout_s=PICKER_TIMEOUT_S
+        )
+        if result is None or result[0] != 0:
+            return None
+        head = result[1].strip().partition(".")[0]
+        if head.isdigit() and 1 <= int(head) <= len(options):
+            return int(head) - 1
+        return None
+
     def choose_argv(self, prompt: str) -> list[str]:
         if self.program == "rofi":
             # rofi shows long text better in the message area than in the prompt.

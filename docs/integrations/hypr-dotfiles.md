@@ -33,33 +33,37 @@ sonu eval -m qwen3.5:4b -m qwen3:8b         # compare models
 
 ## 3. The SONU key (NitroSense key)
 
-The NitroSense key sends scancode `0xf5`. Depending on the Nitro model, Linux reports it as `XF86Presentation`
-(generic Acer rule), `XF86Launch1` (models with a specific systemd hwdb entry), or not at all (it needs a vendor
+The NitroSense key sends scancode `0xf5`. Depending on the Nitro model, Linux reports it as `XF86Launch1`
+(models with a specific systemd hwdb entry), `XF86Presentation` (generic Acer rule), or not at all (it needs a vendor
 driver such as [Linuwu-Sense](https://github.com/0x7375646F/Linuwu-Sense)).
 
-Find out what yours sends:
+**Measured on the author's Nitro:** `wev` shows `key: 156 … sym: XF86Launch1` with separate *pressed* and
+*released* events — so the key works out of the box, and it can later drive push-to-talk.
+
+To check yours:
 
 ```sh
 sudo pacman -S --needed wev
-wev          # press the NitroSense key, look for a line like "sym: XF86Presentation"
+wev          # press the NitroSense key, look for a line like "sym: XF86Launch1"
 ```
 
 Then add one line to `~/hypr-dotfiles/hyprland/.config/hypr/modules/binds.lua` (use the `sym` you saw):
 
 ```lua
-hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu prompt"))   -- SONU prompt
+hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu prompt"))   -- SONU prompt (NitroSense key)
 -- no usable key? SUPER+A is free in this rice:
 -- hl.bind(mainMod .. " + A", hl.dsp.exec_cmd("sonu prompt"))
 ```
 
 `sonu prompt` opens a one-line rofi box (rofi is part of the rice's fallback stack), runs the request, asks before
-anything risky with a **No-first** yes/no box, and shows the verified result as a notification.
+anything risky with a **No-first** yes/no box, shows a pick list when a name matches several apps or windows, and
+shows the verified result as a notification.
 
 In milestone 3 the same key becomes push-to-talk:
 
 ```lua
--- hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu listen start"))
--- hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu listen stop"), { release = true })
+-- hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen start"))
+-- hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen stop"), { release = true })
 ```
 
 ## 4. "Ask SONU" in the `SUPER+SPACE` menu
@@ -83,7 +87,8 @@ if it doesn't exist; it is merged by id and hot-reloaded):
 ## 5. Settle names that match several apps
 
 With both Code - OSS and VSCodium installed, "open VS Code" is ambiguous, so SONU asks which one you mean instead of
-guessing. To decide once, add an alias to `~/.config/sonu/config.toml` (`sonu config init` creates the file):
+guessing: a numbered list in the terminal, or a pick list from the key/menu. To decide once, add an alias to
+`~/.config/sonu/config.toml` (`sonu config init` creates the file):
 
 ```toml
 [apps]

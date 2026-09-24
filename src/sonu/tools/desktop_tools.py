@@ -12,7 +12,18 @@ from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.hyprland.dialect import WorkspaceTarget
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.models import Window
-from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome, outcome_from_checks
+from sonu.tools.base import (
+    ALL_CHOICE,
+    Choice,
+    Choices,
+    Effect,
+    Prepared,
+    Risk,
+    StepStatus,
+    Tool,
+    ToolOutcome,
+    outcome_from_checks,
+)
 from sonu.tools.context import ToolContext
 from sonu.tools.targets import (
     WindowTarget,
@@ -57,6 +68,72 @@ def _failed_dispatch(action: str, exc: HyprlandError) -> ToolOutcome:
     return ToolOutcome(StepStatus.FAILED, f"Hyprland refused to {action}: {exc}")
 
 
+MAX_CHOICES = 6
+
+
+def _resolve_app(app: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
+    resolution = ctx.resolver.resolve_for_request(app, ctx.request_text)
+    if resolution.status == "ambiguous":
+        candidates = resolution.candidates[:MAX_CHOICES]
+        names = " or ".join(candidate.name for candidate in candidates[:4])
+        return ToolOutcome(
+            StepStatus.NEEDS_INPUT,
+            f"'{app}' could mean several apps",
+            question=f"Which one did you mean for '{app}': {names}?",
+            data={"candidates": [c.desktop_id for c in resolution.candidates]},
+            choices=Choices(
+                f"Which app did you mean by '{app}'?",
+                tuple(Choice(candidate.name, candidate.desktop_id) for candidate in candidates),
+            ),
+        )
+    if resolution.entry is None:
+        return ToolOutcome(StepStatus.FAILED, f"'{app}' is not installed ({resolution.reason})")
+    return resolution.entry
+
+
+def _chosen_app(desktop_id: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
+    entry = ctx.resolver.catalog.by_id(desktop_id)
+    if entry is None:
+        return ToolOutcome(StepStatus.FAILED, f"{desktop_id} is no longer installed")
+    return entry
+
+
+def _target_windows(
+    target: WindowTarget,
+    all_: bool,
+    ctx: ToolContext,
+    snapshot: WorldSnapshot,
+    *,
+    verb: str,
+    choice: str | None,
+) -> tuple[Window, ...] | ToolOutcome:
+    """The window(s) a move/close step means — or a question with the matching windows as choices."""
+    match = find_windows(target, snapshot, ctx)
+    if match.problem:
+        return ToolOutcome(StepStatus.FAILED, match.problem.capitalize())
+    if choice == ALL_CHOICE:
+        return match.windows
+    if choice is not None:
+        chosen = tuple(window for window in match.windows if window.address == choice)
+        return chosen or ToolOutcome(StepStatus.FAILED, "The window you picked is no longer open")
+    windows = _pick(match.windows, target, all_, ctx)
+    if len(windows) > 1 and not (all_ or wants_all(ctx.request_text)):
+        shown = windows[:MAX_CHOICES]
+        options = tuple(
+            Choice(window_label(w) + (f" — {w.title[:60]}" if w.title else ""), w.address) for w in shown
+        )
+        return ToolOutcome(
+            StepStatus.NEEDS_INPUT,
+            f"several windows match {target.describe()}",
+            question=ambiguity_question(target, windows, verb),
+            choices=Choices(
+                f"Which window should I {verb}?",
+                (*options, Choice(f"All {len(windows)} of them", ALL_CHOICE)),
+            ),
+        )
+    return windows
+
+
 def _require[V](value: V | None, what: str) -> V:
     if value is None:  # a bug in SONU, not a user error
         raise RuntimeError(f"internal error: missing {what}")
@@ -96,21 +173,12 @@ class LaunchApp(Tool):
     Args = LaunchArgs
 
     async def prepare(
-        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(LaunchArgs, args)
-        resolution = ctx.resolver.resolve_for_request(a.app, ctx.request_text)
-        if resolution.status == "ambiguous":
-            names = " or ".join(candidate.name for candidate in resolution.candidates[:4])
-            return ToolOutcome(
-                StepStatus.NEEDS_INPUT,
-                f"'{a.app}' could mean several apps",
-                question=f"Which one did you mean for '{a.app}': {names}?",
-                data={"candidates": [c.desktop_id for c in resolution.candidates]},
-            )
-        if resolution.entry is None:
-            return ToolOutcome(StepStatus.FAILED, f"'{a.app}' is not installed ({resolution.reason})")
-        entry = resolution.entry
+        entry = _chosen_app(choice, ctx) if choice is not None else _resolve_app(a.app, ctx)
+        if isinstance(entry, ToolOutcome):
+            return entry
         target = _workspace(a.workspace)
         if isinstance(target, ToolOutcome):
             return target
@@ -275,23 +343,16 @@ class MoveWindow(Tool):
     Args = MoveArgs
 
     async def prepare(
-        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(MoveArgs, args)
         target = _workspace(a.workspace)
         if isinstance(target, ToolOutcome):
             return target
         target = _require(target, "workspace")
-        match = find_windows(a.window, snapshot, ctx)
-        if match.problem:
-            return ToolOutcome(StepStatus.FAILED, match.problem.capitalize())
-        windows = _pick(match.windows, a.window, a.all, ctx)
-        if len(windows) > 1 and not (a.all or wants_all(ctx.request_text)):
-            return ToolOutcome(
-                StepStatus.NEEDS_INPUT,
-                f"several windows match {a.window.describe()}",
-                question=ambiguity_question(a.window, windows, "move"),
-            )
+        windows = _target_windows(a.window, a.all, ctx, snapshot, verb="move", choice=choice)
+        if isinstance(windows, ToolOutcome):
+            return windows
         labels = ", ".join(window_label(w) for w in windows)
         return Prepared(f"Move {labels} to workspace {target.value}", (windows, target))
 
@@ -326,7 +387,7 @@ class FocusWindow(Tool):
     Args = FocusArgs
 
     async def prepare(
-        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(FocusArgs, args)
         match = find_windows(a.window, snapshot, ctx)
@@ -368,7 +429,7 @@ class ShowWorkspace(Tool):
     Args = ShowWorkspaceArgs
 
     async def prepare(
-        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         target = _workspace(cast(ShowWorkspaceArgs, args).workspace)
         if isinstance(target, ToolOutcome):
@@ -408,19 +469,12 @@ class CloseWindow(Tool):
     Args = CloseArgs
 
     async def prepare(
-        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(CloseArgs, args)
-        match = find_windows(a.window, snapshot, ctx)
-        if match.problem:
-            return ToolOutcome(StepStatus.FAILED, match.problem.capitalize())
-        windows = _pick(match.windows, a.window, a.all, ctx)
-        if len(windows) > 1 and not (a.all or wants_all(ctx.request_text)):
-            return ToolOutcome(
-                StepStatus.NEEDS_INPUT,
-                f"several windows match {a.window.describe()}",
-                question=ambiguity_question(a.window, windows, "close"),
-            )
+        windows = _target_windows(a.window, a.all, ctx, snapshot, verb="close", choice=choice)
+        if isinstance(windows, ToolOutcome):
+            return windows
         return Prepared("Close " + ", ".join(window_label(w) for w in windows), windows)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
@@ -457,7 +511,7 @@ class DescribeDesktop(Tool):
     Args = DescribeArgs
 
     async def prepare(
-        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         return Prepared("Describe the open windows", None)
 

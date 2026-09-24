@@ -44,6 +44,7 @@ sonu --dry-run open kitty on workspace 2      # show the plan, change nothing
 sonu open kitty on workspace 2
 sonu open VSCodium and Chromium, put VSCodium on workspace 3 and Chromium on workspace 2
 sonu close kitty                              # asks first: closing is a medium-risk action
+sonu open VS Code                             # two builds installed? SONU asks which one — pick by number
 sonu prompt                                   # a text box for keybinds; result as a notification
 ```
 

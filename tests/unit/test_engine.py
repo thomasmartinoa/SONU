@@ -17,7 +17,7 @@ from sonu.policy import Policy
 from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
-from sonu.tools.base import StepStatus, ToolOutcome
+from sonu.tools.base import Choices, StepStatus, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.desktop_tools import DescribeDesktop, LaunchApp
 from sonu.tools.registry import ToolRegistry
@@ -34,6 +34,23 @@ class Confirmations:
     async def __call__(self, request: ConfirmRequest) -> bool:
         self.seen.append(request)
         return self.answer
+
+
+@dataclass
+class Answers:
+    """Answers SONU's which-one questions by label text (None = the user cancelled)."""
+
+    pick: str | None
+    seen: list[Choices] = field(default_factory=list)
+    before_answering: Any = None
+
+    async def __call__(self, choices: Choices) -> str | None:
+        self.seen.append(choices)
+        if self.before_answering:
+            self.before_answering()
+        if self.pick is None:
+            return None
+        return next(option.value for option in choices.options if self.pick in option.label)
 
 
 @dataclass
@@ -434,3 +451,108 @@ async def test_planner_gets_app_labels(harness: Harness) -> None:
     )
     await engine.run("hi", confirm=Confirmations(False))
     assert captured["labels"] == {"zen": "Zen Browser, your default browser"}
+
+
+# ---------------------------------------------------------------- answering questions
+@pytest.mark.anyio
+async def test_user_picks_the_app_and_the_step_runs(harness: Harness) -> None:
+    plans = {"r": steps_plan(("apps.launch", {"app": "VS Code", "workspace": 3}))}
+    answers = Answers("VSCodium")
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False), choose=answers)
+    assert report.status == "done", report.lines()
+    assert answers.seen[0].prompt == "Which app did you mean by 'VS Code'?"
+    assert [option.label for option in answers.seen[0].options] == ["Code - OSS", "VSCodium"]
+    assert harness.workspace_of("VSCodium") == [3]
+    assert report.steps[0].choice == "codium.desktop"
+    step = next(r for r in harness.audit.records() if r.kind == "step.result")
+    assert step.data["choice"] == "codium.desktop"
+
+
+@pytest.mark.anyio
+async def test_unanswered_question_changes_nothing(harness: Harness) -> None:
+    plans = {"r": steps_plan(("apps.launch", {"app": "VS Code"}))}
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False), choose=Answers(None))
+    assert report.status == "needs-input"
+    assert "no answer given" in report.steps[0].outcome.summary
+    assert harness.fake.launched == []
+
+
+@pytest.mark.anyio
+async def test_failing_prompt_counts_as_no_answer(harness: Harness) -> None:
+    async def broken(choices: Choices) -> str | None:
+        raise EOFError
+
+    plans = {"r": steps_plan(("apps.launch", {"app": "VS Code"}))}
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False), choose=broken)
+    assert report.status == "needs-input"
+    assert harness.fake.launched == []
+
+
+@pytest.mark.anyio
+async def test_picked_window_is_closed_after_confirmation(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "kitty", "zsh", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "kitty", "htop", workspace_id=2, stable_id="b2"),
+    ]
+    plans = {"r": steps_plan(("windows.close", {"window": {"app": "kitty"}}))}
+    answers = Answers("htop")
+    confirmations = Confirmations(True)
+    report = await harness.engine(plans).run("r", confirm=confirmations, choose=answers)
+    assert report.status == "done", report.lines()
+    assert answers.seen[0].prompt == "Which window should I close?"
+    assert answers.seen[0].options[-1].label == "All 2 of them"
+    assert len(confirmations.seen) == 1  # answering a question is not approving a risky step
+    assert [w["title"] for w in harness.fake.windows] == ["zsh"]
+
+
+@pytest.mark.anyio
+async def test_all_of_them_moves_every_match(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "kitty", "zsh", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "kitty", "htop", workspace_id=2, stable_id="b2"),
+    ]
+    plans = {"r": steps_plan(("windows.move", {"window": {"app": "kitty"}, "workspace": 4}))}
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False), choose=Answers("All 2"))
+    assert report.status == "done", report.lines()
+    assert harness.workspace_of("kitty") == [4, 4]
+
+
+@pytest.mark.anyio
+async def test_answer_that_was_not_offered_is_rejected(harness: Harness) -> None:
+    async def forged(choices: Choices) -> str | None:
+        return "0xdead"
+
+    harness.fake.windows = [
+        make_window("0xa1", "kitty", "zsh", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "kitty", "htop", workspace_id=2, stable_id="b2"),
+    ]
+    plans = {"r": steps_plan(("windows.close", {"window": {"app": "kitty"}}))}
+    report = await harness.engine(plans).run("r", confirm=Confirmations(True), choose=forged)
+    assert report.steps[0].outcome.status is StepStatus.FAILED
+    assert len(harness.fake.windows) == 2
+
+
+@pytest.mark.anyio
+async def test_picked_window_that_closed_meanwhile_fails_safely(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "kitty", "zsh", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "kitty", "htop", workspace_id=2, stable_id="b2"),
+    ]
+
+    def htop_exits() -> None:
+        harness.fake.windows = [w for w in harness.fake.windows if w["title"] != "htop"]
+
+    plans = {"r": steps_plan(("windows.move", {"window": {"app": "kitty"}, "workspace": 4}))}
+    answers = Answers("htop", before_answering=htop_exits)
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False), choose=answers)
+    assert report.steps[0].outcome.summary == "The window you picked is no longer open"
+    assert harness.workspace_of("kitty") == [1]
+
+
+@pytest.mark.anyio
+async def test_dry_run_does_not_ask(harness: Harness) -> None:
+    plans = {"r": steps_plan(("apps.launch", {"app": "VS Code"}))}
+    answers = Answers("VSCodium")
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False), choose=answers, dry_run=True)
+    assert report.status == "needs-input"
+    assert answers.seen == []

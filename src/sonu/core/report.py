@@ -33,6 +33,8 @@ class StepRecord:
     description: str
     outcome: ToolOutcome
     decision: PolicyDecision | None = None
+    # The value the user picked when the step asked (a desktop id or window address), if any.
+    choice: str | None = None
 
     def audit_data(self) -> dict[str, Any]:
         return {
@@ -43,6 +45,7 @@ class StepRecord:
             "decision": {"verdict": self.decision.verdict, "reason": self.decision.reason}
             if self.decision
             else None,
+            "choice": self.choice,
             "status": self.outcome.status.value,
             "summary": "(personal content not logged)" if self.outcome.private else self.outcome.summary,
             "checks": [check.as_dict() for check in self.outcome.checks],
@@ -125,6 +128,7 @@ class TaskReport:
                     "status": record.outcome.status.value,
                     "summary": record.outcome.summary,
                     "question": record.outcome.question,
+                    "choice": record.choice,
                     "checks": [check.as_dict() for check in record.outcome.checks],
                 }
                 for record in self.steps

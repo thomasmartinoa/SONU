@@ -10,15 +10,15 @@ from enum import StrEnum
 import typer
 from rich.console import Console
 from rich.markup import escape
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 from rich.status import Status
 
 from sonu.cli.state import AppState, env_snapshot, get_state
-from sonu.core.engine import Confirmer, ConfirmRequest, Observer
+from sonu.core.engine import Chooser, Confirmer, ConfirmRequest, Observer
 from sonu.core.planning import Plan
 from sonu.core.report import ICONS, StepRecord, TaskReport
 from sonu.runtime import SetupError, build_runtime
-from sonu.tools.base import Risk
+from sonu.tools.base import Choices, Risk
 from sonu.ui.desktop_ui import Notifier, Picker
 
 SUCCESS_STATUSES = {"done", "planned", "reply", "ask"}
@@ -57,9 +57,14 @@ async def _never(request: ConfirmRequest) -> bool:
     return False
 
 
-def pick_confirmer(mode: ConfirmMode, console: Console) -> tuple[Confirmer, str]:
+def _resolve_mode(mode: ConfirmMode) -> ConfirmMode:
     if mode is ConfirmMode.AUTO:
-        mode = ConfirmMode.TERMINAL if sys.stdin.isatty() else ConfirmMode.GUI
+        return ConfirmMode.TERMINAL if sys.stdin.isatty() else ConfirmMode.GUI
+    return mode
+
+
+def pick_confirmer(mode: ConfirmMode, console: Console) -> tuple[Confirmer, str]:
+    mode = _resolve_mode(mode)
     if mode is ConfirmMode.TERMINAL:
         return terminal_confirmer(console), "terminal"
     if mode is ConfirmMode.GUI:
@@ -68,6 +73,43 @@ def pick_confirmer(mode: ConfirmMode, console: Console) -> tuple[Confirmer, str]
             return gui_confirmer(picker), picker.program
     # Nothing can ask the user: risky steps are refused (fail closed).
     return _never, "none (risky steps will be skipped)"
+
+
+# ---------------------------------------------------------------------------- questions
+def terminal_chooser(console: Console) -> Chooser:
+    async def choose(choices: Choices) -> str | None:
+        console.print(f"[cyan]? {escape(choices.prompt)}[/]")
+        for number, option in enumerate(choices.options, 1):
+            console.print(f"  [bold]{number}[/] {escape(option.label)}")
+        answer = await asyncio.to_thread(
+            Prompt.ask, "  Number (Enter to cancel)", default="", show_default=False, console=console
+        )
+        answer = answer.strip()
+        if answer.isdigit() and 1 <= int(answer) <= len(choices.options):
+            return choices.options[int(answer) - 1].value
+        return None
+
+    return choose
+
+
+def gui_chooser(picker: Picker) -> Chooser:
+    async def choose(choices: Choices) -> str | None:
+        index = await picker.choose(choices.prompt, [option.label for option in choices.options])
+        return None if index is None else choices.options[index].value
+
+    return choose
+
+
+def pick_chooser(mode: ConfirmMode, console: Console) -> Chooser | None:
+    """Who answers SONU's questions: the same place confirmations go (never → nobody; SONU stops)."""
+    mode = _resolve_mode(mode)
+    if mode is ConfirmMode.TERMINAL:
+        return terminal_chooser(console)
+    if mode is ConfirmMode.GUI:
+        picker = Picker.detect()
+        if picker is not None:
+            return gui_chooser(picker)
+    return None
 
 
 # ---------------------------------------------------------------------------- live output
@@ -145,13 +187,16 @@ def run_request(
     state.require_valid_config()
     console = state.console
     confirmer, how = pick_confirmer(confirm_mode, state.err)
+    chooser = pick_chooser(confirm_mode, state.err)
     observer = TerminalObserver(console, enabled=not as_json)
 
     async def go() -> TaskReport:
         runtime = await build_runtime(state.settings, state.paths, env_snapshot(), deep=deep, model=model)
         try:
             observer.start(runtime.planner_model)
-            return await runtime.engine.run(text, confirm=confirmer, dry_run=dry_run, observer=observer)
+            return await runtime.engine.run(
+                text, confirm=confirmer, choose=chooser, dry_run=dry_run, observer=observer
+            )
         finally:
             observer.stop()
             await runtime.aclose()
@@ -187,8 +232,9 @@ _NOTIFY = typer.Option(False, "--notify", help="Also show the result as a deskto
 _CONFIRM = typer.Option(
     ConfirmMode.AUTO,
     "--confirm",
-    help="How to ask before risky steps: auto (terminal if interactive, else a rofi/fuzzel/wofi "
-    "dialog), terminal, gui, or never (risky steps are skipped).",
+    help="How to ask before risky steps and which-one questions: auto (terminal if interactive, "
+    "else a rofi/fuzzel/wofi dialog), terminal, gui, or never (risky steps are skipped, questions "
+    "are only reported).",
 )
 
 
@@ -224,7 +270,7 @@ def prompt(
 ) -> None:
     """Pop up a text box (rofi/fuzzel/wofi), then run the request and show the result as a notification.
 
-    Made for keybinds, e.g. in Hyprland: hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu prompt"))
+    Made for keybinds, e.g. in Hyprland: hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu prompt"))
     """
     state = get_state(ctx)
     picker = Picker.detect()

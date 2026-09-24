@@ -31,6 +31,19 @@ SAMPLE_APPS: dict[str, str] = {
     ),
     "whatsapp.desktop": "[Desktop Entry]\nName=WhatsApp Desktop\nExec=whatsapp-desktop\nType=Application\n",
     "btop.desktop": "[Desktop Entry]\nName=btop++\nExec=btop\nType=Application\nTerminal=true\n",
+    # Helper entries real packages install next to the app (same program, hidden or secondary).
+    "kitty-open.desktop": (
+        "[Desktop Entry]\nType=Application\nName=kitty URL Launcher\nGenericName=Terminal emulator\n"
+        "TryExec=kitty\nExec=kitty +open %U\nCategories=System;TerminalEmulator;\nNoDisplay=true\n"
+    ),
+    "code-oss-url-handler.desktop": (
+        "[Desktop Entry]\nName=Code - OSS - URL Handler\nExec=/usr/bin/code-oss --open-url %U\n"
+        "Type=Application\nNoDisplay=true\nCategories=Utility;TextEditor;Development;IDE;\n"
+    ),
+    "thunar-bulk-rename.desktop": (
+        "[Desktop Entry]\nName=Bulk Rename\nExec=thunar --bulk-rename %F\nType=Application\n"
+        "Categories=System;Utility;Core;GTK;FileTools;\n"
+    ),
 }
 
 

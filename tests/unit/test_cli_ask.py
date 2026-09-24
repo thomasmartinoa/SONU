@@ -66,6 +66,13 @@ def invoke(args: list[str], env: dict[str, str]) -> Any:
         (["ask", "open", "kitty"], ["ask", "open", "kitty"]),
         (["--help"], ["--help"]),
         ([], []),
+        # Found on real hardware: the documented `sonu --dry-run open kitty …` was rejected.
+        (["--dry-run", "open", "kitty"], ["ask", "--dry-run", "open", "kitty"]),
+        (["--deep", "-v", "open", "x"], ["-v", "ask", "--deep", "open", "x"]),
+        (["--model", "qwen3:8b", "open", "x"], ["ask", "--model", "qwen3:8b", "open", "x"]),
+        (["--confirm=gui", "--notify", "open"], ["ask", "--confirm=gui", "--notify", "open"]),
+        (["--dry-run", "doctor"], ["--dry-run", "doctor"]),  # a command stays a command
+        (["--model"], ["--model"]),
     ],
 )
 def test_bare_requests_become_ask(argv: list[str], expected: list[str]) -> None:
@@ -145,3 +152,54 @@ def test_prompt_needs_a_picker(env: dict[str, str], monkeypatch: pytest.MonkeyPa
     result = invoke(["prompt"], env)
     assert result.exit_code == 1
     assert "needs rofi, fuzzel or wofi" in result.output
+
+
+def test_terminal_answers_which_one(
+    env: dict[str, str], fake_ollama: FakeOllama, threaded_hypr: tuple[ThreadedFakeHyprland, FakeHyprland]
+) -> None:
+    _, fake = threaded_hypr
+    fake.apps["codium"] = FakeApp("VSCodium", "Welcome - VSCodium")
+    plan = {"kind": "steps", "steps": [{"tool": "apps.launch", "args": {"app": "VS Code", "workspace": 3}}]}
+    fake_ollama.chat_responder = lambda body: json.dumps(plan)
+    result = CliRunner().invoke(
+        app, ["ask", "--confirm", "terminal", "open VS Code on 3"], env=env, input="2\n"
+    )
+    assert result.exit_code == 0, result.output
+    assert "Which app did you mean by 'VS Code'?" in result.output
+    assert "✔ Opened VSCodium on workspace 3" in result.output
+    assert [w["workspace"]["id"] for w in fake.windows_of_class("VSCodium")] == [3]
+
+
+def test_never_mode_only_reports_the_question(
+    env: dict[str, str], fake_ollama: FakeOllama, threaded_hypr: tuple[ThreadedFakeHyprland, FakeHyprland]
+) -> None:
+    _, fake = threaded_hypr
+    plan = {"kind": "steps", "steps": [{"tool": "apps.launch", "args": {"app": "VS Code"}}]}
+    fake_ollama.chat_responder = lambda body: json.dumps(plan)
+    result = invoke(["ask", "--confirm", "never", "open VS Code"], env)
+    assert result.exit_code == 1
+    assert "Which one did you mean for 'VS Code': Code - OSS or VSCodium?" in result.output
+    assert fake.launched == []
+
+
+@pytest.mark.parametrize(
+    ("output", "exit_code", "expected"),
+    [
+        ("2. VSCodium", 0, 1),
+        ("1. Code - OSS", 0, 0),
+        ("something typed", 0, None),
+        ("9. nope", 0, None),
+        ("", 1, None),
+    ],
+)
+@pytest.mark.anyio
+async def test_picker_choose_reads_the_number_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str, exit_code: int, expected: int | None
+) -> None:
+    script = tmp_path / "rofi"
+    script.write_text(f"#!/bin/sh\ncat > '{tmp_path}/stdin'\necho '{output}'\nexit {exit_code}\n")
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:/usr/bin:/bin")
+    picked = await Picker("rofi").choose("Which app?", ["Code - OSS", "VSCodium"])
+    assert picked == expected
+    assert (tmp_path / "stdin").read_text() == "1. Code - OSS\n2. VSCodium\n"

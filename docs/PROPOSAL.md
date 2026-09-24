@@ -639,13 +639,14 @@ Answered by the author on 2026-09-24:
 The NitroSense key sends keyboard scancode `0xf5`. What Linux turns it into depends on the model: the generic Acer
 rule maps it to **`XF86Presentation`** (keycode 425); models with a specific systemd hwdb entry (e.g. ANV15-51) map it
 to **`XF86Launch1`** (`prog1`); on some models it only reaches Linux through a vendor driver. So the first step is to
-see what yours sends, with `wev` (press the key, read the `sym:` line). Then, in `binds.lua`:
+see what yours sends, with `wev` (press the key, read the `sym:` line). **On the author's laptop it is
+`XF86Launch1`** (xkb keycode 156 = evdev `KEY_PROG1`), with separate press and release events. Then, in `binds.lua`:
 
 ```lua
-hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu prompt"))                       -- M1: open the SONU prompt
+hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu prompt"))                       -- M1: open the SONU prompt
 -- M3 push-to-talk: start on press, stop on release
--- hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu listen start"))
--- hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu listen stop"), { release = true })
+-- hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen start"))
+-- hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen stop"), { release = true })
 ```
 
 Some special keys send press and release together no matter how long they are held; if yours does, voice uses
