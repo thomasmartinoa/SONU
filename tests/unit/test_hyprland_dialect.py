@@ -49,7 +49,7 @@ def test_workspace_targets_are_validated() -> None:
     assert WorkspaceTarget.of("dev").value == "dev"
     for bad in (0, 100, -1, True, "special:magic", "two words", "x" * 33, ""):
         with pytest.raises(ValueError, match="workspace"):
-            WorkspaceTarget.of(bad)  # type: ignore[arg-type]
+            WorkspaceTarget.of(bad)
 
 
 def test_window_selectors_are_exact() -> None:
