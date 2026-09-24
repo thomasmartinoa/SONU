@@ -1,6 +1,7 @@
 # SONU — Design Proposal
 
-> **Status:** v0.2 — decisions recorded ([§10](#10-decisions)); milestone **M0 implemented**.
+> **Status:** v0.3 — decisions recorded ([§10](#10-decisions)); milestones **M0 and M1 implemented** (M1 awaiting
+> real-desktop validation).
 > **Date:** 2026-09-24
 > **Scope:** Architecture, research findings, security model, and roadmap for SONU (System-Oriented Neural Utility).
 > Decisions are also recorded as ADRs in [`docs/adr/`](adr/); the threat model lives in [`threat-model.md`](threat-model.md).
@@ -588,7 +589,7 @@ Order changed after the decisions: voice moves up to **M3** (right after the dae
 | # | Milestone | Scope | Exit criteria |
 |---|---|---|---|
 | **M0 ✅** | Foundations | Repo scaffold, Apache-2.0, CI, config/paths, logging, hash-chained audit log, Hyprland IPC client + event stream (read-only), Ollama inventory client, FakeHyprland, `sonu doctor`, ADRs, threat model | `uv run sonu doctor` reports Hyprland/Ollama/GPU status correctly on your machine; CI green |
-| **M1** | Verified window operator | Hyprland adapter (IPC, events, dialects), XDG app catalog + launcher, world model, M1 tools, verifier, policy engine + confirmations, Ollama provider with schema-constrained plans, CLI (`--dry-run`, `--explain`), FakeHyprland e2e tests, eval set v1 | The VS Code/Chromium example succeeds with verified placement in ≥ 9/10 runs with the default local model; wrong-workspace placement auto-corrected; missing apps reported honestly; every action in the audit log |
+| **M1 ✅** | Verified window operator | Hyprland dialects (Lua + hyprlang), XDG app catalog + resolver, world model + event-driven waiter, tools (launch, move, focus, show workspace, close, describe), verifier, policy + confirmations (terminal / rofi), Ollama planner with schema-constrained plans + repair, `sonu ask` / `sonu prompt` / `sonu eval`, FakeHyprland end-to-end tests, 20 eval cases | Wrong-workspace placement auto-corrected ✅ (tested); missing apps reported honestly ✅; every action audited ✅; **to measure on real hardware:** the VS Code/Chromium example in ≥ 9/10 runs, and the `sonu eval` score of the default model |
 | **M2** | Daemon + memory | `sonud` service, activity journal (30-day default retention), preferences ("remember …"), episodes, layout save/restore, routines, privacy controls | "What was I working on yesterday?" answered from the journal; `sonu layout save/restore` verified; retention/forget work |
 | **M3** | Voice | Push-to-talk, STT, TTS, then the "Hey Sonu" wake word; latency budget; VRAM scheduling; Quickshell bar widget | Spoken M1–M2 commands with measured end-to-end latency; no high-risk confirmation by voice alone |
 | **M4** | Projects & dev workflows | Project discovery, open project in VS Code / VSCodium, dev-server tool (allowlisted scripts from `package.json`/`Makefile`, port detection, `HttpOk` verification), open URL, side-by-side layouts, close-by-project | "Open my AI Shop Assistant project and start the dev server" works end-to-end with verification |

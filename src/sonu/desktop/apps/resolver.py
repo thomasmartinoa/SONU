@@ -144,9 +144,18 @@ class AppResolver:
         default_key, category = ROLES[query]
         default_command = self.role_defaults.get(default_key) if default_key else None
         if default_command:
-            matches = self.catalog.by_executable(default_command) or [
-                entry for entry in self.catalog.entries if entry.stem == default_command
-            ]
+            # The default is a command name ("zen-browser"); the entry may launch another binary
+            # ("zen-bin"), so also accept an entry whose name/id normalises to the same words.
+            wanted = normalize(default_command)
+            matches = (
+                self.catalog.by_executable(default_command)
+                or [entry for entry in self.catalog.entries if entry.stem == default_command]
+                or [
+                    entry
+                    for entry in self.catalog.entries
+                    if not entry.no_display and wanted in identifiers(entry)
+                ]
+            )
             if matches:
                 return Resolution("found", text, matches[0], reason=f"your default {default_key}")
         in_category = tuple(

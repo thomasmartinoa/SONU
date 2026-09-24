@@ -253,3 +253,26 @@ def test_window_class_matching(catalog: AppCatalog) -> None:
     assert not window_matches(code, ["co"])  # too short to count as a prefix
     assert window_matches(code, ["weird-class"], learned=["Weird-Class"])
     assert expected_classes(zen)[0] == "zen"
+
+
+def test_default_browser_found_by_name_when_binary_differs(tmp_path: Path) -> None:
+    apps = tmp_path / "share" / "applications"
+    _write(
+        apps,
+        {
+            "zen.desktop": "[Desktop Entry]\nName=Zen Browser\nExec=/opt/zen/zen-bin %u\nType=Application\n"
+            "Categories=Network;WebBrowser;\n",
+            "chromium.desktop": USER_APPS["chromium.desktop"],
+        },
+    )
+    catalog = AppCatalog.load(
+        {
+            "HOME": str(tmp_path),
+            "XDG_DATA_HOME": str(tmp_path / "share"),
+            "XDG_DATA_DIRS": str(tmp_path / "none"),
+        },
+        which=lambda name: name,
+    )
+    resolution = AppResolver(catalog, role_defaults={"browser": "zen-browser"}).resolve("browser")
+    assert resolution.status == "found"
+    assert resolution.entry is not None and resolution.entry.desktop_id == "zen.desktop"
