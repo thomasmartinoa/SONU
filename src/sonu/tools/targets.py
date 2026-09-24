@@ -58,7 +58,7 @@ def find_windows(target: WindowTarget, snapshot: WorldSnapshot, ctx: ToolContext
         candidates = [active]
 
     if target.app:
-        resolution = ctx.resolver.resolve(target.app)
+        resolution = ctx.resolver.resolve_for_request(target.app, ctx.request_text)
         if resolution.entry:
             entries = [resolution.entry]
         elif resolution.status == "ambiguous":

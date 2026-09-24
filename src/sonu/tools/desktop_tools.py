@@ -99,7 +99,7 @@ class LaunchApp(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot
     ) -> Prepared | ToolOutcome:
         a = cast(LaunchArgs, args)
-        resolution = ctx.resolver.resolve(a.app)
+        resolution = ctx.resolver.resolve_for_request(a.app, ctx.request_text)
         if resolution.status == "ambiguous":
             names = " or ".join(candidate.name for candidate in resolution.candidates[:4])
             return ToolOutcome(

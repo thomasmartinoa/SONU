@@ -141,6 +141,33 @@ class AppResolver:
         near = tuple(entry for _, entry in scored[:3])
         return Resolution("ambiguous", text, candidates=near, reason="no exact match; closest installed apps")
 
+    def grounded_phrase(self, app: str, request: str) -> str:
+        """Prefer the user's own, fuller phrase over the model's shortened one.
+
+        Small models sometimes shorten names ("open VS Code" → app "code"), which silently turns an
+        ambiguous request into a confident one. If the request contains a known phrase — a user
+        alias or a built-in alias like "vs code" — that includes every word of ``app``, resolve
+        that phrase instead, so SONU asks (or applies the user's alias) rather than guessing.
+        """
+        app_words = _strip_fillers(app).split()
+        request_text = f" {normalize(request)} "
+        if not app_words or not request.strip():
+            return app
+        best = app
+        for phrase in (*self.aliases, *BUILTIN_ALIASES):
+            words = phrase.split()
+            if (
+                len(words) > len(app_words)
+                and all(word in words for word in app_words)
+                and f" {phrase} " in request_text
+                and len(phrase) > len(best)
+            ):
+                best = phrase
+        return best
+
+    def resolve_for_request(self, app: str, request: str) -> Resolution:
+        return self.resolve(self.grounded_phrase(app, request))
+
     def labels_for_classes(self, classes: Iterable[str]) -> dict[str, str]:
         """App names for window classes, marking the user's default apps (for the planner's context)."""
         defaults: dict[str, str] = {}

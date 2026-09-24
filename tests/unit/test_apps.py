@@ -276,3 +276,29 @@ def test_default_browser_found_by_name_when_binary_differs(tmp_path: Path) -> No
     resolution = AppResolver(catalog, role_defaults={"browser": "zen-browser"}).resolve("browser")
     assert resolution.status == "found"
     assert resolution.entry is not None and resolution.entry.desktop_id == "zen.desktop"
+
+
+@pytest.mark.parametrize(
+    ("app", "request_text", "expected"),
+    [
+        ("code", "open VS Code on 3", "vs code"),  # the model shortened the user's words
+        ("Code", "please open vscode", "Code"),  # "vscode" is one word: nothing longer to prefer
+        ("code", "open code on 3", "code"),  # the user really said "code"
+        ("chromium", "open chromium", "chromium"),
+        ("browser", "open the browser", "browser"),
+        ("code", "", "code"),
+    ],
+)
+def test_grounded_phrase(resolver: AppResolver, app: str, request_text: str, expected: str) -> None:
+    assert resolver.grounded_phrase(app, request_text) == expected
+
+
+def test_shortened_name_still_asks(resolver: AppResolver) -> None:
+    resolution = resolver.resolve_for_request("code", "open VS Code")
+    assert resolution.status == "ambiguous"
+
+
+def test_shortened_name_uses_the_users_alias(catalog: AppCatalog) -> None:
+    resolver = AppResolver(catalog, aliases={"vs code": "codium.desktop"})
+    resolution = resolver.resolve_for_request("code", "open VS Code")
+    assert resolution.entry is not None and resolution.entry.desktop_id == "codium.desktop"

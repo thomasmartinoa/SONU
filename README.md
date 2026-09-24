@@ -74,6 +74,7 @@ the `SUPER+SPACE` menu entry and notifications.
 
 - [Design proposal](docs/PROPOSAL.md) — research, architecture, roadmap, decisions
 - [hypr-dotfiles integration](docs/integrations/hypr-dotfiles.md) — keybind, menu entry, notifications
+- [Evals](docs/evals.md) — how planner models are scored, and the results so far
 - [Threat model](docs/threat-model.md)
 - [Architecture decision records](docs/adr/)
 - [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)
