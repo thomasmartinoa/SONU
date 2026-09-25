@@ -288,17 +288,20 @@ forbid_tools = ["windows.focus", "apps.launch"]
 [[case]]
 id = "play-a-specific-song"
 request = "play me faded"
-notes = "Found on real hardware: SONU pressed play on whatever was loaded and said done. It can't pick songs."
+notes = "Found on real hardware: SONU once pressed play on whatever was loaded. It must find and play Faded."
 system = { player = "Paused" }
-expect_status = ["partial", "cannot"]
+expect_status = ["done"]
+expect_system = { videos_playing = 1 }
+require_tools = ["media.play"]
 
 [[case]]
 id = "song-on-youtube"
 request = "play faded on youtube"
-notes = "It can search YouTube, but must not claim it started the song."
-expect_status = ["partial"]
-expect_windows = [{ class = "zen", title_contains = "search_query=faded" }]
-require_tools = ["web.search"]
+notes = "The browser holds the new video back (autoplay rules); SONU must press play and check it."
+expect_status = ["done"]
+expect_windows = [{ class = "zen", title_contains = "youtube.com/watch" }]
+expect_system = { videos_playing = 1 }
+require_tools = ["media.play"]
 
 [[case]]
 id = "wifi-connect-saved"
@@ -321,3 +324,48 @@ request = "connect my headphones"
 notes = "Bluetooth starts off and rfkill-blocked; the headphones are found by kind (bluez icon)."
 expect_status = ["done"]
 expect_system = { bt_connected = ["WH-1000XM4"] }
+
+
+# ---- capability batch 1 (v5)
+
+[[case]]
+id = "reminder-in-minutes"
+request = "remind me in 15 minutes to check the oven"
+expect_status = ["done"]
+expect_system = { reminders = 1 }
+require_tools = ["reminders.set"]
+
+[[case]]
+id = "timer"
+request = "set a timer for 5 minutes"
+expect_status = ["done"]
+expect_system = { reminders = 1 }
+require_tools = ["reminders.set"]
+
+[[case]]
+id = "screenshot-window"
+request = "take a screenshot of this window"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+expect_status = ["done"]
+expect_system = { screenshots = 1 }
+require_tools = ["screen.capture"]
+
+[[case]]
+id = "night-light-and-dnd"
+request = "turn on the night light and don't disturb me"
+expect_status = ["done"]
+expect_system = { night_light = "on", do_not_disturb = true }
+require_tools = ["desktop.shell"]
+
+[[case]]
+id = "keep-awake"
+request = "keep my screen from going to sleep"
+expect_status = ["done"]
+expect_system = { keep_awake = "on" }
+
+[[case]]
+id = "laptop-health"
+request = "how is my laptop doing? cpu, memory and temperature"
+expect_status = ["done"]
+require_tools = ["system.status"]
+expect_reply_contains = "CPU temperature: 61"

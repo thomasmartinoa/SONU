@@ -69,11 +69,16 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "wifi-off-asks": steps(("settings.wifi", {"on": False})),
     "battery-status": steps(("system.status", {"what": ["battery"]})),
     "next-song-with-player-open": steps(("media.control", {"action": "next"})),
-    "play-a-specific-song": {"kind": "cannot", "message": "I can't pick songs yet.", "steps": []},
-    "song-on-youtube": {
-        **steps(("web.search", {"site": "youtube", "query": "faded"})),
-        "unsupported": ["start playing it"],
-    },
+    "play-a-specific-song": steps(("media.play", {"query": "faded"})),
+    "song-on-youtube": steps(("media.play", {"query": "faded"})),
+    "reminder-in-minutes": steps(("reminders.set", {"text": "check the oven", "in_minutes": 15})),
+    "timer": steps(("reminders.set", {"text": "timer", "in_minutes": 5})),
+    "screenshot-window": steps(("screen.capture", {"what": "window"})),
+    "night-light-and-dnd": steps(
+        ("desktop.shell", {"action": "night_light_on"}), ("desktop.shell", {"action": "do_not_disturb_on"})
+    ),
+    "keep-awake": steps(("desktop.shell", {"action": "keep_awake_on"})),
+    "laptop-health": steps(("system.status", {"what": ["cpu", "memory", "temperature"]})),
     "wifi-connect-saved": steps(("settings.wifi_connect", {"network": "hithere"})),
     "wifi-connect-new": steps(("settings.wifi_connect", {"network": "cafe"})),
     "headphones-connect": steps(("settings.bluetooth_device", {"device": "headphones"})),

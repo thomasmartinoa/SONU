@@ -389,7 +389,34 @@ class SetPowerMode(Tool):
 
 
 # ---------------------------------------------------------------------------- system.status
-StatusItem = Literal["volume", "mic", "brightness", "bluetooth", "wifi", "media", "power_mode", "battery"]
+StatusItem = Literal[
+    "volume",
+    "mic",
+    "brightness",
+    "bluetooth",
+    "wifi",
+    "media",
+    "power_mode",
+    "battery",
+    "health",
+    "cpu",
+    "memory",
+    "disk",
+    "temperature",
+    "gpu",
+    "uptime",
+]
+_SETTINGS_ITEMS: tuple[StatusItem, ...] = (
+    "volume",
+    "mic",
+    "brightness",
+    "bluetooth",
+    "wifi",
+    "media",
+    "power_mode",
+    "battery",
+)
+_HEALTH_ITEMS: tuple[StatusItem, ...] = ("cpu", "memory", "temperature", "gpu", "disk", "uptime")
 _ITEM_PROGRAM: dict[StatusItem, str | None] = {
     "volume": "wpctl",
     "mic": "wpctl",
@@ -398,22 +425,26 @@ _ITEM_PROGRAM: dict[StatusItem, str | None] = {
     "wifi": "nmcli",
     "media": "playerctl",
     "power_mode": "powerprofilesctl",
-    "battery": None,
+    "gpu": "nvidia-smi",
 }
+_GIB = 1024**3
 
 
 class StatusArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     what: list[StatusItem] = Field(
-        default_factory=list, max_length=8, description="which settings to report; empty = all of them"
+        default_factory=list,
+        max_length=16,
+        description="what to report; health = cpu, memory, temperature, gpu, disk, uptime; empty = settings",
     )
 
 
 class SystemStatus(Tool):
     name = "system.status"
     description = (
-        "Tell the user the current volume, mic, brightness, Bluetooth, Wi-Fi, media, power mode or battery."
+        "Tell the user the current volume, mic, brightness, Bluetooth, Wi-Fi, media, power mode, battery, "
+        "or the laptop's health: CPU, memory, temperature, GPU, disk space, uptime."
     )
     risk = Risk.READ_ONLY
     effects = frozenset({Effect.SYSTEM_READ})
@@ -422,7 +453,9 @@ class SystemStatus(Tool):
     async def prepare(
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
-        items = list(dict.fromkeys(cast(StatusArgs, args).what)) or list(_ITEM_PROGRAM)
+        asked = cast(StatusArgs, args).what or list(_SETTINGS_ITEMS)
+        expanded = [part for item in asked for part in (_HEALTH_ITEMS if item == "health" else (item,))]
+        items = list(dict.fromkeys(expanded))
         return Prepared("Check " + ", ".join(item.replace("_", " ") for item in items), items)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
@@ -431,7 +464,7 @@ class SystemStatus(Tool):
 
     @staticmethod
     async def _read(item: StatusItem, ctx: ToolContext) -> str:
-        program = _ITEM_PROGRAM[item]
+        program = _ITEM_PROGRAM.get(item)
         label = item.replace("_", " ").capitalize()
         if program and not ctx.system.available(program):
             return f"{label}: unknown ({program} isn't installed)"
@@ -445,18 +478,58 @@ class SystemStatus(Tool):
                 powered = await ctx.system.bluetooth_powered()
                 return "Bluetooth: " + ("no adapter" if powered is None else "on" if powered else "off")
             if item == "wifi":
-                return f"Wi-Fi: {'on' if await ctx.system.wifi_enabled() else 'off'}"
+                if not await ctx.system.wifi_enabled():
+                    return "Wi-Fi: off"
+                network = await ctx.system.wifi_active()
+                return f"Wi-Fi: on ({network})" if network else "Wi-Fi: on (not connected)"
             if item == "media":
                 status = await ctx.system.player_status()
                 return f"Media: {status.lower() if status else 'nothing playing'}"
             if item == "power_mode":
                 return f"Power mode: {await ctx.system.power_mode()}"
+            if item in _HEALTH_ITEMS:
+                return await _health(item, ctx)
             batteries = ctx.system.batteries()
             if not batteries:
                 return "Battery: none found"
             return " · ".join(f"Battery: {b.percent}% ({b.status.lower()})" for b in batteries)
         except CommandError as exc:
             return f"{label}: unknown ({exc})"
+
+
+async def _health(item: StatusItem, ctx: ToolContext) -> str:
+    system = ctx.system
+    if item == "cpu":
+        percent = await system.cpu_percent()
+        return "CPU: unknown" if percent is None else f"CPU: {percent:.0f}% busy"
+    if item == "memory":
+        memory = system.memory()
+        return (
+            "Memory: unknown"
+            if memory is None
+            else f"Memory: {memory[0] / _GIB:.1f} of {memory[1] / _GIB:.1f} GiB used"
+        )
+    if item == "disk":
+        disk = system.disk()
+        return (
+            "Disk: unknown"
+            if disk is None
+            else f"Disk: {disk[0] / _GIB:.0f} of {disk[1] / _GIB:.0f} GiB free"
+        )
+    if item == "temperature":
+        celsius = system.cpu_temperature()
+        return "CPU temperature: unknown" if celsius is None else f"CPU temperature: {celsius:.0f} °C"
+    if item == "gpu":
+        gpu = await system.gpu()
+        if gpu is None:
+            return "GPU: unknown"
+        util, celsius, used, total = gpu
+        return f"GPU: {util}% busy · {celsius} °C · {used / 1024:.1f} of {total / 1024:.1f} GiB"
+    seconds = system.uptime_s()
+    if seconds is None:
+        return "Uptime: unknown"
+    hours, minutes = divmod(round(seconds / 60), 60)
+    return f"Up {hours} h {minutes} min" if hours else f"Up {minutes} min"
 
 
 # ---------------------------------------------------------------------------- settings.wifi_connect

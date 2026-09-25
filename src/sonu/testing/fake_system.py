@@ -8,14 +8,34 @@ power mode that may be unavailable.
 
 from __future__ import annotations
 
+import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from sonu.system.commands import CommandError, CommandResult, ProgramMissing
 
 ALL_PROGRAMS = frozenset(
-    {"wpctl", "brightnessctl", "bluetoothctl", "rfkill", "nmcli", "playerctl", "powerprofilesctl"}
+    {
+        "wpctl",
+        "brightnessctl",
+        "bluetoothctl",
+        "rfkill",
+        "nmcli",
+        "playerctl",
+        "powerprofilesctl",
+        "yt-dlp",
+        "systemd-run",
+        "systemctl",
+        "notify-send",
+        "grim",
+        "slurp",
+        "wl-copy",
+        "wl-paste",
+        "qs",
+        "nvidia-smi",
+    }
 )
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
 
 @dataclass
@@ -52,6 +72,55 @@ class FakeSystem:
     power_mode: str = "balanced"
     power_modes: tuple[str, ...] = ("performance", "balanced", "power-saver")
     calls: list[tuple[str, ...]] = field(default_factory=list)
+    # YouTube: what yt-dlp finds (query → (id, title)); unknown queries get a made-up video.
+    videos: dict[str, tuple[str, str]] = field(default_factory=dict)
+    last_video: tuple[str, str] | None = None
+    # Other media players, e.g. a browser tab playing a video: name → [title, status].
+    other_players: dict[str, list[str]] = field(default_factory=dict)
+    browser_autoplay: bool = False  # False: the browser holds a new video back until "play"
+    browser_mpris: bool = True  # False: the browser never shows up in the media controls
+    timers: dict[str, str] = field(default_factory=dict)  # systemd unit → notification text
+    area: str | None = "10,20 300x200"  # what slurp returns (None: the user cancelled)
+    clipboard_type: str | None = None
+    shell: dict[str, str] = field(
+        default_factory=lambda: {"nightlight": "off", "caffeine": "off", "dnd": "false", "lock": "unlocked"}
+    )
+    notifications: int = 3
+    gpu_line: str = "12, 55, 4143, 8192"
+    last_input: bytes | None = None
+    shots: list[str] = field(default_factory=list)  # screenshot files written by grim
+
+    @property
+    def night_light(self) -> str:
+        return self.shell["nightlight"]
+
+    @property
+    def keep_awake(self) -> str:
+        return self.shell["caffeine"]
+
+    @property
+    def do_not_disturb(self) -> bool:
+        return self.shell["dnd"] == "true"
+
+    @property
+    def screenshots(self) -> int:
+        return len(self.shots)
+
+    @property
+    def videos_playing(self) -> int:
+        return sum(1 for _, status in self.other_players.values() if status == "Playing")
+
+    @property
+    def reminders(self) -> int:
+        return len(self.timers)
+
+    def page_opened(self, url: str) -> None:
+        """The fake browser opened ``url``: a YouTube watch page registers a media player (MPRIS)."""
+        if "youtube.com/watch" in url and self.last_video and self.browser_mpris:
+            self.other_players["firefox.instance_1_42"] = [
+                self.last_video[1],
+                "Playing" if self.browser_autoplay else "Paused",
+            ]
 
     @property
     def brightness(self) -> int:
@@ -68,8 +137,16 @@ class FakeSystem:
     def available(self, program: str) -> bool:
         return program in self.installed
 
-    async def run(self, argv: Sequence[str], *, timeout_s: float = 5.0) -> CommandResult:
+    async def run(
+        self,
+        argv: Sequence[str],
+        *,
+        timeout_s: float = 5.0,
+        input_bytes: bytes | None = None,
+        capture: bool = True,
+    ) -> CommandResult:
         args = tuple(argv)
+        self.last_input = input_bytes
         if args[0] not in self.installed:
             raise ProgramMissing(args[0])
         if args[0] == "bluetoothctl" and not self.bluetooth_service:
@@ -200,6 +277,14 @@ class FakeSystem:
         return 1, "", "unsupported\n"
 
     def _playerctl(self, args: list[str]) -> tuple[int, str, str]:
+        if args == ["-l"]:
+            names = (["applemusic"] if self.player is not None else []) + list(self.other_players)
+            return (0, "".join(f"{n}\n" for n in names), "") if names else (1, "", "No players found\n")
+        if args[:1] == ["-p"]:
+            name, rest = args[1], args[2:]
+            if name != "applemusic":
+                return self._other_player(name, rest)
+            args = rest
         if self.player is None:
             return 1, "", "No players found\n"
         if args == ["status"]:
@@ -216,6 +301,83 @@ class FakeSystem:
         elif args[0] == "previous":
             self.track = max(self.track - 1, 0)
         return 0, "", ""
+
+    def _other_player(self, name: str, args: list[str]) -> tuple[int, str, str]:
+        if name not in self.other_players:
+            return 1, "", "No players found\n"
+        player = self.other_players[name]
+        if args == ["status"]:
+            return 0, player[1] + "\n", ""
+        if args[:1] == ["metadata"]:
+            return 0, player[0] + "\n", ""
+        if args == ["play"]:
+            player[1] = "Playing"
+        return 0, "", ""
+
+    def _yt_dlp(self, args: list[str]) -> tuple[int, str, str]:
+        query = args[-1].removeprefix("ytsearch1:")
+        made_up = (
+            "vid" + str(zlib.crc32(query.encode()) % 10**8).zfill(8),
+            f"{query.title()} (Official Video)",
+        )
+        video = self.videos.get(query, made_up)
+        self.last_video = video
+        return 0, f"{video[0]}\t{video[1]}\n", ""
+
+    def _systemd_run(self, args: list[str]) -> tuple[int, str, str]:
+        unit = next(a.removeprefix("--unit=") for a in args if a.startswith("--unit="))
+        self.timers[unit] = args[-1]
+        return 0, f"Running timer as unit: {unit}.timer\n", ""
+
+    def _systemctl(self, args: list[str]) -> tuple[int, str, str]:
+        unit = args[2].removesuffix(".timer")
+        return 0, ("active" if unit in self.timers else "inactive") + "\n", ""
+
+    def _notify_send(self, args: list[str]) -> tuple[int, str, str]:
+        return 0, "", ""
+
+    def _grim(self, args: list[str]) -> tuple[int, str, str]:
+        from pathlib import Path
+
+        Path(args[-1]).write_bytes(PNG)
+        self.shots.append(args[-1])
+        return 0, "", ""
+
+    def _slurp(self, args: list[str]) -> tuple[int, str, str]:
+        return (0, self.area + "\n", "") if self.area else (1, "", "selection cancelled\n")
+
+    def _wl_copy(self, args: list[str]) -> tuple[int, str, str]:
+        if self.last_input and self.last_input.startswith(PNG[:8]):
+            self.clipboard_type = "image/png"
+        return 0, "", ""
+
+    def _wl_paste(self, args: list[str]) -> tuple[int, str, str]:
+        return 0, (self.clipboard_type or "text/plain") + "\n", ""
+
+    def _qs(self, args: list[str]) -> tuple[int, str, str]:
+        target, function = args[2], args[3]
+        if target in ("nightlight", "caffeine"):
+            if function in ("on", "off"):
+                self.shell[target] = function
+                return 0, "", ""
+            return 0, self.shell[target] + "\n", ""
+        if target == "notifications":
+            if function == "dnd":
+                self.shell["dnd"] = "false" if self.shell["dnd"] == "true" else "true"
+                return 0, self.shell["dnd"] + "\n", ""
+            if function == "clear":
+                self.notifications = 0
+                return 0, "", ""
+            return 0, f"{self.notifications}\n", ""
+        if target == "lock":
+            if function == "lock":
+                self.shell["lock"] = "locked"
+                return 0, "", ""
+            return 0, self.shell["lock"] + "\n", ""
+        return 1, "", f"No target {target} in shell\n"
+
+    def _nvidia_smi(self, args: list[str]) -> tuple[int, str, str]:
+        return 0, self.gpu_line + "\n", ""
 
     def _powerprofilesctl(self, args: list[str]) -> tuple[int, str, str]:
         if args == ["get"]:

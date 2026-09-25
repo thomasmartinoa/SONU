@@ -659,6 +659,11 @@ SETTINGS_PROGRAMS: tuple[tuple[str, str], ...] = (
     ("nmcli", "Wi-Fi"),
     ("playerctl", "media play/pause/next"),
     ("powerprofilesctl", "power mode"),
+    ("yt-dlp", "playing songs and videos from YouTube"),
+    ("slurp", "screenshots of an area"),
+    ("wl-copy", "copying screenshots"),
+    ("systemd-run", "reminders and timers"),
+    ("qs", "night light, keep awake, do-not-disturb, lock (the rice's switches)"),
 )
 
 
@@ -676,7 +681,7 @@ async def check_settings_programs(ctx: DoctorContext) -> list[CheckResult]:
         CheckResult(
             "tools.settings",
             "Desktop tools",
-            "Settings programs",
+            "Control programs",
             "info" if missing else "ok",
             summary,
             hint=hint,

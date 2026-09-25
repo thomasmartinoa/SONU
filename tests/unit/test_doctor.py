@@ -283,3 +283,4 @@ async def test_settings_programs_are_listed_with_packages(xdg_env: dict[str, str
     assert result.status == "info"
     assert result.summary.startswith("found: wpctl, brightnessctl, nmcli · missing: bluetoothctl")
     assert result.hint is not None and "bluetoothctl — Bluetooth (pacman: bluez-utils)" in result.hint
+    assert "yt-dlp — playing songs and videos from YouTube (pacman: yt-dlp)" in result.hint

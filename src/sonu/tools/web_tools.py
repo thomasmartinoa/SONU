@@ -110,7 +110,7 @@ WEB_REACT_S = 8.0
 _SITE_OPERATOR = re.compile(r"(?<!\S)site:(\S+)", re.IGNORECASE)
 
 
-def _compact(text: str) -> str:
+def compact(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.casefold())
 
 
@@ -131,20 +131,20 @@ def _valid_host(host: str) -> bool:
 
 
 @dataclass(frozen=True, slots=True)
-class _Target:
+class Target:
     url: str
     label: str  # "YouTube search for 'networkchuck'", "github.com"
     marker: str  # compact text expected in the window title; "" if SONU can't know it
 
 
-def site_link(text: str, request: str) -> _Target | ToolOutcome:
+def site_link(text: str, request: str) -> Target | ToolOutcome:
     """A site the user named ("youtube") or a link/domain they typed ("github.com/hyprwm")."""
     key = normalize(text)
     for site in (*SITES.values(), *ENGINES.values()):
         if key in site.words or key == normalize(site.name):
             if not _named_in(site, request):
                 return ToolOutcome(StepStatus.FAILED, f"SONU only opens sites you named ({site.name} wasn't)")
-            return _Target(site.home, site.name, _compact(site.marker))
+            return Target(site.home, site.name, compact(site.marker))
 
     raw = text.strip()
     url = raw if "://" in raw else f"https://{raw}"
@@ -162,7 +162,7 @@ def site_link(text: str, request: str) -> _Target | ToolOutcome:
     if typed.casefold() not in request.casefold():
         return ToolOutcome(StepStatus.FAILED, "SONU only opens links you typed yourself")
     label = typed if len(typed) <= 60 else typed[:59] + "…"
-    return _Target(url, label, _compact(_brand(host) if port is None else ""))
+    return Target(url, label, compact(_brand(host) if port is None else ""))
 
 
 def _brand(host: str) -> str:
@@ -182,15 +182,15 @@ def _brand(host: str) -> str:
 
 # ---------------------------------------------------------------------------- the shared part
 @dataclass(frozen=True, slots=True)
-class _WebPlan:
+class WebPlan:
     entry: AppEntry
     argv: tuple[str, ...]
-    target: _Target
+    target: Target
 
 
-def _prepare_browser(
-    target: _Target, browser: str | None, ctx: ToolContext, choice: str | None
-) -> _WebPlan | ToolOutcome:
+def prepare_browser(
+    target: Target, browser: str | None, ctx: ToolContext, choice: str | None
+) -> WebPlan | ToolOutcome:
     entry: AppEntry | ToolOutcome
     if choice is not None:
         entry = chosen_app(choice, ctx)
@@ -205,10 +205,10 @@ def _prepare_browser(
     argv = ctx.launch_argv(entry)
     if argv is None:
         return ToolOutcome(StepStatus.FAILED, f"{entry.name} can't be started")
-    return _WebPlan(entry, (*argv, target.url), target)
+    return WebPlan(entry, (*argv, target.url), target)
 
 
-async def _open_in_browser(plan: _WebPlan, ctx: ToolContext) -> ToolOutcome:
+async def open_in_browser(plan: WebPlan, ctx: ToolContext) -> ToolOutcome:
     entry, target = plan.entry, plan.target
     before = await ctx.desktop.snapshot()
     titles = {window.address: window.title for window in before.windows}
@@ -229,7 +229,7 @@ async def _open_in_browser(plan: _WebPlan, ctx: ToolContext) -> ToolOutcome:
     def loaded(snapshot: WorldSnapshot) -> Window | None:
         if not target.marker:
             return next(iter(changed(snapshot)), None)
-        return next((w for w in changed(snapshot) if target.marker in _compact(w.title)), None)
+        return next((w for w in changed(snapshot) if target.marker in compact(w.title)), None)
 
     running = any(
         window_matches(entry, (window.window_class, window.initial_class), learned)
@@ -327,14 +327,14 @@ class WebSearch(Tool):
             )
         site = ENGINES[ctx.settings.web.search_engine] if site_key == "web" else SITES[site_key]
         url = site.search.format(q=quote_plus(query))
-        target = _Target(url, f"{site.name} search for '{query}'", _compact(site.marker))
-        plan = _prepare_browser(target, a.browser, ctx, choice)
+        target = Target(url, f"{site.name} search for '{query}'", compact(site.marker))
+        plan = prepare_browser(target, a.browser, ctx, choice)
         if isinstance(plan, ToolOutcome):
             return plan
         return Prepared(f"Search {site.name} for '{a.query.strip()}' in {plan.entry.name}", plan)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
-        return await _open_in_browser(cast(_WebPlan, prepared.payload), ctx)
+        return await open_in_browser(cast(WebPlan, prepared.payload), ctx)
 
 
 # ---------------------------------------------------------------------------- web.open
@@ -367,13 +367,13 @@ class OpenSite(Tool):
         target = site_link(a.site, ctx.request_text)
         if isinstance(target, ToolOutcome):
             return target
-        plan = _prepare_browser(target, a.browser, ctx, choice)
+        plan = prepare_browser(target, a.browser, ctx, choice)
         if isinstance(plan, ToolOutcome):
             return plan
         return Prepared(f"Open {target.label} in {plan.entry.name}", plan)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
-        return await _open_in_browser(cast(_WebPlan, prepared.payload), ctx)
+        return await open_in_browser(cast(WebPlan, prepared.payload), ctx)
 
 
 WEB_TOOLS: tuple[Tool, ...] = (WebSearch(), OpenSite())

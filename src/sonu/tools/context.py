@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from sonu.config.settings import Settings
@@ -42,6 +43,8 @@ class ToolContext:
     task_browser: AppEntry | None = None
     # Volume, brightness, radios, media, power mode (tests and evals pass a SystemControl on a fake).
     system: SystemControl = field(default_factory=SystemControl)
+    # The clock (reminders, screenshot names); tests pass a fixed one.
+    now: Callable[[], datetime] = datetime.now
 
     def learned(self, entry: AppEntry) -> set[str]:
         return self.learned_classes.get(entry.desktop_id, set())

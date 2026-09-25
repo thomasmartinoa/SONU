@@ -7,7 +7,8 @@ Owner: [@thomasmartinoa](https://github.com/thomasmartinoa). It is never called 
 
 1. [`docs/STATUS.md`](docs/STATUS.md) — what works on real hardware, what's next, open questions, every PR so far.
 2. [`docs/DECISIONS.md`](docs/DECISIONS.md) — every decision and why. Don't re-open a decision without a new reason.
-3. As needed: [`docs/PROPOSAL.md`](docs/PROPOSAL.md) (design, research, roadmap), [`docs/threat-model.md`](docs/threat-model.md),
+3. [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) — the map of abilities (done / next / planned) and how each works.
+4. As needed: [`docs/PROPOSAL.md`](docs/PROPOSAL.md) (design, research, roadmap), [`docs/threat-model.md`](docs/threat-model.md),
    [`docs/evals.md`](docs/evals.md), [`docs/integrations/hypr-dotfiles.md`](docs/integrations/hypr-dotfiles.md), [`docs/adr/`](docs/adr/).
 
 **Every PR updates `docs/STATUS.md`** (and `docs/DECISIONS.md` when something was decided), so a fresh session or a
@@ -52,8 +53,9 @@ sonu eval                               # real planner model on the eval suite (
 src/sonu/
   cli/            typer commands: ask (default), prompt, eval, doctor, config, audit, desktop
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py
-  tools/          base.py (tool contract), desktop_tools.py, web_tools.py, registry.py (plan schema),
-                  targets.py (which window), context.py
+  tools/          base.py (tool contract), desktop_tools.py, web_tools.py, media_tools.py, settings_tools.py,
+                  everyday_tools.py, grounding.py, registry.py (plan schema), targets.py, context.py
+  system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …)
   desktop/        hyprland/ (IPC, events, Lua/hyprlang dialects, desktop adapter), apps/ (XDG catalog, resolver)
   world/          snapshot.py, origin.py (the terminal SONU runs in)
   verify/ policy/ audit/ llm/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice)

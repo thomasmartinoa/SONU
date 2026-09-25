@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v4, 40 cases)
+## The cases (v5, 46 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -34,6 +34,10 @@ v4 adds five more from the owner's first settings session: **"play me faded"** (
 not report done), "play faded on youtube" (search, and say it can't start the video), connecting to a **saved** Wi-Fi
 network (asks, because it leaves the current one), refusing an **unknown** network, and connecting headphones found
 by kind while Bluetooth starts off.
+
+v5 (capability batch 1) turns the two "play" cases into real playback (the browser holds the video back, SONU
+must press play and confirm it) and adds reminders, a timer, a window screenshot, night light + do-not-disturb, keep
+awake and a laptop-health question.
 
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use

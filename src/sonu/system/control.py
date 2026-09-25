@@ -7,8 +7,11 @@ The exact behaviours copied from the rice (hypr-dotfiles) are noted where they m
 
 from __future__ import annotations
 
+import asyncio
 import re
+import shutil
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -33,6 +36,10 @@ _DEVICE_LINE = re.compile(r"^Device ((?:[0-9A-F]{2}:){5}[0-9A-F]{2}) (.+)$", re.
 _MAC = re.compile(r"^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$")
 _WIFI_TYPE = "802-11-wireless"
 CONNECT_TIMEOUT_S = 25.0
+SEARCH_TIMEOUT_S = 30.0  # yt-dlp contacts YouTube
+_VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
+_GEOMETRY = re.compile(r"^-?\d+,-?\d+ \d+x\d+$")
+_SHELL_WORD = re.compile(r"^[a-z][a-z-]{0,30}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +66,16 @@ class BluetoothDevice:
     name: str
     icon: str  # e.g. "audio-headphones", "input-keyboard" (bluez's device class)
     connected: bool
+
+
+@dataclass(frozen=True, slots=True)
+class Video:
+    id: str
+    title: str
+
+    @property
+    def url(self) -> str:
+        return f"https://www.youtube.com/watch?v={self.id}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,10 +151,19 @@ def parse_bluetooth_info(mac: str, text: str) -> BluetoothDevice:
 
 class SystemControl:
     def __init__(
-        self, runner: CommandRunner | None = None, *, power_supply: Path = Path("/sys/class/power_supply")
+        self,
+        runner: CommandRunner | None = None,
+        *,
+        power_supply: Path = Path("/sys/class/power_supply"),
+        proc: Path = Path("/proc"),
+        sys: Path = Path("/sys"),
+        home: Path | None = None,
     ) -> None:
         self.runner: CommandRunner = runner or SubprocessRunner()
         self.power_supply = power_supply
+        self.proc = proc
+        self.sys = sys
+        self.home = home or Path.home()
 
     def available(self, program: str) -> bool:
         return self.runner.available(program)
@@ -259,6 +285,182 @@ class SystemControl:
     async def player(self, action: PlayerAction) -> None:
         await self._run("playerctl", _PLAYERCTL[action])
 
+    async def players(self) -> list[str]:
+        """Every media player the system knows (``playerctl -l``), e.g. a browser playing a video."""
+        result = await self.runner.run(("playerctl", "-l"))
+        return [line.strip() for line in result.stdout.splitlines() if line.strip()] if result.ok else []
+
+    async def player_state(self, name: str) -> tuple[str | None, str]:
+        """(status, title) of one player; status None if it's gone."""
+        status = await self.runner.run(("playerctl", "-p", name, "status"))
+        title = await self.runner.run(("playerctl", "-p", name, "metadata", "--format", "{{title}}"))
+        return (
+            status.stdout.strip() or None
+        ) if status.ok else None, title.stdout.strip() if title.ok else ""
+
+    async def play_player(self, name: str) -> None:
+        await self._run("playerctl", "-p", name, "play")
+
+    # ------------------------------------------------------------------ YouTube (yt-dlp, read-only lookup)
+    async def find_video(self, query: str) -> Video | None:
+        """The top YouTube result for ``query`` (the user's own words). Nothing is downloaded."""
+        result = await self._run(
+            "yt-dlp",
+            "--ignore-config",
+            "--no-warnings",
+            "--flat-playlist",
+            "--print",
+            "%(id)s\t%(title)s",
+            f"ytsearch1:{query}",
+            timeout_s=SEARCH_TIMEOUT_S,
+        )
+        for line in result.stdout.splitlines():
+            video_id, _, title = line.partition("\t")
+            if _VIDEO_ID.match(video_id):
+                return Video(video_id, title.strip() or video_id)
+        return None
+
+    # ------------------------------------------------------------------ reminders (systemd user timers)
+    async def schedule_reminder(self, unit: str, when: datetime, text: str) -> None:
+        """A transient user timer that shows a notification at ``when`` (local time)."""
+        await self._run(
+            "systemd-run",
+            "--user",
+            f"--unit={unit}",
+            f"--description=SONU reminder: {text[:60]}",
+            f"--on-calendar={when:%Y-%m-%d %H:%M:%S}",
+            "--timer-property=AccuracySec=1s",
+            "--",
+            "notify-send",
+            "--app-name=SONU",
+            "--urgency=critical",
+            "--",
+            "SONU reminder",
+            text,
+        )
+
+    async def timer_active(self, unit: str) -> bool:
+        result = await self.runner.run(
+            ("systemctl", "--user", "show", f"{unit}.timer", "--property=ActiveState", "--value")
+        )
+        return result.ok and result.stdout.strip() == "active"
+
+    # ------------------------------------------------------------------ screenshots (grim, slurp, wl-copy)
+    def screenshot_dir(self) -> Path:
+        """The rice's screenshot folder (~/Pictures/screenshot) if it exists, else ~/Pictures/Screenshots."""
+        pictures = self.home / "Pictures"
+        rice = pictures / "screenshot"
+        return rice if rice.is_dir() else pictures / "Screenshots"
+
+    async def select_area(self) -> str | None:
+        """Let the user drag out an area (slurp); None if they cancelled."""
+        result = await self.runner.run(("slurp",), timeout_s=120.0)
+        geometry = result.stdout.strip()
+        return geometry if result.ok and _GEOMETRY.match(geometry) else None
+
+    async def screenshot(self, path: Path, geometry: str | None = None) -> None:
+        if geometry is not None and not _GEOMETRY.match(geometry):
+            raise CommandError(f"Not a screen area: {geometry!r}")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        area = ("-g", geometry) if geometry else ()
+        await self._run("grim", *area, str(path), timeout_s=15.0)
+
+    async def copy_image(self, path: Path) -> None:
+        # wl-copy keeps serving the clipboard from a forked helper: don't capture its output.
+        image = await asyncio.to_thread(path.read_bytes)
+        result = await self.runner.run(("wl-copy", "--type", "image/png"), input_bytes=image, capture=False)
+        if not result.ok:
+            raise CommandError(result.problem())
+
+    async def clipboard_types(self) -> list[str]:
+        result = await self.runner.run(("wl-paste", "--list-types"))
+        return result.stdout.split() if result.ok else []
+
+    # ------------------------------------------------------------------ the rice's switches (Quickshell IPC)
+    async def shell_call(self, target: str, function: str) -> str:
+        """``qs ipc call target function`` → its return value (the rice's own switches)."""
+        if not (_SHELL_WORD.match(target) and _SHELL_WORD.match(function)):
+            raise CommandError(f"Not a shell switch: {target}.{function}")
+        return (await self._run("qs", "ipc", "call", target, function)).stdout.strip()
+
+    # ------------------------------------------------------------------ laptop health (read-only)
+    def _cpu_times(self) -> tuple[int, int]:
+        fields = (self.proc / "stat").read_text().splitlines()[0].split()[1:]
+        values = [int(value) for value in fields]
+        idle = values[3] + (values[4] if len(values) > 4 else 0)  # idle + iowait
+        return idle, sum(values)
+
+    async def cpu_percent(self) -> float | None:
+        try:
+            idle1, total1 = self._cpu_times()
+            await asyncio.sleep(0.3)
+            idle2, total2 = self._cpu_times()
+        except (OSError, ValueError, IndexError):
+            return None
+        if total2 == total1:
+            return None
+        return max(0.0, min(100.0, 100.0 * (1 - (idle2 - idle1) / (total2 - total1))))
+
+    def memory(self) -> tuple[int, int] | None:
+        """(used, total) in bytes, from /proc/meminfo (used = total - available)."""
+        try:
+            info = {
+                line.split(":")[0]: int(line.split()[1]) * 1024
+                for line in (self.proc / "meminfo").read_text().splitlines()
+                if len(line.split()) >= 2
+            }
+            return info["MemTotal"] - info["MemAvailable"], info["MemTotal"]
+        except (OSError, ValueError, KeyError):
+            return None
+
+    def disk(self) -> tuple[int, int] | None:
+        """(free, total) bytes of the partition holding the home folder."""
+        try:
+            usage = shutil.disk_usage(self.home)
+        except OSError:
+            return None
+        return usage.free, usage.total
+
+    def cpu_temperature(self) -> float | None:
+        """°C of the CPU: hwmon coretemp/k10temp, else the x86_pkg_temp zone, else the hottest zone."""
+        for hwmon in sorted((self.sys / "class" / "hwmon").glob("hwmon*")):
+            try:
+                if (hwmon / "name").read_text().strip() in ("coretemp", "k10temp", "zenpower"):
+                    return int((hwmon / "temp1_input").read_text()) / 1000
+            except (OSError, ValueError):
+                continue
+        zones: list[tuple[str, float]] = []
+        for zone in sorted((self.sys / "class" / "thermal").glob("thermal_zone*")):
+            try:
+                zones.append(((zone / "type").read_text().strip(), int((zone / "temp").read_text()) / 1000))
+            except (OSError, ValueError):
+                continue
+        package = [temp for kind, temp in zones if kind == "x86_pkg_temp"]
+        if package:
+            return package[0]
+        return max((temp for _, temp in zones), default=None)
+
+    def uptime_s(self) -> float | None:
+        try:
+            return float((self.proc / "uptime").read_text().split()[0])
+        except (OSError, ValueError, IndexError):
+            return None
+
+    async def gpu(self) -> tuple[int, int, int, int] | None:
+        """(utilisation %, °C, MiB used, MiB total) from nvidia-smi."""
+        result = await self.runner.run(
+            (
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total",
+                "--format=csv,noheader,nounits",
+            )
+        )
+        try:
+            util, temp, used, total = (int(v.strip()) for v in result.stdout.splitlines()[0].split(","))
+        except (ValueError, IndexError):
+            return None
+        return util, temp, used, total
+
     # ------------------------------------------------------------------ power mode (powerprofilesctl)
     async def power_mode(self) -> str:
         return (await self._run("powerprofilesctl", "get")).stdout.strip()
@@ -289,6 +491,7 @@ __all__ = [
     "PowerMode",
     "ProgramMissing",
     "SystemControl",
+    "Video",
     "Volume",
     "parse_backlight",
     "parse_bluetooth_powered",
