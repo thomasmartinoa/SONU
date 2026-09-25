@@ -44,8 +44,9 @@ class TargetMatch:
     problem: str | None = None  # set when nothing matched or the app name is unknown
 
 
-def window_label(window: Window) -> str:
-    return f"{window.window_class} (workspace {window.workspace.name})"
+def window_label(window: Window, *, focused: bool = False) -> str:
+    where = f"workspace {window.workspace.name}" + (", focused" if focused else "")
+    return f"{window.window_class} ({where})"
 
 
 def find_windows(target: WindowTarget, snapshot: WorldSnapshot, ctx: ToolContext) -> TargetMatch:

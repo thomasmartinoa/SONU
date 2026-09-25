@@ -219,6 +219,8 @@ async def test_close_needs_confirmation_and_respects_no(harness: Harness) -> Non
     report = await harness.engine(plans).run("close kitty", confirm=confirmations)
     assert [request.tool for request in confirmations.seen] == ["windows.close"]
     assert report.steps[0].outcome.status is StepStatus.DENIED
+    assert report.status == "declined"
+    assert report.headline() == "Nothing changed — not approved"
     assert len(harness.fake.windows) == 1
 
 
@@ -257,6 +259,7 @@ async def test_suggest_mode_never_acts(harness: Harness) -> None:
         REQUEST, confirm=Confirmations(True)
     )
     assert {record.outcome.status for record in report.steps} == {StepStatus.DENIED}
+    assert report.status == "failed"  # forbidden by policy, not declined by the user
     assert harness.fake.launched == []
 
 
@@ -556,3 +559,46 @@ async def test_dry_run_does_not_ask(harness: Harness) -> None:
     report = await harness.engine(plans).run("r", confirm=Confirmations(False), choose=answers, dry_run=True)
     assert report.status == "needs-input"
     assert answers.seen == []
+
+
+# ---------------------------------------------------------------- found on the author's desktop
+@pytest.mark.anyio
+async def test_terminal_opens_a_new_window_even_if_one_is_open(harness: Harness) -> None:
+    harness.fake.windows = [make_window("0xa1", "kitty", "zsh", workspace_id=1, stable_id="a1")]
+    harness.fake.active_address = "0xa1"  # the terminal the user is typing in
+    plans = {"r": steps_plan(("apps.launch", {"app": "kitty", "workspace": 2}))}
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert harness.fake.launched
+    assert harness.workspace_of("kitty") == [1, 2]  # the user's terminal stayed where it was
+
+
+@pytest.mark.anyio
+async def test_move_ignores_windows_already_on_the_target(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "kitty", "git pull", workspace_id=2, stable_id="a1"),
+        make_window("0xb2", "kitty", "~", workspace_id=3, stable_id="b2"),
+    ]
+    plans = {"r": steps_plan(("windows.move", {"window": {"app": "kitty"}, "workspace": 3}))}
+    answers = Answers(None)
+    report = await harness.engine(plans).run("r", confirm=Confirmations(False), choose=answers)
+    assert report.status == "done", report.lines()
+    assert answers.seen == []  # nothing to ask: only one kitty wasn't on 3 already
+    assert harness.workspace_of("kitty") == [3, 3]
+
+
+@pytest.mark.anyio
+async def test_choice_labels_are_short_and_mark_the_focused_window(harness: Harness) -> None:
+    long_title = "cd ~/dev_works/SONU && git pull \\nsonu --dry-run open kitty on workspace 2"
+    harness.fake.windows = [
+        make_window("0xa1", "kitty", long_title, workspace_id=2, stable_id="a1"),
+        make_window("0xb2", "kitty", "~", workspace_id=3, stable_id="b2"),
+    ]
+    harness.fake.active_address = "0xa1"
+    plans = {"r": steps_plan(("windows.close", {"window": {"app": "kitty"}}))}
+    answers = Answers(None)
+    await harness.engine(plans).run("r", confirm=Confirmations(False), choose=answers)
+    labels = [option.label for option in answers.seen[0].options]
+    assert labels[0].startswith("kitty (workspace 2, focused) — cd ~/dev_works/SONU")
+    assert labels[0].endswith("…") and len(labels[0]) < 90
+    assert labels[1] == "kitty (workspace 3) — ~"

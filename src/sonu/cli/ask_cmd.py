@@ -165,9 +165,13 @@ def print_final(console: Console, report: TaskReport, *, streamed: bool) -> None
     else:
         for question in report.questions:
             console.print(f"[cyan]? {escape(question)}[/]")
-    colour = {"done": "green", "planned": "blue", "partial": "yellow", "needs-input": "cyan"}.get(
-        status, "red"
-    )
+    colour = {
+        "done": "green",
+        "planned": "blue",
+        "partial": "yellow",
+        "declined": "yellow",
+        "needs-input": "cyan",
+    }.get(status, "red")
     if report.plan is not None and report.plan.kind == "steps":
         console.print(f"[{colour}]{escape(report.headline())}[/]")
 
