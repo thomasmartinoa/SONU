@@ -206,8 +206,8 @@ Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "step
 can be done, use "steps" for it and put the rest in unsupported.
 - unsupported: the parts the user actually asked for that no tool below can do, in the user's \
 words; never things they didn't ask for. No tool can type text, click or scroll inside an app, \
-handle files or choose a particular song or video to play. Do the parts you can and list the rest \
-here; never force a tool to do something it can't. Usually [].
+handle files, pair a new Bluetooth device or choose a particular song or video to play. Do the \
+parts you can and list the rest here; opening an app is not doing the task in it. Usually [].
 
 Tools:
 {tools}
