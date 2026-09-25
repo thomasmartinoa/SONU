@@ -148,3 +148,22 @@ async def test_reply_kind_passes_through() -> None:
     fake = fake_with({"kind": "reply", "message": " Hello! ", "steps": []})
     plan = await make_planner(fake).plan("hi", SNAPSHOT, REGISTRY)
     assert (plan.kind, plan.message, plan.steps) == ("reply", "Hello!", ())
+
+
+@pytest.mark.anyio
+async def test_unsupported_parts_are_kept_and_cleaned() -> None:
+    reply = {
+        "unsupported": ["turn on  bluetooth", "Turn on Bluetooth", "", "x" * 300],
+        "kind": "steps",
+        "message": "Opening Bluetooth Manager.",
+        "steps": [{"tool": "apps.launch", "args": {"app": "bluetooth manager"}}],
+    }
+    plan = await make_planner(fake_with(reply)).plan("r", SNAPSHOT, REGISTRY)
+    assert plan.unsupported == ("turn on bluetooth", "x" * 120)
+
+
+def test_schema_asks_for_unsupported_first() -> None:
+    schema = REGISTRY.plan_schema()
+    assert next(iter(schema["properties"])) == "unsupported"
+    assert "unsupported" in schema["required"]
+    assert "Do the parts you can and list the rest here" in build_system_prompt(REGISTRY, SNAPSHOT)

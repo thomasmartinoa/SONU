@@ -27,6 +27,8 @@ class HyprlandDesktop:
     def __init__(self, client: HyprlandClient, dialect: Dialect) -> None:
         self.client = client
         self.dialect = dialect
+        # The window SONU was started from, stamped on every snapshot (set by the engine).
+        self.origin_address: str | None = None
 
     @property
     def instance(self) -> HyprlandInstance:
@@ -50,6 +52,7 @@ class HyprlandDesktop:
             workspaces=tuple(workspaces),
             monitors=tuple(monitors),
             active_address=active.address if active else None,
+            origin_address=self.origin_address,
         )
 
     async def wait_for(

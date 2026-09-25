@@ -28,6 +28,8 @@ class Plan:
     kind: PlanKind
     message: str = ""
     steps: tuple[PlannedStep, ...] = ()
+    # Parts of the request no tool can do, in the user's words: reported as not done, never dropped.
+    unsupported: tuple[str, ...] = ()
     model: str = ""
     duration_s: float = 0.0
     attempts: int = 1

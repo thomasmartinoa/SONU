@@ -163,6 +163,8 @@ def print_final(console: Console, report: TaskReport, *, streamed: bool) -> None
         for line in report.lines():
             console.print(escape(line))
     else:
+        for line in report.not_done:
+            console.print(f"[red]{escape(line)}[/]")
         for question in report.questions:
             console.print(f"[cyan]? {escape(question)}[/]")
     colour = {

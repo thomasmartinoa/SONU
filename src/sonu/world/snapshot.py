@@ -38,6 +38,9 @@ class WorldSnapshot:
     workspaces: tuple[Workspace, ...] = ()
     monitors: tuple[Monitor, ...] = ()
     active_address: str | None = None
+    # The window SONU was started from (the terminal the request was typed in). Its title echoes
+    # the request, so it is never used as evidence for title matching. See sonu.world.origin.
+    origin_address: str | None = None
     extra: dict[str, object] = field(default_factory=dict)
 
     @property
@@ -109,7 +112,9 @@ class WorldSnapshot:
                 name = window.window_class
                 if name in labels:
                     name += f" [{labels[name]}]"
-                if include_titles and window.title:
+                if window.address == self.origin_address:
+                    parts.append(f"{name} (the terminal SONU was started from)")
+                elif include_titles and window.title:
                     title = (
                         window.title
                         if len(window.title) <= max_title

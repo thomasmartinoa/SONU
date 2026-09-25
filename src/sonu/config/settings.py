@@ -79,6 +79,14 @@ class AppsSettings(_Section):
     reuse_existing: bool = True
 
 
+SearchEngine = Literal["duckduckgo", "google", "brave", "startpage"]
+
+
+class WebSettings(_Section):
+    # Where "search the web for …" goes. Site searches (YouTube, GitHub, …) always use that site.
+    search_engine: SearchEngine = "duckduckgo"
+
+
 class VerifySettings(_Section):
     # How long a move/focus/close may take to show up on the desktop before it counts as failed.
     timeout_s: float = Field(default=5.0, gt=0, le=60)
@@ -95,6 +103,7 @@ class Settings(_Section):
     privacy: PrivacySettings = PrivacySettings()
     hyprland: HyprlandSettings = HyprlandSettings()
     apps: AppsSettings = AppsSettings()
+    web: WebSettings = WebSettings()
     verify: VerifySettings = VerifySettings()
     audit: AuditSettings = AuditSettings()
 
@@ -180,6 +189,10 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # aliases = {}
 # launch_timeout_s = 20.0
 # reuse_existing = true
+
+[web]
+# Where "search the web for …" goes: duckduckgo, google, brave or startpage.
+# search_engine = "duckduckgo"
 
 [verify]
 # timeout_s = 5.0

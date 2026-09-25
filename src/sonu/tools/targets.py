@@ -34,8 +34,8 @@ class WindowTarget(BaseModel):
     def describe(self) -> str:
         if self.focused and not self.app:
             return "the focused window"
-        name = self.app or "window"
-        return f"{name} window" + (f" titled like '{self.title_contains}'" if self.title_contains else "")
+        name = f"{self.app} window" if self.app else "window"
+        return name + (f" titled like '{self.title_contains}'" if self.title_contains else "")
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +47,11 @@ class TargetMatch:
 def window_label(window: Window, *, focused: bool = False) -> str:
     where = f"workspace {window.workspace.name}" + (", focused" if focused else "")
     return f"{window.window_class} ({where})"
+
+
+def _title_has(window: Window, words: str, snapshot: WorldSnapshot) -> bool:
+    """Title matching, ignoring the terminal SONU runs in: its title is the request itself."""
+    return window.address != snapshot.origin_address and words.casefold() in window.title.casefold()
 
 
 def find_windows(target: WindowTarget, snapshot: WorldSnapshot, ctx: ToolContext) -> TargetMatch:
@@ -84,16 +89,14 @@ def find_windows(target: WindowTarget, snapshot: WorldSnapshot, ctx: ToolContext
             ]
         if not by_entry and resolution.status == "not_found":
             # Not an app at all ("the GitHub window"): treat the words as part of a title.
-            needle = target.app.casefold()
-            by_entry = [window for window in candidates if needle in window.title.casefold()]
+            by_entry = [w for w in candidates if _title_has(w, target.app, snapshot)]
         candidates = by_entry
 
     if target.title_contains:
-        needle = target.title_contains.casefold()
-        candidates = [window for window in candidates if needle in window.title.casefold()]
+        candidates = [w for w in candidates if _title_has(w, target.title_contains, snapshot)]
 
     if not candidates:
-        return TargetMatch((), f"no open window matches {target.describe()}")
+        return TargetMatch((), f"no {target.describe()} is open")
     return TargetMatch(tuple(snapshot.by_recency(candidates)))
 
 
@@ -141,12 +144,15 @@ def wants_all(request: str) -> bool:
     return bool(_ALL.search(request))
 
 
-def narrow_by_request(windows: tuple[Window, ...], request: str, target: WindowTarget) -> tuple[Window, ...]:
+def narrow_by_request(
+    windows: tuple[Window, ...], request: str, target: WindowTarget, *, ignore: str | None = None
+) -> tuple[Window, ...]:
     """Pick the one window whose title contains a distinctive word from the user's request.
 
     Only ever *narrows* the windows the step already targeted, using the user's own (trusted)
     words — e.g. "move the GitHub window" among two browser windows. If the words don't single
-    out exactly one window, nothing changes and SONU asks instead.
+    out exactly one window, nothing changes and SONU asks instead. The title of ``ignore`` (the
+    terminal SONU runs in, whose title is the request itself) never counts.
     """
     if len(windows) < 2 or not request:
         return windows
@@ -158,7 +164,7 @@ def narrow_by_request(windows: tuple[Window, ...], request: str, target: WindowT
     }
     chosen: set[str] = set()
     for word in words:
-        hits = [window for window in windows if word in window.title.casefold()]
+        hits = [window for window in windows if window.address != ignore and word in window.title.casefold()]
         if len(hits) == 1:
             chosen.add(hits[0].address)
     if len(chosen) == 1:

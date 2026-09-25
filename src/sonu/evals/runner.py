@@ -40,6 +40,7 @@ EVAL_APPS: dict[str, FakeApp] = {
     "kitty": FakeApp("kitty", "zsh"),
     "thunar": FakeApp("Thunar", "Home - Thunar"),
     "whatsapp-desktop": FakeApp("WhatsApp Desktop", "WhatsApp"),
+    "blueman-manager": FakeApp("blueman-manager", "Bluetooth Devices"),
 }
 ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty"}
 
@@ -72,6 +73,8 @@ class EvalCase(_Model):
     expect_absent: list[str] = Field(default_factory=list)
     expect_shown: int | None = None
     forbid_tools: list[str] = Field(default_factory=list)
+    # True: the plan must list something it can't do; False: it must not (unset: either).
+    expect_unsupported: bool | None = None
     require_tools: list[str] = Field(default_factory=list)
 
 
@@ -130,6 +133,11 @@ def check_expectations(case: EvalCase, report: TaskReport, fake: FakeHyprland) -
         failures.append(f"workspace {case.expect_shown} should be shown, not {fake.active_workspace}")
     used = [record.tool for record in report.steps]
     failures.extend(f"must not use {tool}" for tool in case.forbid_tools if tool in used)
+    unsupported = report.plan.unsupported if report.plan else ()
+    if case.expect_unsupported is True and not unsupported:
+        failures.append("should say which part it can't do (unsupported is empty)")
+    if case.expect_unsupported is False and unsupported:
+        failures.append(f"claimed it can't do: {'; '.join(unsupported)}")
     failures.extend(f"should use {tool}" for tool in case.require_tools if tool not in used)
     return failures
 

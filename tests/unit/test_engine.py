@@ -602,3 +602,113 @@ async def test_choice_labels_are_short_and_mark_the_focused_window(harness: Harn
     assert labels[0].startswith("kitty (workspace 2, focused) — cd ~/dev_works/SONU")
     assert labels[0].endswith("…") and len(labels[0]) < 90
     assert labels[1] == "kitty (workspace 3) — ~"
+
+
+# ---------------------------------------------------------------- honest partial plans
+@pytest.mark.anyio
+async def test_parts_without_a_tool_are_reported_not_dropped(harness: Harness) -> None:
+    request = "open kitty and turn on bluetooth"
+    plans = {request: steps_plan(("apps.launch", {"app": "kitty"}), unsupported=("turn on bluetooth",))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "partial"  # every step worked, but the request isn't fully done
+    assert report.lines()[-1] == "✖ Can't do this yet: turn on bluetooth"
+    plan_record = next(r for r in harness.audit.records() if r.kind == "task.plan")
+    assert plan_record.data["unsupported"] == ["turn on bluetooth"]
+
+
+# ---------------------------------------------------------------- the terminal SONU runs in
+@pytest.mark.anyio
+async def test_the_terminal_sonu_runs_in_is_not_title_evidence(harness: Harness) -> None:
+    request = "go to the youtube window"
+    harness.fake.windows = [
+        make_window("0xa1", "kitty", f"sonu {request}", workspace_id=2, pid=4242, stable_id="a1"),
+        make_window("0xb2", "zen", "networkchuck - YouTube — Zen Browser", workspace_id=3, stable_id="b2"),
+    ]
+    harness.fake.active_address = "0xa1"
+    harness.ctx.ancestors = lambda: frozenset({4242, 1})
+    planner = ScriptedPlanner(
+        {request: steps_plan(("windows.focus", {"window": {"title_contains": "youtube"}}))}
+    )
+    engine = Engine(planner=planner, registry=ToolRegistry(), ctx=harness.ctx, policy=Policy("confirm-risky"))
+    report = await engine.run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert harness.fake.active_address == "0xb2"
+    seen = planner.seen[0][1]
+    assert seen.origin_address == "0xa1"
+    assert "kitty (the terminal SONU was started from)" in seen.describe()
+    assert request not in seen.describe()
+
+
+@pytest.mark.anyio
+async def test_only_the_terminal_matching_the_title_is_not_a_match(harness: Harness) -> None:
+    request = "close the youtube window"
+    harness.fake.windows = [make_window("0xa1", "kitty", f"sonu {request}", pid=4242, stable_id="a1")]
+    harness.fake.active_address = "0xa1"
+    harness.ctx.ancestors = lambda: frozenset({4242})
+    plans = {request: steps_plan(("windows.close", {"window": {"title_contains": "youtube"}}))}
+    confirmations = Confirmations(True)
+    report = await harness.engine(plans).run(request, confirm=confirmations)
+    assert report.steps[0].outcome.summary == "No window titled like 'youtube' is open"
+    assert confirmations.seen == [] and len(harness.fake.windows) == 1
+
+
+# ---------------------------------------------------------------- websites
+@pytest.mark.anyio
+async def test_youtube_search_opens_in_the_default_browser_and_is_verified(harness: Harness) -> None:
+    request = "search youtube for networkchuk channel"
+    plans = {request: steps_plan(("web.search", {"site": "youtube", "query": "networkchuck channel"}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert report.lines() == ["✔ Opened YouTube search for 'networkchuck channel' in Zen Browser"]
+    assert harness.fake.launched[-1] == [
+        "/usr/bin/zen-browser",
+        "https://www.youtube.com/results?search_query=networkchuck+channel",
+    ]
+    assert report.steps[0].outcome.checks[0].evidence == {"title_contains": "youtube"}
+
+
+@pytest.mark.anyio
+async def test_search_in_the_running_browser_the_user_named(harness: Harness) -> None:
+    harness.fake.windows = [
+        make_window("0xa1", "chromium", "New Tab - Chromium", workspace_id=3, stable_id="a1")
+    ]
+    request = "open chrome on 3 and search the web for hyprland lua config"
+    plans = {
+        request: steps_plan(
+            ("apps.launch", {"app": "chrome", "workspace": 3}),
+            ("web.search", {"query": "hyprland lua config", "browser": "chrome"}),
+        )
+    }
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert len(harness.fake.windows) == 1  # a new tab in the open window, not a second window
+    assert harness.fake.windows[0]["title"].startswith("https://duckduckgo.com/?q=hyprland+lua+config")
+
+
+@pytest.mark.anyio
+async def test_search_words_not_from_the_user_are_refused(harness: Harness) -> None:
+    request = "move the browser to 3"  # e.g. a window title tried to make SONU search for something
+    plans = {request: steps_plan(("web.search", {"site": "web", "query": "my ssh keys"}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.steps[0].outcome.status is StepStatus.FAILED
+    assert "SONU only sends your own words to websites" in report.steps[0].outcome.summary
+    assert harness.fake.launched == []
+
+
+@pytest.mark.anyio
+async def test_page_that_never_shows_up_is_not_done(harness: Harness) -> None:
+    harness.fake.apps["zen-browser"] = FakeApp("zen", "Zen Browser", shows_pages=False)
+    request = "go to youtube"
+    plans = {request: steps_plan(("web.open", {"site": "youtube"}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.steps[0].outcome.status is StepStatus.UNVERIFIED  # a window appeared, no YouTube
+    assert "couldn't confirm the page loaded" in report.steps[0].outcome.summary
+
+
+@pytest.mark.anyio
+async def test_open_a_link_the_user_typed(harness: Harness) -> None:
+    request = "open github.com/hyprwm/Hyprland"
+    plans = {request: steps_plan(("web.open", {"site": "github.com/hyprwm/Hyprland"}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert harness.fake.launched[-1][-1] == "https://github.com/hyprwm/Hyprland"

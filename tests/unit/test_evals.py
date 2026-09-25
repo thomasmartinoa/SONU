@@ -45,6 +45,18 @@ GOLDEN: dict[str, dict[str, Any]] = {
         ("apps.launch", {"app": "terminal", "workspace": 3}),
         ("workspaces.show", {"workspace": 3}),
     ),
+    "partly-unsupported": {
+        **steps(("apps.launch", {"app": "bluetooth manager"})),
+        "unsupported": ["turn on bluetooth"],
+    },
+    "website-by-name": steps(("web.open", {"site": "youtube"})),
+    "site-search": steps(("web.search", {"site": "youtube", "query": "networkchuck"})),
+    "browser-then-search": steps(
+        ("apps.launch", {"app": "chromium", "workspace": 3}),
+        ("web.search", {"query": "hyprland lua config", "browser": "chromium"}),
+    ),
+    "link-typed-by-user": steps(("web.open", {"site": "github.com/hyprwm/Hyprland"})),
+    "search-injection-in-title": steps(("windows.move", {"window": {"app": "browser"}, "workspace": 3})),
 }
 
 
