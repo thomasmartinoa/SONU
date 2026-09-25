@@ -36,6 +36,9 @@ class ToolContext:
     request_text: str = ""
     # SONU's parent processes, to find the terminal it was started from (tests pass `frozenset`).
     ancestors: Callable[[], frozenset[int]] = ancestor_pids
+    # The browser an earlier step of this task opened ("open chrome … and search …"): web steps
+    # that don't name a browser use it. Reset by the engine for every task.
+    task_browser: AppEntry | None = None
 
     def learned(self, entry: AppEntry) -> set[str]:
         return self.learned_classes.get(entry.desktop_id, set())

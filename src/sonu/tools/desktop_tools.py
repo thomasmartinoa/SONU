@@ -199,6 +199,8 @@ class LaunchApp(Tool):
         entry = chosen_app(choice, ctx) if choice is not None else resolve_app(a.app, ctx)
         if isinstance(entry, ToolOutcome):
             return entry
+        if "WebBrowser" in entry.categories:
+            ctx.task_browser = entry  # later web steps in this request go to this browser
         target = _workspace(a.workspace)
         if isinstance(target, ToolOutcome):
             return target
