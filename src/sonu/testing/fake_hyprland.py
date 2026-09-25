@@ -11,12 +11,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-from collections.abc import Callable
+import shlex
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Literal, Self
 
 from sonu.desktop.hyprland.instance import EVENT_SOCKET_NAME, REQUEST_SOCKET_NAME, HyprlandInstance
+from sonu.testing.fake_dispatch import FakeCommand, parse_dispatch
 
 _READ_CHUNK = 1023
 
@@ -71,6 +74,25 @@ def make_window(
     }
 
 
+@dataclass
+class FakeApp:
+    """How a fake application behaves when launched — including the ways real apps misbehave."""
+
+    window_class: str
+    title: str = ""
+    delay_s: float = 0.05
+    # A second launch hands off to the running instance (VS Code, Chromium): exec rules are lost.
+    single_instance: bool = False
+    # False: ignores exec workspace rules and opens on the focused workspace.
+    honours_rules: bool = True
+    # Force the window onto this workspace no matter what (simulates stubborn apps).
+    lands_on: int | None = None
+    # False: the process starts but never maps a window.
+    opens_window: bool = True
+    # False: ignores close requests (e.g. an "unsaved changes" dialog keeps it open).
+    closes: bool = True
+
+
 def make_monitor(name: str = "eDP-1", *, monitor_id: int = 0, active_workspace: int = 1) -> dict[str, Any]:
     return {
         "id": monitor_id,
@@ -117,6 +139,11 @@ class FakeHyprland:
         self.active_address: str | None = None
         self.requests: list[str] = []
         self.dispatch_handler: Callable[[str], str] | None = None
+        # Launch simulation: argv[0] basename -> behaviour. Unknown commands open nothing.
+        self.apps: dict[str, FakeApp] = {}
+        self.launched: list[list[str]] = []
+        self._next_address = 0x5500_0000_1000
+        self._tasks: set[asyncio.Task[None]] = set()
         self._servers: list[asyncio.Server] = []
         self._event_writers: set[asyncio.StreamWriter] = set()
         self._clients_changed = asyncio.Event()
@@ -147,6 +174,12 @@ class FakeHyprland:
         return self.instance
 
     async def stop(self) -> None:
+        for task in list(self._tasks):
+            task.cancel()
+        for task in list(self._tasks):
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        self._tasks.clear()
         for writer in list(self._event_writers):
             writer.close()
         self._event_writers.clear()
@@ -237,8 +270,117 @@ class FakeHyprland:
             return json.dumps(active) if active else ("{}" if as_json else "Invalid")
         if command.startswith("dispatch "):
             argument = command.removeprefix("dispatch ")
-            return self.dispatch_handler(argument) if self.dispatch_handler else "ok"
+            if self.dispatch_handler:
+                return self.dispatch_handler(argument)
+            return self._simulate_dispatch(argument)
         return "unknown request"
+
+    # ------------------------------------------------------------------ simulation
+    @property
+    def active_workspace(self) -> int:
+        return int(self.monitors[0]["activeWorkspace"]["id"])
+
+    def window(self, address: str) -> dict[str, Any] | None:
+        return next((w for w in self.windows if w["address"] == address), None)
+
+    def windows_of_class(self, window_class: str) -> list[dict[str, Any]]:
+        return [w for w in self.windows if w["class"] == window_class]
+
+    def _find(self, selector: str | None) -> dict[str, Any] | None:
+        if selector is None:  # real Hyprland: no selector means "the focused window"
+            return self.window(self.active_address) if self.active_address else None
+        kind, _, value = selector.partition(":")
+        if kind == "address":
+            return self.window(value.lower())
+        if kind == "stableid":
+            return next((w for w in self.windows if w["stableId"] == value.lower()), None)
+        return None
+
+    def _background(self, coroutine: Coroutine[Any, Any, None]) -> None:
+        task = asyncio.get_running_loop().create_task(coroutine)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    def _simulate_dispatch(self, argument: str) -> str:
+        provider = self.config_provider or "hyprlang"
+        parsed = parse_dispatch(argument, provider)
+        if parsed is None:
+            return f"error: fake Hyprland cannot parse dispatch {argument!r}"
+        if parsed.kind == "exec":
+            return self._exec(parsed)
+        if parsed.kind == "focus_workspace":
+            self._background(self._focus_workspace(int(parsed.workspace or "1")))
+            return "ok"
+        window = self._find(parsed.window)
+        if window is None:
+            return "ok"  # real Hyprland: a selector that matches nothing is a silent no-op
+        if parsed.kind == "move":
+            self._background(self._move(window, int(parsed.workspace or "1")))
+        elif parsed.kind == "focus_window":
+            self._background(self._focus_window(window))
+        elif parsed.kind == "close":
+            self._background(self._close(window))
+        return "ok"
+
+    def _exec(self, parsed: FakeCommand) -> str:
+        argv = shlex.split(parsed.command or "")
+        if not argv:
+            return "error: empty command"
+        self.launched.append(argv)
+        app = self.apps.get(Path(argv[0]).name)
+        if app is None or not app.opens_window:
+            return "ok"  # real Hyprland reports ok even if the program fails to start
+        rule_workspace = int(parsed.workspace) if parsed.workspace else None
+        self._background(self._open(app, rule_workspace))
+        return "ok"
+
+    async def _open(self, app: FakeApp, rule_workspace: int | None) -> None:
+        await asyncio.sleep(app.delay_s)
+        handed_off = app.single_instance and bool(self.windows_of_class(app.window_class))
+        if app.lands_on is not None:
+            workspace = app.lands_on
+        elif rule_workspace is not None and app.honours_rules and not handed_off:
+            workspace = rule_workspace
+        else:
+            workspace = self.active_workspace
+        address = f"0x{self._next_address:x}"
+        self._next_address += 0x100
+        window = make_window(address, app.window_class, app.title, workspace_id=workspace)
+        self.windows.append(window)
+        await self.emit(
+            "openwindow", f"{address.removeprefix('0x')},{workspace},{app.window_class},{app.title}"
+        )
+        if workspace == self.active_workspace:
+            self.active_address = address
+            await self.emit("activewindowv2", address.removeprefix("0x"))
+
+    async def _move(self, window: dict[str, Any], workspace: int) -> None:
+        window["workspace"] = {"id": workspace, "name": str(workspace)}
+        if self.active_address == window["address"] and workspace != self.active_workspace:
+            self.active_address = None
+        await self.emit("movewindowv2", f"{window['address'].removeprefix('0x')},{workspace},{workspace}")
+
+    async def _focus_workspace(self, workspace: int) -> None:
+        self.monitors[0]["activeWorkspace"] = {"id": workspace, "name": str(workspace)}
+        await self.emit("workspacev2", f"{workspace},{workspace}")
+
+    async def _focus_window(self, window: dict[str, Any]) -> None:
+        workspace = int(window["workspace"]["id"])
+        if workspace != self.active_workspace:
+            await self._focus_workspace(workspace)
+        self.active_address = window["address"]
+        await self.emit("activewindowv2", window["address"].removeprefix("0x"))
+
+    async def _close(self, window: dict[str, Any]) -> None:
+        app = next((a for a in self.apps.values() if a.window_class == window["class"]), None)
+        if app is not None and not app.closes:
+            return
+        await asyncio.sleep(0.01)
+        if window in self.windows:
+            self.windows.remove(window)
+        if self.active_address == window["address"]:
+            self.active_address = None
+        await self.emit("closewindow", window["address"].removeprefix("0x"))
 
     def _version_reply(self, as_json: bool) -> str:
         if not as_json:

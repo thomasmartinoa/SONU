@@ -21,37 +21,61 @@ Works on any distro running Hyprland; other compositors can be added behind the 
 
 ## Status
 
-🚧 **Milestone M0 (foundations) is done** — SONU can inspect your system but does not act on it yet.
-Milestone M1 (the verified window operator) is next. See the [roadmap](docs/PROPOSAL.md#8-roadmap).
+🚧 **Milestone M1 — the verified window operator — is implemented** and awaiting validation on real desktops.
+SONU can open apps (on a chosen workspace), move, focus and close windows, and switch workspaces — each step
+verified on the real desktop. Voice (M3) and memory (M2) come next. See the [roadmap](docs/PROPOSAL.md#8-roadmap).
 
 ## Try it
 
-Requires Python ≥ 3.12 and [uv](https://docs.astral.sh/uv/).
+Requires Linux with Hyprland, Python ≥ 3.12, [uv](https://docs.astral.sh/uv/) and [Ollama](https://ollama.com).
 
 ```sh
 git clone https://github.com/thomasmartinoa/SONU.git
 cd SONU
-uv sync
-uv run sonu doctor                  # checks Hyprland, Ollama, models, GPU, tools, config, audit log
+uv tool install --editable .        # puts `sonu` on your PATH (~/.local/bin)
+ollama pull qwen3.5:4b              # the default local planner
+sonu doctor                         # checks Hyprland, Ollama, models, GPU, tools, config, audit log
 ```
 
-Other commands available today (all read-only):
+Then talk to it:
 
 ```sh
-uv run sonu desktop windows         # windows as SONU sees them (--no-titles for sharing)
-uv run sonu desktop workspaces
-uv run sonu desktop monitors
-uv run sonu desktop events          # live Hyprland events (Ctrl+C to stop)
-uv run sonu config init             # write a commented ~/.config/sonu/config.toml
-uv run sonu config show             # effective configuration
-uv run sonu audit tail              # recent audit records
-uv run sonu audit verify            # check the audit log's hash chain
-uv run sonu doctor --json           # machine-readable report
+sonu --dry-run open kitty on workspace 2      # show the plan, change nothing
+sonu open kitty on workspace 2
+sonu open VSCodium and Chromium, put VSCodium on workspace 3 and Chromium on workspace 2
+sonu close kitty                              # asks first: closing is a medium-risk action
+sonu open VS Code                             # two builds installed? SONU asks which one — pick by number
+sonu prompt                                   # a text box for keybinds; result as a notification
 ```
+
+A run looks like this (illustrative output) — every ✔ is a check SONU made on the real desktop *after* acting:
+
+```
+plan by qwen3.5:4b in 1.3s · 2 steps
+Opening VSCodium on workspace 3 and Chromium on workspace 2.
+✔ Opened VSCodium on workspace 3
+✔ Opened Chromium on workspace 2 (it appeared on 1; moved it)
+Done — every step verified
+```
+
+More commands:
+
+```sh
+sonu eval                           # score your planner model on 20 realistic requests (fake desktop)
+sonu desktop windows                # windows as SONU sees them (--no-titles for sharing)
+sonu desktop events                 # live Hyprland events
+sonu audit tail                     # everything SONU did; `sonu audit verify` checks the hash chain
+sonu config init                    # write a commented ~/.config/sonu/config.toml
+```
+
+Using the hypr-dotfiles rice? See [the integration guide](docs/integrations/hypr-dotfiles.md) for the keybind,
+the `SUPER+SPACE` menu entry and notifications.
 
 ## Documentation
 
 - [Design proposal](docs/PROPOSAL.md) — research, architecture, roadmap, decisions
+- [hypr-dotfiles integration](docs/integrations/hypr-dotfiles.md) — keybind, menu entry, notifications
+- [Evals](docs/evals.md) — how planner models are scored, and the results so far
 - [Threat model](docs/threat-model.md)
 - [Architecture decision records](docs/adr/)
 - [Contributing](CONTRIBUTING.md) · [Security policy](SECURITY.md)

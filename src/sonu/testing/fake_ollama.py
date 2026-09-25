@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -16,6 +17,9 @@ class FakeOllama:
         self.models: dict[str, dict[str, Any]] = {}
         self.loaded: list[dict[str, Any]] = []
         self.requests: list[str] = []
+        # /api/chat: gets the request body, returns the assistant's content (e.g. plan JSON).
+        self.chat_responder: Callable[[dict[str, Any]], str] | None = None
+        self.chat_requests: list[dict[str, Any]] = []
 
     def add_model(self, name: str, *, size_gib: float, capabilities: list[str]) -> None:
         self.models[name] = {"size": int(size_gib * GIB), "capabilities": capabilities}
@@ -45,6 +49,23 @@ class FakeOllama:
             )
         if request.method == "GET" and path == "/api/ps":
             return httpx.Response(200, json={"models": self.loaded})
+        if request.method == "POST" and path == "/api/chat":
+            body = json.loads(request.content)
+            self.chat_requests.append(body)
+            if body.get("model") not in self.models:
+                return httpx.Response(404, json={"error": f"model '{body.get('model')}' not found"})
+            content = self.chat_responder(body) if self.chat_responder else "{}"
+            return httpx.Response(
+                200,
+                json={
+                    "model": body["model"],
+                    "message": {"role": "assistant", "content": content},
+                    "done": True,
+                    "total_duration": 250_000_000,
+                    "prompt_eval_count": 900,
+                    "eval_count": 40,
+                },
+            )
         if request.method == "POST" and path == "/api/show":
             name = json.loads(request.content).get("model", "")
             spec = self.models.get(name)

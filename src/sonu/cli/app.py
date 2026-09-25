@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from pathlib import Path
 
 import typer
@@ -12,7 +13,7 @@ from rich.markup import escape
 
 from sonu import __version__
 from sonu.audit import AuditError, AuditLog
-from sonu.cli import audit_cmd, config_cmd, desktop_cmd
+from sonu.cli import ask_cmd, audit_cmd, config_cmd, desktop_cmd, eval_cmd
 from sonu.cli.state import AppState, env_snapshot, get_state
 from sonu.doctor import DoctorContext, as_json, render_console, run_checks, summarize
 from sonu.logs import setup_logging
@@ -26,6 +27,9 @@ app = typer.Typer(
     add_completion=False,
     pretty_exceptions_enable=False,
 )
+app.command("ask")(ask_cmd.ask)
+app.command("prompt")(ask_cmd.prompt)
+app.command("eval")(eval_cmd.eval_cmd)
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(audit_cmd.app, name="audit")
 app.add_typer(desktop_cmd.app, name="desktop")
@@ -85,7 +89,40 @@ def doctor(
         raise typer.Exit(code=1)
 
 
+COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop"}
+_GLOBAL_FLAGS = {"-v", "-vv", "-vvv", "--verbose"}
+# `sonu ask` options that may come before a bare request: `sonu --dry-run open kitty`.
+_ASK_FLAGS = {"--dry-run", "--deep", "--json", "--notify"}
+_ASK_OPTIONS = {"--model", "--confirm"}  # these take a value
+
+
+def rewrite_bare_request(args: list[str]) -> list[str]:
+    """`sonu open kitty on 3` → `sonu ask open kitty on 3`.
+
+    Global flags (-v) and `ask` options (--dry-run, --model X, …) may come before the request.
+    """
+    global_flags: list[str] = []
+    ask_options: list[str] = []
+    index = 0
+    while index < len(args):
+        arg = args[index]
+        if arg in _GLOBAL_FLAGS:
+            global_flags.append(arg)
+        elif arg in _ASK_FLAGS or (arg.partition("=")[0] in _ASK_OPTIONS and "=" in arg):
+            ask_options.append(arg)
+        elif arg in _ASK_OPTIONS and index + 1 < len(args):
+            ask_options += args[index : index + 2]
+            index += 1
+        else:
+            break
+        index += 1
+    if index < len(args) and not args[index].startswith("-") and args[index] not in COMMANDS:
+        return [*global_flags, "ask", *ask_options, *args[index:]]
+    return args
+
+
 def main() -> None:
+    sys.argv = [sys.argv[0], *rewrite_bare_request(sys.argv[1:])]
     try:
         app()
     except KeyboardInterrupt:

@@ -17,6 +17,10 @@ class OllamaError(Exception):
     """Ollama is unreachable or answered unexpectedly."""
 
 
+class OllamaNotFound(OllamaError):
+    """The endpoint or model does not exist (HTTP 404)."""
+
+
 class _OllamaModel(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
@@ -48,6 +52,19 @@ class ModelInfo(_OllamaModel):
     @property
     def supports_tools(self) -> bool:
         return "tools" in self.capabilities
+
+
+class ChatStats(_OllamaModel):
+    total_duration: int = 0  # nanoseconds
+    load_duration: int = 0
+    prompt_eval_count: int = 0
+    eval_count: int = 0
+
+
+class ChatReply(_OllamaModel):
+    content: str
+    thinking: str = ""
+    stats: ChatStats = ChatStats()
 
 
 class _Tags(_OllamaModel):
@@ -91,7 +108,7 @@ class OllamaClient:
         except httpx.HTTPError as exc:
             raise OllamaError(f"cannot reach Ollama at {self.host}: {exc.__class__.__name__}: {exc}") from exc
         if response.status_code == 404:
-            raise OllamaError(f"{path}: not found (404) — {response.text[:200]}")
+            raise OllamaNotFound(f"{path}: not found (404) — {response.text[:200]}")
         if response.is_error:
             raise OllamaError(f"{path}: HTTP {response.status_code} — {response.text[:200]}")
         try:
@@ -120,8 +137,57 @@ class OllamaClient:
         except ValidationError as exc:
             raise OllamaError(f"/api/ps: unexpected reply: {exc.errors()[0]['msg']}") from exc
 
+    async def chat(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        *,
+        format_schema: dict[str, Any] | None = None,
+        think: bool | None = None,
+        options: dict[str, Any] | None = None,
+        keep_alive: str | None = None,
+        timeout_s: float | None = None,
+    ) -> ChatReply:
+        """One non-streaming chat completion. ``format_schema`` constrains the reply to a JSON schema."""
+        body: dict[str, Any] = {"model": model, "messages": messages, "stream": False}
+        if format_schema is not None:
+            body["format"] = format_schema
+        if think is not None:
+            body["think"] = think
+        if options:
+            body["options"] = options
+        if keep_alive is not None:
+            body["keep_alive"] = keep_alive
+        try:
+            response = await self._client.post(
+                "/api/chat",
+                json=body,
+                timeout=timeout_s if timeout_s is not None else httpx.USE_CLIENT_DEFAULT,
+            )
+        except httpx.TimeoutException as exc:
+            raise OllamaError(f"{model} took too long to answer") from exc
+        except httpx.HTTPError as exc:
+            raise OllamaError(f"cannot reach Ollama at {self.host}: {exc.__class__.__name__}: {exc}") from exc
+        if response.status_code == 404:
+            raise OllamaNotFound(f"model '{model}' is not installed — run `ollama pull {model}`")
+        if response.is_error:
+            raise OllamaError(f"/api/chat: HTTP {response.status_code} — {response.text[:300]}")
+        try:
+            data = response.json()
+            message = data.get("message") or {}
+            return ChatReply(
+                content=message.get("content", ""),
+                thinking=message.get("thinking", "") or "",
+                stats=ChatStats.model_validate(data),
+            )
+        except (ValueError, ValidationError, AttributeError) as exc:
+            raise OllamaError("/api/chat: unexpected reply") from exc
+
     async def model_info(self, name: str) -> ModelInfo:
-        data = await self._request("POST", "/api/show", json={"model": name})
+        try:
+            data = await self._request("POST", "/api/show", json={"model": name})
+        except OllamaNotFound as exc:
+            raise OllamaNotFound(f"model '{name}' is not installed — run `ollama pull {name}`") from exc
         try:
             return ModelInfo.model_validate(data)
         except ValidationError as exc:

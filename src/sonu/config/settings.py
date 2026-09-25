@@ -24,6 +24,10 @@ class _Section(BaseModel):
 class OllamaSettings(_Section):
     host: str = "http://127.0.0.1:11434"
     timeout_s: float = Field(default=10.0, gt=0, le=600)
+    # Generation can include loading the model into GPU memory on first use.
+    chat_timeout_s: float = Field(default=120.0, gt=0, le=1800)
+    keep_alive: str = "10m"
+    num_ctx: int = Field(default=8192, ge=2048, le=262144)
 
 
 class ModelRole(_Section):
@@ -66,6 +70,20 @@ class HyprlandSettings(_Section):
     request_timeout_s: float = Field(default=2.0, gt=0, le=30)
 
 
+class AppsSettings(_Section):
+    # Your words -> desktop-file ID or executable, e.g. {"vs code" = "codium.desktop"}.
+    aliases: dict[str, str] = Field(default_factory=dict)
+    # How long to wait for a launched app's window (cold starts of big apps can be slow).
+    launch_timeout_s: float = Field(default=20.0, gt=0, le=120)
+    # "Open X" when X is already open: bring/move the existing window instead of a new one.
+    reuse_existing: bool = True
+
+
+class VerifySettings(_Section):
+    # How long a move/focus/close may take to show up on the desktop before it counts as failed.
+    timeout_s: float = Field(default=5.0, gt=0, le=60)
+
+
 class AuditSettings(_Section):
     enabled: bool = True
 
@@ -76,6 +94,8 @@ class Settings(_Section):
     policy: PolicySettings = PolicySettings()
     privacy: PrivacySettings = PrivacySettings()
     hyprland: HyprlandSettings = HyprlandSettings()
+    apps: AppsSettings = AppsSettings()
+    verify: VerifySettings = VerifySettings()
     audit: AuditSettings = AuditSettings()
 
 
@@ -122,6 +142,9 @@ DEFAULT_CONFIG_TEMPLATE = """\
 [ollama]
 # host = "http://127.0.0.1:11434"
 # timeout_s = 10.0
+# chat_timeout_s = 120.0
+# keep_alive = "10m"
+# num_ctx = 8192
 
 [models.planner]
 # Understands requests and proposes plans. Must support tool calling.
@@ -150,6 +173,16 @@ DEFAULT_CONFIG_TEMPLATE = """\
 
 [hyprland]
 # request_timeout_s = 2.0
+
+[apps]
+# Settle names that match several apps. Example (uncomment and edit):
+#   aliases = { "vs code" = "codium.desktop" }
+# aliases = {}
+# launch_timeout_s = 20.0
+# reuse_existing = true
+
+[verify]
+# timeout_s = 5.0
 
 [audit]
 # Append-only, hash-chained log of everything SONU does.

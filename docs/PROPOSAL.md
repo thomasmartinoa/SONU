@@ -1,6 +1,7 @@
 # SONU — Design Proposal
 
-> **Status:** v0.2 — decisions recorded ([§10](#10-decisions)); milestone **M0 implemented**.
+> **Status:** v0.3 — decisions recorded ([§10](#10-decisions)); milestones **M0 and M1 implemented** (M1 awaiting
+> real-desktop validation).
 > **Date:** 2026-09-24
 > **Scope:** Architecture, research findings, security model, and roadmap for SONU (System-Oriented Neural Utility).
 > Decisions are also recorded as ADRs in [`docs/adr/`](adr/); the threat model lives in [`threat-model.md`](threat-model.md).
@@ -588,7 +589,7 @@ Order changed after the decisions: voice moves up to **M3** (right after the dae
 | # | Milestone | Scope | Exit criteria |
 |---|---|---|---|
 | **M0 ✅** | Foundations | Repo scaffold, Apache-2.0, CI, config/paths, logging, hash-chained audit log, Hyprland IPC client + event stream (read-only), Ollama inventory client, FakeHyprland, `sonu doctor`, ADRs, threat model | `uv run sonu doctor` reports Hyprland/Ollama/GPU status correctly on your machine; CI green |
-| **M1** | Verified window operator | Hyprland adapter (IPC, events, dialects), XDG app catalog + launcher, world model, M1 tools, verifier, policy engine + confirmations, Ollama provider with schema-constrained plans, CLI (`--dry-run`, `--explain`), FakeHyprland e2e tests, eval set v1 | The VS Code/Chromium example succeeds with verified placement in ≥ 9/10 runs with the default local model; wrong-workspace placement auto-corrected; missing apps reported honestly; every action in the audit log |
+| **M1 ✅** | Verified window operator | Hyprland dialects (Lua + hyprlang), XDG app catalog + resolver, world model + event-driven waiter, tools (launch, move, focus, show workspace, close, describe), verifier, policy + confirmations (terminal / rofi), Ollama planner with schema-constrained plans + repair, `sonu ask` / `sonu prompt` / `sonu eval`, FakeHyprland end-to-end tests, 20 eval cases | Wrong-workspace placement auto-corrected ✅ (tested); missing apps reported honestly ✅; every action audited ✅; `sonu eval`: `qwen3.5:4b` 20/20 (CPU container, see [evals](evals.md)); **to confirm on real hardware:** the VS Code/Chromium example in ≥ 9/10 runs |
 | **M2** | Daemon + memory | `sonud` service, activity journal (30-day default retention), preferences ("remember …"), episodes, layout save/restore, routines, privacy controls | "What was I working on yesterday?" answered from the journal; `sonu layout save/restore` verified; retention/forget work |
 | **M3** | Voice | Push-to-talk, STT, TTS, then the "Hey Sonu" wake word; latency budget; VRAM scheduling; Quickshell bar widget | Spoken M1–M2 commands with measured end-to-end latency; no high-risk confirmation by voice alone |
 | **M4** | Projects & dev workflows | Project discovery, open project in VS Code / VSCodium, dev-server tool (allowlisted scripts from `package.json`/`Makefile`, port detection, `HttpOk` verification), open URL, side-by-side layouts, close-by-project | "Open my AI Shop Assistant project and start the dev server" works end-to-end with verification |
@@ -638,13 +639,14 @@ Answered by the author on 2026-09-24:
 The NitroSense key sends keyboard scancode `0xf5`. What Linux turns it into depends on the model: the generic Acer
 rule maps it to **`XF86Presentation`** (keycode 425); models with a specific systemd hwdb entry (e.g. ANV15-51) map it
 to **`XF86Launch1`** (`prog1`); on some models it only reaches Linux through a vendor driver. So the first step is to
-see what yours sends, with `wev` (press the key, read the `sym:` line). Then, in `binds.lua`:
+see what yours sends, with `wev` (press the key, read the `sym:` line). **On the author's laptop it is
+`XF86Launch1`** (xkb keycode 156 = evdev `KEY_PROG1`), with separate press and release events. Then, in `binds.lua`:
 
 ```lua
-hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu prompt"))                       -- M1: open the SONU prompt
+hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu prompt"))                       -- M1: open the SONU prompt
 -- M3 push-to-talk: start on press, stop on release
--- hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu listen start"))
--- hl.bind("XF86Presentation", hl.dsp.exec_cmd("sonu listen stop"), { release = true })
+-- hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen start"))
+-- hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen stop"), { release = true })
 ```
 
 Some special keys send press and release together no matter how long they are held; if yours does, voice uses

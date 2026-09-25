@@ -30,7 +30,7 @@ async def test_inventory_queries() -> None:
 @pytest.mark.anyio
 async def test_unknown_model_is_an_error() -> None:
     async with OllamaClient(transport=FakeOllama().transport) as client:
-        with pytest.raises(OllamaError, match="404"):
+        with pytest.raises(OllamaError, match=r"not installed — run `ollama pull nope:1b`"):
             await client.model_info("nope:1b")
 
 

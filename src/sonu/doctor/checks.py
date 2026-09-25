@@ -678,7 +678,9 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
         else "No default apps found; SONU will ask which browser/terminal you mean."
     )
     if info.quickshell_config:
-        hint += " A SUPER+SPACE menu entry and a bar widget are planned (M1/M3)."
+        hint += (
+            " Key and SUPER+SPACE menu setup: docs/integrations/hypr-dotfiles.md (a bar widget comes in M3)."
+        )
     return [
         CheckResult(
             "integration.hypr_theme",
