@@ -85,6 +85,8 @@ SearchEngine = Literal["duckduckgo", "google", "brave", "startpage"]
 class WebSettings(_Section):
     # Where "search the web for …" goes. Site searches (YouTube, GitHub, …) always use that site.
     search_engine: SearchEngine = "duckduckgo"
+    # How long a page may take to load before SONU reports it as unconfirmed.
+    load_timeout_s: float = Field(default=30.0, gt=0, le=120)
 
 
 class VerifySettings(_Section):
@@ -193,6 +195,7 @@ DEFAULT_CONFIG_TEMPLATE = """\
 [web]
 # Where "search the web for …" goes: duckduckgo, google, brave or startpage.
 # search_engine = "duckduckgo"
+# load_timeout_s = 30.0
 
 [verify]
 # timeout_s = 5.0

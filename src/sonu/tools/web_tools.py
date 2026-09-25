@@ -13,6 +13,7 @@ window title must change to show the site (e.g. "networkchuck - YouTube") before
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import re
 from dataclasses import dataclass
@@ -105,8 +106,10 @@ SearchSite = Literal["web", "youtube", "github", "wikipedia", "archwiki", "aur",
 # Small words a model may add to a query without changing what the user asked for.
 _CONNECTIVES = {"a", "an", "the", "of", "for", "and", "in", "on", "to", "with", "how", "what"}
 _HOST_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
-# How long to wait for an already-running browser to show the page.
-WEB_TIMEOUT_S = 10.0
+# How long an already-running browser gets to react (a window title changes) to a link.
+WEB_REACT_S = 8.0
+# A search operator the model sometimes adds: "dotfiles site:github.com".
+_SITE_OPERATOR = re.compile(r"(?<!\S)site:(\S+)", re.IGNORECASE)
 
 
 def _compact(text: str) -> str:
@@ -247,31 +250,56 @@ async def _open_in_browser(plan: _WebPlan, ctx: ToolContext) -> ToolOutcome:
         window_matches(entry, (window.window_class, window.initial_class), learned)
         for window in before.windows
     )
-    # A cold start (browser not open yet) can take a while; a running browser answers quickly.
-    timeout = (
-        min(WEB_TIMEOUT_S, ctx.settings.apps.launch_timeout_s)
-        if running
-        else ctx.settings.apps.launch_timeout_s
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    # 1. Did the browser react at all? A running browser answers within seconds; a cold start
+    #    (browser not open yet) may take as long as any app launch.
+    launch_s = ctx.settings.apps.launch_timeout_s
+    react_s = min(WEB_REACT_S, launch_s) if running else launch_s
+    reacted, _ = await ctx.desktop.wait_for(
+        lambda s: loaded(s) or next(iter(changed(s)), None), timeout_s=react_s
     )
-    window, snapshot = await ctx.desktop.wait_for(loaded, timeout_s=timeout)
+    if reacted is None:
+        # Hyprland starts programs without reporting failures, and a browser may open the page in
+        # a background tab: SONU can't tell "not opened" from "not visible", so it claims neither.
+        return ToolOutcome(
+            StepStatus.UNVERIFIED,
+            f"Sent {target.label} to {entry.name}, but didn't see it open within {react_s:.0f}s "
+            "(it may be in a background tab or another window)",
+        )
+    # 2. It reacted: give the page time to load (slow connections take well over 10s; found on
+    #    real hardware) until its title shows the site.
+    remaining = max(0.0, ctx.settings.web.load_timeout_s - (loop.time() - started))
+    window, _ = await ctx.desktop.wait_for(loaded, timeout_s=remaining)
     if window is not None and target.marker:
         check = Check(f"{entry.name} shows {target.label}", True, {"title_contains": target.marker})
         return ToolOutcome(StepStatus.DONE, f"Opened {target.label} in {entry.name}", (check,))
-    if window is not None or changed(snapshot):
-        return ToolOutcome(
-            StepStatus.UNVERIFIED,
-            f"Sent {target.label} to {entry.name}, but couldn't confirm the page loaded",
-        )
-    # Hyprland starts programs without reporting failures, and a browser may open the page in a
-    # background tab: SONU can't tell "not opened" from "not visible", so it doesn't claim either.
     return ToolOutcome(
         StepStatus.UNVERIFIED,
-        f"Sent {target.label} to {entry.name}, but didn't see it open within {timeout:.0f}s "
-        "(it may be in a background tab or another window)",
+        f"Sent {target.label} to {entry.name}, but couldn't confirm the page loaded",
     )
 
 
 # ---------------------------------------------------------------------------- web.search
+def _without_site_operator(query: str, site: str, request: str) -> tuple[str, str]:
+    """ "dotfiles site:github.com" (site "web") → ("dotfiles", "github"), if the user named GitHub.
+
+    Found on real hardware: the model sometimes writes a search-engine operator instead of using
+    the site parameter. For a known site the user named, SONU searches that site directly; any
+    other operator is left in the query (and then has to pass the grounding check like any word).
+    """
+    match = _SITE_OPERATOR.search(query)
+    if match is None or site != "web":
+        return " ".join(query.split()), site
+    host = match.group(1).lower().removeprefix("www.").split("/")[0]
+    for key, known in SITES.items():
+        known_host = (urlsplit(known.home).hostname or "").removeprefix("www.")
+        if host in (known_host, known_host.split(".", 1)[-1]) and _named_in(known, request):
+            rest = (query[: match.start()] + query[match.end() :]).split()
+            return " ".join(rest), key
+    return " ".join(query.split()), site
+
+
 class SearchArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -296,16 +324,19 @@ class WebSearch(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(SearchArgs, args)
-        missing = ungrounded_words(a.query, ctx.request_text)
+        query, site_key = _without_site_operator(a.query, a.site, ctx.request_text)
+        if not query:
+            return ToolOutcome(StepStatus.FAILED, "There's nothing to search for")
+        missing = ungrounded_words(query, ctx.request_text)
         if missing:
             return ToolOutcome(
                 StepStatus.FAILED,
-                f"Won't search for '{a.query}': {', '.join(missing)} isn't in your request "
+                f"Won't search for '{query}': {', '.join(missing)} isn't in your request "
                 "(SONU only sends your own words to websites)",
             )
-        site = ENGINES[ctx.settings.web.search_engine] if a.site == "web" else SITES[a.site]
-        url = site.search.format(q=quote_plus(a.query.strip()))
-        target = _Target(url, f"{site.name} search for '{a.query.strip()}'", _compact(site.marker))
+        site = ENGINES[ctx.settings.web.search_engine] if site_key == "web" else SITES[site_key]
+        url = site.search.format(q=quote_plus(query))
+        target = _Target(url, f"{site.name} search for '{query}'", _compact(site.marker))
         plan = _prepare_browser(target, a.browser, ctx, choice)
         if isinstance(plan, ToolOutcome):
             return plan

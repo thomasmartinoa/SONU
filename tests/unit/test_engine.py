@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from sonu.audit import AuditLog
-from sonu.config.settings import AppsSettings, AutonomyMode, Settings, VerifySettings
+from sonu.config.settings import AppsSettings, AutonomyMode, Settings, VerifySettings, WebSettings
 from sonu.core.engine import ConfirmRequest, Engine, enforce_verification
 from sonu.core.planning import Plan
 from sonu.desktop.apps import AppCatalog, AppResolver
@@ -92,7 +92,11 @@ async def harness(fake_hypr: FakeHyprland, tmp_path: Path) -> AsyncIterator[Harn
         }
     )
     desktop = await HyprlandDesktop.connect(fake_hypr.instance)
-    settings = Settings(apps=AppsSettings(launch_timeout_s=1.5), verify=VerifySettings(timeout_s=1.0))
+    settings = Settings(
+        apps=AppsSettings(launch_timeout_s=1.5),
+        verify=VerifySettings(timeout_s=1.0),
+        web=WebSettings(load_timeout_s=2.0),
+    )
     resolver = AppResolver(catalog, role_defaults={"browser": "zen-browser", "terminal": "kitty"})
     ctx = ToolContext(desktop, resolver, settings, default_terminal="kitty", which=lambda n: f"/usr/bin/{n}")
     yield Harness(fake_hypr, ctx, AuditLog(tmp_path / "audit" / "audit.jsonl"))
@@ -742,3 +746,27 @@ async def test_page_sonu_cannot_see_is_unverified_not_failed(harness: Harness) -
     outcome = report.steps[0].outcome
     assert outcome.status is StepStatus.UNVERIFIED
     assert "it may be in a background tab" in outcome.summary
+
+
+@pytest.mark.anyio
+async def test_slow_page_is_still_verified(harness: Harness) -> None:
+    # Found on real hardware: a page that took longer than the first wait was reported unconfirmed
+    # although it loaded. Once the browser reacts, SONU waits for the page (web.load_timeout_s).
+    # The tab opens at once, the page takes longer than an app launch may (1.5s here) to load.
+    harness.fake.apps["zen-browser"] = FakeApp("zen", "Zen Browser", delay_s=0.1, page_load_s=2.5)
+    harness.fake.windows = [make_window("0xa1", "zen", "Zen Browser", workspace_id=1, stable_id="a1")]
+    harness.ctx.settings = harness.ctx.settings.model_copy(update={"web": WebSettings(load_timeout_s=5.0)})
+    request = "open github.com/thomasmartinoa"
+    plans = {request: steps_plan(("web.open", {"site": "github.com/thomasmartinoa"}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+
+
+@pytest.mark.anyio
+async def test_site_operator_becomes_a_site_search(harness: Harness) -> None:
+    # Found on real hardware: the model wrote "… site:github.com" instead of site="github".
+    request = "open zen on workspace 3 and in github find me dotfiles of user thomasmartinoa"
+    plans = {request: steps_plan(("web.search", {"query": "thomasmartinoa dotfiles site:github.com"}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert harness.fake.launched[-1][-1] == "https://github.com/search?q=thomasmartinoa+dotfiles"

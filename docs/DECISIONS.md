@@ -1,0 +1,53 @@
+# Decision log
+
+Every decision about SONU, when it was made, why, and who made it. Big ones also have an ADR in [`adr/`](adr/).
+Add a row when something is decided (in the same PR); don't re-open a decision without a new reason.
+
+"Owner" is [@thomasmartinoa](https://github.com/thomasmartinoa). "Claude" means the owner delegated the choice
+("choose what is best") and the reasoning below was accepted by merging.
+
+| # | Date | Decision | Why | By |
+|---|---|---|---|---|
+| D1 | 2026-09-24 | The project is **SONU** (System-Oriented Neural Utility), command `sonu`; never called JARVIS | Owner's naming | Owner |
+| D2 | 2026-09-24 | **Python** ≥ 3.12, uv, pydantic, httpx, typer ([ADR 0001](adr/0001-python.md)) | Best ecosystem for local models, voice and Linux automation | Owner |
+| D3 | 2026-09-24 | **Apache-2.0** ([ADR 0002](adr/0002-apache-2.0.md)) | Permissive, with an explicit patent grant | Claude |
+| D4 | 2026-09-24 | **Text/CLI first**, voice after the daemon (M3) | A verified text loop first makes voice reliable later | Owner (allowed) |
+| D5 | 2026-09-24 | Default autonomy **`confirm-risky`**; fail closed ([ADR 0004](adr/0004-safety-defaults.md)) | Low-risk steps flow, anything risky asks | Claude |
+| D6 | 2026-09-24 | **Activity journal**: yes, local only, 30-day retention, password managers and private windows excluded (M2) | Useful memory without a permanent record | Owner + Claude |
+| D7 | 2026-09-24 | **Local first**; no paid API; free cloud tiers later (M5); **no subscription-token extraction**; ChatGPT Go unusable; Claude Pro via Claude Code with SONU as an MCP server (M5) ([ADR 0003](adr/0003-no-subscription-token-extraction.md)) | Owner has no API credit; provider terms forbid using subscription logins in third-party tools | Owner + Claude |
+| D8 | 2026-09-24 | Spoken language **English**; wake word **"Hey Sonu"** | Owner's choice | Owner |
+| D9 | 2026-09-24 | **Hyprland first**, talking to its sockets directly, Lua or hyprlang dispatch detected at runtime ([ADR 0005](adr/0005-hyprland-first-adapter.md)) | The owner's desktop; other compositors fit behind the same adapter later | Claude |
+| D10 | 2026-09-24 | Workflow: **feature branch → PR → `main`; the owner merges**. `main` was created by the owner (the session's guard blocks Claude from pushing `main`) | Every change is reviewable; CI must pass | Owner |
+| D11 | 2026-09-24 | Planner **`qwen3.5:4b`** (fits 8 GB VRAM, ~1 s plans, 26/26 evals); deep planner **`qwen3.5:9b`** (`qwen3:8b` is fine if not pulled). Never suggest "Uncensored"/never-refuse models for planning. Large MoE models (qwen3.6:35b-a3b, gpt-oss:20b, …) are not used for interactive planning on 8 GB VRAM | Measured with `sonu eval`; big models spill to CPU and evict the fast one | Owner ("pull which is good") + Claude |
+| D12 | 2026-09-24 | **SONU key = the NitroSense key**, which is `XF86Launch1` on the owner's Nitro (measured with `wev`; separate press and release) → `sonu prompt` now, push-to-talk in M3 | A dedicated key the rice doesn't use | Owner |
+| D13 | 2026-09-24 | SONU only **reads** the rice's files; changes to the rice are the owner's ([guide](integrations/hypr-dotfiles.md)) | The dotfiles are the owner's project | Claude |
+| D14 | 2026-09-24 | Every window action uses an exact `stableid:`/`address:` selector and is verified on fresh snapshots | Hyprland acts on the focused window without a selector and says "ok" to a selector that matches nothing | Claude |
+| D15 | 2026-09-25 | **Terminals always open a new window**; other apps reuse an open window | "open kitty" moved the terminal the owner was typing in | Claude (from real use) |
+| D16 | 2026-09-25 | Ambiguity → **pick list** (numbers in the terminal, rofi from the key); only offered answers are accepted; answering is not approving a risky step | SONU asked "which one?" but couldn't be answered | Claude (from real use) |
+| D17 | 2026-09-25 | Parts of a request no tool can do go in **`unsupported`** and are reported ("✖ Can't do this yet"); such a task is never "done" | "…and turn on Bluetooth" was silently dropped and reported done | Claude (from real use) |
+| D18 | 2026-09-25 | **Web: only the user's words leave the machine**. Fixed URL templates for known sites; every query word must be in the request; `web.open` only opens sites the user named or links they typed; http(s) only. Web search default **DuckDuckGo** (`[web] search_engine`) | Links can carry data out; the model and page content must not choose destinations | Claude |
+| D19 | 2026-09-25 | The terminal SONU runs in (found by process ancestry) is **never title evidence** | Its title is the request itself; "go to youtube" focused it | Claude (from real use) |
+| D20 | 2026-09-25 | A result SONU can't observe is **unverified**, never "failed" or "done"; pages get up to 30 s to load once the browser reacted (`[web] load_timeout_s`) | Background tabs are invisible; slow connections took >10 s | Claude (from real use) |
+| D21 | 2026-09-25 | **Roadmap order: settings control (M1.5) before daemon + memory (M2)** | "Whole PC control" first, then faster replies and memory | Owner |
+| D22 | 2026-09-25 | **Everything is tracked in the repo**: `CLAUDE.md`, `docs/STATUS.md`, this log — updated in every PR | A fresh clone or session must have the full plan, progress and decisions | Owner |
+| D23 | 2026-09-25 | **Graphify is not used for now** | See below | Claude (owner: "only if it's good") |
+| D24 | 2026-09-25 | Settings tools use **the same programs as the owner's rice**: `wpctl` (volume capped at 100%), `brightnessctl` (skip the NVIDIA backlight device), `rfkill unblock` before `bluetoothctl power on`, `nmcli radio wifi`, `playerctl`, `powerprofilesctl`; every change is read back to verify it; turning Wi-Fi or networking **off** asks first | Proven on this laptop by the rice; turning the network off can cut a remote session | Claude |
+| D25 | 2026-09-25 | Supply chain: CI actions pinned by SHA, `uv.lock` with hashes, Dependabot with a 7-day cooldown; dependency bumps merge only with green CI (rich 15 merged this way) | LiteLLM compromise (March 2026) | Claude |
+
+## D23 — Graphify (why not now)
+
+[Graphify](https://github.com/Graphify-Labs/graphify) builds a knowledge graph of a codebase (tree-sitter, plus an LLM
+pass for docs) and, via `graphify claude install`, rewrites `CLAUDE.md` and adds a `PreToolUse` hook that steers the
+assistant to query the graph instead of reading files ([graphify.net](https://graphify.net/)). It is popular and
+open source (MIT), but for SONU today:
+
+- **Small repo, small gain.** SONU has ~100 source files. The headline "71.5×" compares one graph query with reading a
+  whole corpus (~52 files, ~92k words) for every question; sessions here already search and read only the files they
+  need. Most tokens in a long session are the conversation itself, which the graph doesn't reduce.
+- **Quality risk.** Editing code needs the exact current source; a hook that discourages reading files trades
+  accuracy for tokens — the opposite of what the owner asked for.
+- **Staleness.** The graph must be rebuilt after every change (`graphify update .`); a stale graph gives wrong answers.
+- **Supply chain.** It is one more third-party tool running on every file read in the dev environment.
+
+What reduces tokens here instead: start a **new session per milestone** — it reads `CLAUDE.md` and `docs/STATUS.md`
+(a few thousand tokens) instead of carrying a long history. Revisit Graphify if the repo grows past ~500 files.
