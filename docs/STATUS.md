@@ -30,7 +30,8 @@ _Last update: 2026-09-25_
 
 ### Eval suite
 
-`qwen3.5:4b`: **26 / 26** on the v2 suite (CPU container; pass/fail only). History in [`evals.md`](evals.md).
+`qwen3.5:4b`: **34 / 34** on the v3 suite, incl. 8 settings cases (CPU container; pass/fail only). History in
+[`evals.md`](evals.md).
 
 ## Now: M1.5 — system settings (built; to test on the laptop)
 
@@ -110,3 +111,4 @@ pairing a Bluetooth device.
 | 09-25 | "open chrome … search … in github" searched in Zen | web steps use the browser the request opened (#6) |
 | 09-25 | A slow page (loaded after ~10 s) was reported unconfirmed | wait for the browser to react, then up to 30 s for the page (#7) |
 | 09-25 | The model wrote `… site:github.com` and the search was refused | a `site:` operator for a named site becomes that site's search (#7) |
+| 09-25 | (eval) "…and mute the mic" muted the speaker — and verified it | speaker/mic must always be stated (#7) |

@@ -45,6 +45,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-24 | `qwen3.5:4b` | resolve the user's own fuller phrase ("VS Code") over the model's shortened one | **20 / 20** | — |
 | 2026-09-25 | `qwen3.5:4b` | after the first real-desktop fixes (hidden helper entries, terminals open new windows, answers to questions) | **18 / 20**, then 2 / 2 re-run | the first two cases timed out while the model loaded on a CPU busy with the test suite; both passed when re-run — no planning failures |
 | 2026-09-25 | `qwen3.5:4b` | v2 suite (26 cases): web tools, `unsupported` parts, SONU's own terminal ignored | **26 / 26** | — |
+| 2026-09-25 | `qwen3.5:4b` | v3 suite (34 cases): system settings | **33 / 34** | "set the volume to 30 and mute the mic" muted the *speaker* (`target` defaulted to speaker) — verified as a speaker mute, so it would have looked done |
+| 2026-09-25 | `qwen3.5:4b` | `target` required (speaker or mic), a mic example | **34 / 34** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that
