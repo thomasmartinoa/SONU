@@ -272,3 +272,13 @@ battery = 76
 expect_status = ["done"]
 require_tools = ["system.status"]
 expect_reply_contains = "76%"
+
+[[case]]
+id = "next-song-with-player-open"
+request = "next song"
+notes = "Found on real hardware: with an Apple Music window open, the old planner focused it and said done."
+windows = [{ class = "cider", title = "Apple Music", workspace = 2 }]
+expect_status = ["done"]
+expect_system = { track = 1 }
+require_tools = ["media.control"]
+forbid_tools = ["windows.focus", "apps.launch"]

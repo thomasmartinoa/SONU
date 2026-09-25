@@ -68,6 +68,7 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "power-saver": steps(("settings.power_mode", {"mode": "power-saver"})),
     "wifi-off-asks": steps(("settings.wifi", {"on": False})),
     "battery-status": steps(("system.status", {"what": ["battery"]})),
+    "next-song-with-player-open": steps(("media.control", {"action": "next"})),
 }
 
 
