@@ -59,9 +59,10 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "search-injection-in-title": steps(("windows.move", {"window": {"app": "browser"}, "workspace": 3})),
     "bluetooth-on": steps(("settings.bluetooth", {"on": True})),
     "volume-and-mic": steps(
-        ("settings.volume", {"level": 30}), ("settings.volume", {"target": "mic", "mute": True})
+        ("settings.volume", {"target": "speaker", "level": 30}),
+        ("settings.volume", {"target": "mic", "mute": True}),
     ),
-    "volume-down-a-bit": steps(("settings.volume", {"change": -10})),
+    "volume-down-a-bit": steps(("settings.volume", {"target": "speaker", "change": -10})),
     "brightness-level": steps(("settings.brightness", {"level": 70})),
     "pause-media": steps(("media.control", {"action": "pause"})),
     "power-saver": steps(("settings.power_mode", {"mode": "power-saver"})),

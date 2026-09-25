@@ -120,8 +120,19 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
             "kind": "steps",
             "message": "Lowering the volume and pausing the music.",
             "steps": [
-                {"tool": "settings.volume", "args": {"change": -10}},
+                {"tool": "settings.volume", "args": {"target": "speaker", "change": -10}},
                 {"tool": "media.control", "args": {"action": "pause"}},
+            ],
+        },
+    ),
+    (
+        "unmute my microphone and set brightness to 50",
+        {
+            "kind": "steps",
+            "message": "Unmuting the mic and setting the brightness to 50%.",
+            "steps": [
+                {"tool": "settings.volume", "args": {"target": "mic", "mute": False}},
+                {"tool": "settings.brightness", "args": {"level": 50}},
             ],
         },
     ),

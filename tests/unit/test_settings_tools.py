@@ -143,18 +143,18 @@ async def test_no_bluetooth_adapter(rig: Rig) -> None:
 
 @pytest.mark.anyio
 async def test_volume_is_set_capped_and_verified(rig: Rig) -> None:
-    report, _ = await rig.run(("settings.volume", {"level": 30}))
+    report, _ = await rig.run(("settings.volume", {"target": "speaker", "level": 30}))
     assert report.lines() == ["✔ Speaker volume is now 30%"]
     assert ("wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "30%") in rig.system.calls
     rig.system.speaker = 0.95
-    report, _ = await rig.run(("settings.volume", {"change": 20}))
+    report, _ = await rig.run(("settings.volume", {"target": "speaker", "change": 20}))
     assert report.lines() == ["✔ Speaker volume is now 100%"]  # never above 100%
 
 
 @pytest.mark.anyio
 async def test_volume_change_while_muted_says_so(rig: Rig) -> None:
     rig.system.speaker_muted = True
-    report, _ = await rig.run(("settings.volume", {"change": -10}))
+    report, _ = await rig.run(("settings.volume", {"target": "speaker", "change": -10}))
     assert report.lines() == [
         "✔ Speaker volume is now 40% — it's muted, so you won't hear it (say 'unmute the speaker')"
     ]
@@ -171,9 +171,11 @@ def test_volume_needs_exactly_one_instruction() -> None:
     from sonu.tools.settings_tools import VolumeArgs
 
     with pytest.raises(ValueError, match="exactly one of level, change, mute"):
-        VolumeArgs.model_validate({"level": 30, "mute": True})
+        VolumeArgs.model_validate({"target": "speaker", "level": 30, "mute": True})
     with pytest.raises(ValueError, match="exactly one"):
-        VolumeArgs.model_validate({})
+        VolumeArgs.model_validate({"target": "mic"})
+    with pytest.raises(ValueError, match="target"):  # speaker or mic must always be said
+        VolumeArgs.model_validate({"mute": True})
 
 
 @pytest.mark.anyio
@@ -227,7 +229,7 @@ async def test_power_mode(rig: Rig) -> None:
 @pytest.mark.anyio
 async def test_missing_program_says_what_to_install(rig: Rig) -> None:
     rig.system.installed.discard("wpctl")
-    report, _ = await rig.run(("settings.volume", {"level": 30}))
+    report, _ = await rig.run(("settings.volume", {"target": "speaker", "level": 30}))
     assert report.lines() == ["✖ wpctl isn't installed (install: sudo pacman -S wireplumber)"]
 
 
@@ -246,7 +248,9 @@ async def test_status_reads_everything_it_can(rig: Rig) -> None:
 @pytest.mark.anyio
 async def test_dry_run_changes_no_setting(rig: Rig) -> None:
     report, _ = await rig.run(
-        ("settings.volume", {"level": 10}), ("settings.bluetooth", {"on": True}), dry_run=True
+        ("settings.volume", {"target": "speaker", "level": 10}),
+        ("settings.bluetooth", {"on": True}),
+        dry_run=True,
     )
     assert report.lines() == ["· would: Set the speaker volume to 10%", "· would: Turn Bluetooth on"]
     assert rig.system.calls == []

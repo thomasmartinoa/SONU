@@ -56,7 +56,9 @@ def _exactly_one(model: BaseModel, *names: str) -> None:
 class VolumeArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    target: AudioTarget = Field(default="speaker", description="speaker (sound output) or mic")
+    # Required on purpose: with a default, the model once muted the speaker for "mute the mic"
+    # (eval, 2026-09-25) — every step now has to say which one it means.
+    target: AudioTarget = Field(description="speaker (sound, volume) or mic (microphone)")
     level: int | None = Field(default=None, ge=0, le=100, description="set to this percent")
     change: int | None = Field(
         default=None, ge=-100, le=100, description="raise (+) or lower (-) by this many percent; 'a bit' = 10"
