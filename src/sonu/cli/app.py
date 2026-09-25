@@ -126,4 +126,10 @@ def main() -> None:
     try:
         app()
     except KeyboardInterrupt:
+        # Say so: a step that was already sent (e.g. a page opening) may still complete.
+        print(
+            "\n✖ Stopped (Ctrl+C). A step already sent to an app may still finish — "
+            "`sonu audit tail` shows what was done.",
+            file=sys.stderr,
+        )
         raise SystemExit(130) from None

@@ -213,3 +213,19 @@ def test_parts_sonu_cannot_do_are_printed(env: dict[str, str], fake_ollama: Fake
     assert "✔ Opened kitty on workspace 2" in result.output
     assert "✖ Can't do this yet: turn on bluetooth" in result.output
     assert "Partly done" in result.output
+
+
+def test_ctrl_c_says_what_happened(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import sonu.cli.app as cli
+
+    def interrupted() -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "app", interrupted)
+    monkeypatch.setattr("sys.argv", ["sonu", "open", "kitty"])
+    with pytest.raises(SystemExit) as exit_info:
+        cli.main()
+    assert exit_info.value.code == 130
+    assert "Stopped (Ctrl+C)" in capsys.readouterr().err

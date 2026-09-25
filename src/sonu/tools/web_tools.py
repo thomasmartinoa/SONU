@@ -105,6 +105,8 @@ SearchSite = Literal["web", "youtube", "github", "wikipedia", "archwiki", "aur",
 # Small words a model may add to a query without changing what the user asked for.
 _CONNECTIVES = {"a", "an", "the", "of", "for", "and", "in", "on", "to", "with", "how", "what"}
 _HOST_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
+# How long to wait for an already-running browser to show the page.
+WEB_TIMEOUT_S = 10.0
 
 
 def _compact(text: str) -> str:
@@ -168,10 +170,11 @@ def site_link(text: str, request: str) -> _Target | ToolOutcome:
         return ToolOutcome(StepStatus.FAILED, f"SONU only opens web links (https://…), not '{parts.scheme}:'")
     if parts.username or parts.password or not host or not _valid_host(host):
         return ToolOutcome(StepStatus.FAILED, f"'{raw}' is not a web address SONU will open")
-    typed = raw.removeprefix("https://").removeprefix("http://").rstrip("/").casefold()
-    if typed not in request.casefold():
+    typed = raw.removeprefix("https://").removeprefix("http://").rstrip("/")
+    if typed.casefold() not in request.casefold():
         return ToolOutcome(StepStatus.FAILED, "SONU only opens links you typed yourself")
-    return _Target(url, host, _compact(_brand(host) if port is None else ""))
+    label = typed if len(typed) <= 60 else typed[:59] + "…"
+    return _Target(url, label, _compact(_brand(host) if port is None else ""))
 
 
 def _brand(host: str) -> str:
@@ -200,7 +203,13 @@ class _WebPlan:
 def _prepare_browser(
     target: _Target, browser: str | None, ctx: ToolContext, choice: str | None
 ) -> _WebPlan | ToolOutcome:
-    entry = chosen_app(choice, ctx) if choice is not None else resolve_app(browser or "browser", ctx)
+    entry: AppEntry | ToolOutcome
+    if choice is not None:
+        entry = chosen_app(choice, ctx)
+    elif browser is None and ctx.task_browser is not None:
+        entry = ctx.task_browser  # "open chrome on 3 and search …": the browser this request opened
+    else:
+        entry = resolve_app(browser or "browser", ctx)
     if isinstance(entry, ToolOutcome):
         return entry
     if entry.accepts not in ("url", "urls"):
@@ -234,7 +243,16 @@ async def _open_in_browser(plan: _WebPlan, ctx: ToolContext) -> ToolOutcome:
             return next(iter(changed(snapshot)), None)
         return next((w for w in changed(snapshot) if target.marker in _compact(w.title)), None)
 
-    timeout = ctx.settings.apps.launch_timeout_s
+    running = any(
+        window_matches(entry, (window.window_class, window.initial_class), learned)
+        for window in before.windows
+    )
+    # A cold start (browser not open yet) can take a while; a running browser answers quickly.
+    timeout = (
+        min(WEB_TIMEOUT_S, ctx.settings.apps.launch_timeout_s)
+        if running
+        else ctx.settings.apps.launch_timeout_s
+    )
     window, snapshot = await ctx.desktop.wait_for(loaded, timeout_s=timeout)
     if window is not None and target.marker:
         check = Check(f"{entry.name} shows {target.label}", True, {"title_contains": target.marker})
@@ -244,7 +262,13 @@ async def _open_in_browser(plan: _WebPlan, ctx: ToolContext) -> ToolOutcome:
             StepStatus.UNVERIFIED,
             f"Sent {target.label} to {entry.name}, but couldn't confirm the page loaded",
         )
-    return ToolOutcome(StepStatus.FAILED, f"{entry.name} didn't show {target.label} within {timeout:.0f}s")
+    # Hyprland starts programs without reporting failures, and a browser may open the page in a
+    # background tab: SONU can't tell "not opened" from "not visible", so it doesn't claim either.
+    return ToolOutcome(
+        StepStatus.UNVERIFIED,
+        f"Sent {target.label} to {entry.name}, but didn't see it open within {timeout:.0f}s "
+        "(it may be in a background tab or another window)",
+    )
 
 
 # ---------------------------------------------------------------------------- web.search

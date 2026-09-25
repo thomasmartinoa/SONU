@@ -116,6 +116,7 @@ class Engine:
                 return report
         self._audit("task.start", {"request": request, "dry_run": dry_run})
         self.ctx.request_text = request
+        self.ctx.task_browser = None
 
         try:
             snapshot = await self.ctx.desktop.snapshot()

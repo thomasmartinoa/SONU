@@ -712,3 +712,33 @@ async def test_open_a_link_the_user_typed(harness: Harness) -> None:
     report = await harness.engine(plans).run(request, confirm=Confirmations(False))
     assert report.status == "done", report.lines()
     assert harness.fake.launched[-1][-1] == "https://github.com/hyprwm/Hyprland"
+    assert report.lines() == ["✔ Opened github.com/hyprwm/Hyprland in Zen Browser"]
+
+
+@pytest.mark.anyio
+async def test_web_step_uses_the_browser_this_request_opened(harness: Harness) -> None:
+    # Found on real hardware: the model left out "chrome" in the search step, so it went to Zen.
+    request = "open chrome on workspace 3 and search for arch install guide in github"
+    plans = {
+        request: steps_plan(
+            ("apps.launch", {"app": "chrome", "workspace": 3}),
+            ("web.search", {"site": "github", "query": "arch install guide"}),
+        )
+    }
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert report.lines()[-1] == "✔ Opened GitHub search for 'arch install guide' in Chromium"
+    assert harness.fake.launched[-1][0] == "/usr/bin/chromium"
+
+
+@pytest.mark.anyio
+async def test_page_sonu_cannot_see_is_unverified_not_failed(harness: Harness) -> None:
+    # The browser is running but the page never shows in any window title (e.g. a background tab).
+    harness.fake.apps["zen-browser"] = FakeApp("zen", "Zen Browser", shows_pages=False)
+    harness.fake.windows = [make_window("0xa1", "zen", "Zen Browser", workspace_id=1, stable_id="a1")]
+    request = "search youtube for networkchuck"
+    plans = {request: steps_plan(("web.search", {"site": "youtube", "query": "networkchuck"}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    outcome = report.steps[0].outcome
+    assert outcome.status is StepStatus.UNVERIFIED
+    assert "it may be in a background tab" in outcome.summary
