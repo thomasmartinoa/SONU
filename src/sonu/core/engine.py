@@ -22,6 +22,7 @@ from sonu.policy.engine import Policy
 from sonu.tools.base import Choices, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import MAX_STEPS, ToolRegistry
+from sonu.world.origin import find_origin
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,9 @@ class Engine:
 
         try:
             snapshot = await self.ctx.desktop.snapshot()
+            origin = find_origin(snapshot.windows, self.ctx.ancestors(), snapshot.active_address)
+            self.ctx.desktop.origin_address = origin
+            snapshot = replace(snapshot, origin_address=origin)
             labels = self.ctx.resolver.labels_for_classes(w.window_class for w in snapshot.windows)
             plan = await self.planner.plan(request, snapshot, self.registry, app_labels=labels)
         except (HyprlandError, PlanningError) as exc:
@@ -131,6 +135,7 @@ class Engine:
             {
                 "kind": plan.kind,
                 "steps": [{"tool": step.tool, "args": step.args} for step in plan.steps],
+                "unsupported": list(plan.unsupported),
                 "model": plan.model,
                 "duration_s": round(plan.duration_s, 3),
                 "attempts": plan.attempts,

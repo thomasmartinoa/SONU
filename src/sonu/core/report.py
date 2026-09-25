@@ -81,15 +81,21 @@ class TaskReport:
         if self.dry_run:
             ok = all(s in (StepStatus.SKIPPED, StepStatus.DONE) for s in statuses)
             return "planned" if ok else "failed"
-        if StepStatus.NEEDS_INPUT in statuses:
-            return "needs-input"
         if all(status is StepStatus.DONE for status in statuses):
-            return "done"
+            # Every step worked — but if part of the request had no tool, the request isn't done.
+            return "partial" if self.plan.unsupported else "done"
         if StepStatus.DONE in statuses:
             return "partial"
         if all(record.outcome.status is StepStatus.DENIED and record.asked for record in self.steps):
             return "declined"
         return "failed"
+
+    @property
+    def not_done(self) -> list[str]:
+        """Lines for the parts of the request SONU had no tool for."""
+        if self.plan is None or self.plan.kind != "steps":
+            return []
+        return [f"✖ Can't do this yet: {part}" for part in self.plan.unsupported]
 
     @property
     def questions(self) -> list[str]:
@@ -109,6 +115,7 @@ class TaskReport:
             if self.dry_run and record.outcome.status is StepStatus.SKIPPED:
                 summary = f"would: {record.description}"
             out.append(f"{ICONS[record.outcome.status]} {summary}")
+        out.extend(self.not_done)
         out.extend(f"? {question}" for question in self.questions)
         return out
 
@@ -128,6 +135,7 @@ class TaskReport:
                 "model": plan.model,
                 "duration_s": round(plan.duration_s, 3),
                 "attempts": plan.attempts,
+                "unsupported": list(plan.unsupported),
             },
             "steps": [
                 {

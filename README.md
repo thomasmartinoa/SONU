@@ -21,9 +21,11 @@ Works on any distro running Hyprland; other compositors can be added behind the 
 
 ## Status
 
-🚧 **Milestone M1 — the verified window operator — is implemented** and awaiting validation on real desktops.
-SONU can open apps (on a chosen workspace), move, focus and close windows, and switch workspaces — each step
-verified on the real desktop. Voice (M3) and memory (M2) come next. See the [roadmap](docs/PROPOSAL.md#8-roadmap).
+✅ **Milestone M1 — the verified window operator — is implemented** and in daily use on the author's laptop.
+SONU can open apps (on a chosen workspace), move, focus and close windows, switch workspaces, and open websites and
+searches in your browser — each step verified on the real desktop. When part of a request is beyond its tools
+("…and turn on Bluetooth"), it says so instead of reporting done. Voice (M3) and memory (M2) come next. See the
+[roadmap](docs/PROPOSAL.md#8-roadmap).
 
 ## Try it
 
@@ -46,6 +48,8 @@ sonu open VSCodium and Chromium, put VSCodium on workspace 3 and Chromium on wor
 sonu close kitty                              # asks first: closing is a medium-risk action
 sonu open VS Code                             # two builds installed? SONU asks which one — pick by number
 sonu move kitty to workspace 3                # several kitty windows? only asks if it can't tell which
+sonu search youtube for networkchuck          # web searches and sites open in your browser, verified
+sonu open chrome on 3 and go to github.com
 sonu prompt                                   # a text box for keybinds; result as a notification
 ```
 

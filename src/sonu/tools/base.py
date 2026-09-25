@@ -47,6 +47,7 @@ class Effect(StrEnum):
     WINDOW_FOCUS = "window.focus"
     WORKSPACE_SHOW = "workspace.show"
     WINDOW_CLOSE = "window.close"
+    WEB_OPEN = "web.open"  # sends a URL to the user's browser
 
 
 class StepStatus(StrEnum):

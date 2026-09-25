@@ -376,6 +376,15 @@ Rules for all tools:
 | `workspaces.switch(id)` | low | active workspace |
 | `windows.close(selector)` | **medium → confirm** | window gone (graceful close, never SIGKILL by default) |
 | `ask_user(question)` / `cannot_do(reason)` | — | lets the model be honest instead of guessing |
+| `web.search(query, site?, browser?)` *(added after the first real-desktop runs)* | low | browser title shows the site |
+| `web.open(site, browser?)` *(same)* | low | browser title shows the site |
+
+Every plan also carries **`unsupported`**: the parts of the request no tool can do ("turn on Bluetooth"). They are
+reported as not done, so a request is never called done because the parts SONU *could* do worked.
+
+The web tools only send the user's own words: queries go into fixed URL templates for known sites, every query word
+must appear in the request, and `web.open` only opens a site the user named or a link they typed. The model never
+builds a URL, so text from a window title or web page can't pick a destination or smuggle data out in one.
 
 Window **selectors** are structured (`{app: "code-oss"}`, `{title_contains: "…"}`, `{address: "0x…"}`) and resolved
 against the world model; ambiguous selectors trigger `ask_user`.

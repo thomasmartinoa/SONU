@@ -56,12 +56,12 @@ def _workspace(value: WorkspaceArg | None) -> WorkspaceTarget | ToolOutcome | No
 
 
 def _pick(
-    windows: tuple[Window, ...], target: WindowTarget, all_: bool, ctx: ToolContext
+    windows: tuple[Window, ...], target: WindowTarget, all_: bool, ctx: ToolContext, snapshot: WorldSnapshot
 ) -> tuple[Window, ...]:
     """Narrow several matches with the user's own words, unless every match was asked for."""
     if all_ or len(windows) < 2:
         return windows
-    return narrow_by_request(windows, ctx.request_text, target)
+    return narrow_by_request(windows, ctx.request_text, target, ignore=snapshot.origin_address)
 
 
 def _failed_dispatch(action: str, exc: HyprlandError) -> ToolOutcome:
@@ -71,7 +71,7 @@ def _failed_dispatch(action: str, exc: HyprlandError) -> ToolOutcome:
 MAX_CHOICES = 6
 
 
-def _resolve_app(app: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
+def resolve_app(app: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
     resolution = ctx.resolver.resolve_for_request(app, ctx.request_text)
     if resolution.status == "ambiguous":
         candidates = resolution.candidates[:MAX_CHOICES]
@@ -100,7 +100,7 @@ def _short(text: str, limit: int = 48) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _chosen_app(desktop_id: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
+def chosen_app(desktop_id: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
     entry = ctx.resolver.catalog.by_id(desktop_id)
     if entry is None:
         return ToolOutcome(StepStatus.FAILED, f"{desktop_id} is no longer installed")
@@ -126,7 +126,7 @@ def _target_windows(
     if choice is not None:
         chosen = tuple(window for window in match.windows if window.address == choice)
         return chosen or ToolOutcome(StepStatus.FAILED, "The window you picked is no longer open")
-    windows = _pick(match.windows, target, all_, ctx)
+    windows = _pick(match.windows, target, all_, ctx, snapshot)
     if already_at is not None and len(windows) > 1:
         # Moving a window to where it already is changes nothing: only the others are candidates.
         elsewhere = tuple(w for w in windows if w.workspace.name != already_at)
@@ -196,7 +196,7 @@ class LaunchApp(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(LaunchArgs, args)
-        entry = _chosen_app(choice, ctx) if choice is not None else _resolve_app(a.app, ctx)
+        entry = chosen_app(choice, ctx) if choice is not None else resolve_app(a.app, ctx)
         if isinstance(entry, ToolOutcome):
             return entry
         target = _workspace(a.workspace)
@@ -418,7 +418,9 @@ class FocusWindow(Tool):
         if match.problem:
             return ToolOutcome(StepStatus.FAILED, match.problem.capitalize())
         # Prefer the window the user's words point at; otherwise the most recently used match.
-        window = narrow_by_request(match.windows, ctx.request_text, a.window)[0]
+        window = narrow_by_request(match.windows, ctx.request_text, a.window, ignore=snapshot.origin_address)[
+            0
+        ]
         return Prepared(f"Focus {window_label(window)}", window)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:

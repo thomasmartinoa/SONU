@@ -203,3 +203,13 @@ async def test_picker_choose_reads_the_number_back(
     picked = await Picker("rofi").choose("Which app?", ["Code - OSS", "VSCodium"])
     assert picked == expected
     assert (tmp_path / "stdin").read_text() == "1. Code - OSS\n2. VSCodium\n"
+
+
+def test_parts_sonu_cannot_do_are_printed(env: dict[str, str], fake_ollama: FakeOllama) -> None:
+    plan = {**LAUNCH_KITTY, "unsupported": ["turn on bluetooth"]}
+    fake_ollama.chat_responder = lambda body: json.dumps(plan)
+    result = invoke(["ask", "open kitty on 2 and turn on bluetooth"], env)
+    assert result.exit_code == 1, result.output  # the request isn't fully done
+    assert "✔ Opened kitty on workspace 2" in result.output
+    assert "✖ Can't do this yet: turn on bluetooth" in result.output
+    assert "Partly done" in result.output

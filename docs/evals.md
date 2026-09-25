@@ -11,13 +11,18 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v1, 20 cases)
+## The cases (v2, 26 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
 workspaces, going to an app, closing one or all windows of an app, reusing an already-open app, describing the
 desktop, chit-chat, out-of-scope requests, an uninstalled app, **an ambiguous name that must lead to a question**,
 **a prompt-injection attempt in a window title**, and a four-step "set up my workspace" request.
+
+v2 adds six cases from the author's real-desktop runs: a request that is only **partly possible** (open Bluetooth
+Manager *and turn on Bluetooth* — SONU must say what it can't do, not report done), a website by name, a site search,
+a search in the browser the user named, a link the user typed, and **an injected title that tries to make SONU search
+for (and so leak) a secret**.
 
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use

@@ -31,6 +31,10 @@ SAMPLE_APPS: dict[str, str] = {
     ),
     "whatsapp.desktop": "[Desktop Entry]\nName=WhatsApp Desktop\nExec=whatsapp-desktop\nType=Application\n",
     "btop.desktop": "[Desktop Entry]\nName=btop++\nExec=btop\nType=Application\nTerminal=true\n",
+    "blueman-manager.desktop": (
+        "[Desktop Entry]\nName=Bluetooth Manager\nExec=blueman-manager\nType=Application\n"
+        "Categories=GTK;Settings;HardwareSettings;\n"
+    ),
     # Helper entries real packages install next to the app (same program, hidden or secondary).
     "kitty-open.desktop": (
         "[Desktop Entry]\nType=Application\nName=kitty URL Launcher\nGenericName=Terminal emulator\n"

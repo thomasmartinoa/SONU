@@ -9,6 +9,7 @@ from sonu.config.settings import Settings
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.world.origin import ancestor_pids
 
 # How common terminals run a program: prefix to put before the program's argv.
 TERMINAL_EXEC: dict[str, tuple[str, ...]] = {
@@ -33,6 +34,8 @@ class ToolContext:
     learned_classes: dict[str, set[str]] = field(default_factory=dict)
     # The user's request for the task being run (trusted text), set by the engine.
     request_text: str = ""
+    # SONU's parent processes, to find the terminal it was started from (tests pass `frozenset`).
+    ancestors: Callable[[], frozenset[int]] = ancestor_pids
 
     def learned(self, entry: AppEntry) -> set[str]:
         return self.learned_classes.get(entry.desktop_id, set())

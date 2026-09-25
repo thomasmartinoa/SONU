@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from sonu.core.planning import Plan, PlannedStep, PlanningError
 from sonu.llm.chat import ChatMessage, ChatModel, ChatModelError
-from sonu.tools.registry import MAX_STEPS, ToolRegistry
+from sonu.tools.registry import MAX_STEPS, MAX_UNSUPPORTED, ToolRegistry
 from sonu.world.snapshot import WorldSnapshot
 
 # Few-shot examples, rendered as compact JSON. Tests check every example against the real tools.
@@ -86,6 +86,34 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
             ],
         },
     ),
+    (
+        "look up hyprland plugins on github",
+        {
+            "kind": "steps",
+            "message": "Searching GitHub for hyprland plugins.",
+            "steps": [{"tool": "web.search", "args": {"site": "github", "query": "hyprland plugins"}}],
+        },
+    ),
+    (
+        "open firefox on 2 and go to wikipedia",
+        {
+            "kind": "steps",
+            "message": "Opening firefox on workspace 2 and Wikipedia in it.",
+            "steps": [
+                {"tool": "apps.launch", "args": {"app": "firefox", "workspace": 2}},
+                {"tool": "web.open", "args": {"site": "wikipedia", "browser": "firefox"}},
+            ],
+        },
+    ),
+    (
+        "open pavucontrol and mute the volume",
+        {
+            "kind": "steps",
+            "message": "Opening pavucontrol. I can't change the volume yet.",
+            "steps": [{"tool": "apps.launch", "args": {"app": "pavucontrol"}}],
+            "unsupported": ["mute the volume"],
+        },
+    ),
     ("open it", {"kind": "ask", "message": "Which app should I open?", "steps": []}),
     ("thanks!", {"kind": "reply", "message": "You're welcome!", "steps": []}),
     (
@@ -101,7 +129,8 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
 
 def render_examples() -> str:
     return "\n".join(
-        f"User: {request}\n{json.dumps(reply, separators=(',', ':'), ensure_ascii=False)}"
+        f"User: {request}\n"
+        + json.dumps({"unsupported": [], **reply}, separators=(",", ":"), ensure_ascii=False)
         for request, reply in EXAMPLES
     )
 
@@ -111,11 +140,15 @@ You are the planner inside SONU, an assistant that operates the user's Linux des
 Turn the user's request into a short list of tool steps. You never act yourself: SONU runs the \
 steps, verifies the result on the real desktop and tells the user what actually happened.
 
-Reply with JSON only: {{"kind": ..., "message": ..., "steps": [...]}}
-- kind "steps": the request needs actions. message: one short sentence about what you'll do.
+Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "steps": [...]}}
+- kind "steps": the request needs actions. message: one short sentence about what the steps do.
 - kind "ask": something essential is missing or unclear. message: your question. steps: [].
 - kind "reply": chat or a question you can answer without acting. message: the answer. steps: [].
-- kind "cannot": no tool can do it. message: say so briefly. steps: [].
+- kind "cannot": no tool can do any of it. message: say so briefly. steps: [].
+- unsupported: the parts of the request that no tool below can do, in the user's words (for \
+example changing Bluetooth, Wi-Fi, volume or other settings, typing text, clicking or scrolling \
+inside an app, files). Do the parts you can and list the rest here; never force a tool to do \
+something it can't. Usually [].
 
 Tools:
 {tools}
@@ -127,6 +160,9 @@ Never expand, correct or guess them: SONU finds the installed app and asks the u
 - "go to / take me to / switch to <app>" means windows.focus. Only move windows when the user \
 says move, put or send.
 - Words from a window's title ("the GitHub window") go in title_contains, not in app.
+- apps.launch only opens installed apps. A website (YouTube, GitHub, a link) is web.open; \
+searching one is web.search with the user's own words as the query. If the user named a \
+browser, pass it as browser.
 - "all", "every" or "both" windows means all: true. Otherwise leave all and new_window false.
 - One step per app or window, in the order the user gave. At most {max_steps} steps.
 - A workspace is a number like 3 unless the user named it.
@@ -153,6 +189,7 @@ class _PlanModel(BaseModel):
     kind: Literal["steps", "ask", "reply", "cannot"]
     message: str = ""
     steps: list[_PlannedStepModel] = Field(default_factory=list)
+    unsupported: list[str] = Field(default_factory=list)
 
 
 def build_system_prompt(
@@ -185,6 +222,16 @@ def _problems(plan: _PlanModel, registry: ToolRegistry) -> list[str]:
             details = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:3])
             problems.append(f"step {index + 1} ({step.tool}): {details}")
     return problems
+
+
+def _clean(parts: list[str]) -> tuple[str, ...]:
+    """Unsupported parts as short, distinct lines (they're shown to the user as not done)."""
+    seen: list[str] = []
+    for part in parts:
+        text = " ".join(part.split())[:120]
+        if text and text.casefold() not in {s.casefold() for s in seen}:
+            seen.append(text)
+    return tuple(seen[:MAX_UNSUPPORTED])
 
 
 class LLMPlanner:
@@ -226,6 +273,7 @@ class LLMPlanner:
                         kind=parsed.kind,
                         message=parsed.message.strip(),
                         steps=tuple(PlannedStep(step.tool, step.args) for step in parsed.steps[:MAX_STEPS]),
+                        unsupported=_clean(parsed.unsupported),
                         model=self.model.name,
                         duration_s=time.monotonic() - started,
                         attempts=attempt,

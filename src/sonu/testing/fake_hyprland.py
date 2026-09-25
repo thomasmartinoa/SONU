@@ -32,7 +32,7 @@ def make_window(
     workspace_id: int = 1,
     workspace_name: str | None = None,
     monitor: int = 0,
-    pid: int = 1000,
+    pid: int = 0,  # 0: never an ancestor of the test process (see sonu.world.origin)
     stable_id: str | None = None,
     floating: bool = False,
     focus_history_id: int = 0,
@@ -91,6 +91,9 @@ class FakeApp:
     opens_window: bool = True
     # False: ignores close requests (e.g. an "unsaved changes" dialog keeps it open).
     closes: bool = True
+    # Browsers: a link on the command line opens in the running browser's most recent window (a new
+    # tab) and its title becomes "<url> - <title>". False: the page never loads (title unchanged).
+    shows_pages: bool = True
 
 
 def make_monitor(name: str = "eDP-1", *, monitor_id: int = 0, active_workspace: int = 1) -> dict[str, Any]:
@@ -331,10 +334,23 @@ class FakeHyprland:
         if app is None or not app.opens_window:
             return "ok"  # real Hyprland reports ok even if the program fails to start
         rule_workspace = int(parsed.workspace) if parsed.workspace else None
-        self._background(self._open(app, rule_workspace))
+        url = next((arg for arg in argv[1:] if arg.startswith(("https://", "http://"))), None)
+        running = sorted(self.windows_of_class(app.window_class), key=lambda w: w["focusHistoryID"])
+        if url and running:
+            self._background(self._load_page(app, running[0], url))
+        else:
+            title = f"{url} - {app.title}" if url and app.shows_pages else None
+            self._background(self._open(app, rule_workspace, title))
         return "ok"
 
-    async def _open(self, app: FakeApp, rule_workspace: int | None) -> None:
+    async def _load_page(self, app: FakeApp, window: dict[str, Any], url: str) -> None:
+        await asyncio.sleep(app.delay_s)
+        if not app.shows_pages:
+            return
+        window["title"] = f"{url} - {app.title}"
+        await self.emit("windowtitlev2", f"{window['address'].removeprefix('0x')},{window['title']}")
+
+    async def _open(self, app: FakeApp, rule_workspace: int | None, title: str | None = None) -> None:
         await asyncio.sleep(app.delay_s)
         handed_off = app.single_instance and bool(self.windows_of_class(app.window_class))
         if app.lands_on is not None:
@@ -345,11 +361,10 @@ class FakeHyprland:
             workspace = self.active_workspace
         address = f"0x{self._next_address:x}"
         self._next_address += 0x100
-        window = make_window(address, app.window_class, app.title, workspace_id=workspace)
+        title = title if title is not None else app.title
+        window = make_window(address, app.window_class, title, workspace_id=workspace)
         self.windows.append(window)
-        await self.emit(
-            "openwindow", f"{address.removeprefix('0x')},{workspace},{app.window_class},{app.title}"
-        )
+        await self.emit("openwindow", f"{address.removeprefix('0x')},{workspace},{app.window_class},{title}")
         if workspace == self.active_workspace:
             self.active_address = address
             await self.emit("activewindowv2", address.removeprefix("0x"))

@@ -13,8 +13,10 @@ from typing import Any
 
 from sonu.tools.base import Tool
 from sonu.tools.desktop_tools import DEFAULT_TOOLS
+from sonu.tools.web_tools import WEB_TOOLS
 
 MAX_STEPS = 8
+MAX_UNSUPPORTED = 4
 
 
 def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
@@ -36,7 +38,7 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 class ToolRegistry:
-    def __init__(self, tools: Iterable[Tool] = DEFAULT_TOOLS) -> None:
+    def __init__(self, tools: Iterable[Tool] = (*DEFAULT_TOOLS, *WEB_TOOLS)) -> None:
         self._tools = {tool.name: tool for tool in tools}
 
     def get(self, name: str) -> Tool | None:
@@ -61,12 +63,18 @@ class ToolRegistry:
         ]
         return {
             "type": "object",
+            # "unsupported" comes first so the model decides what it can't do before planning steps.
             "properties": {
+                "unsupported": {
+                    "type": "array",
+                    "maxItems": MAX_UNSUPPORTED,
+                    "items": {"type": "string", "maxLength": 120},
+                },
                 "kind": {"type": "string", "enum": ["steps", "ask", "reply", "cannot"]},
                 "message": {"type": "string"},
                 "steps": {"type": "array", "maxItems": MAX_STEPS, "items": {"anyOf": step_variants}},
             },
-            "required": ["kind", "message", "steps"],
+            "required": ["unsupported", "kind", "message", "steps"],
             "additionalProperties": False,
         }
 

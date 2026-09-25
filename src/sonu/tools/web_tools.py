@@ -1,0 +1,333 @@
+"""Opening websites and searches in the user's browser.
+
+A link is a way to send data off the machine, so these tools only ever send the user's own words:
+
+- ``web.search`` puts the query into a fixed URL template for a known site (YouTube, GitHub, …)
+  or the configured search engine, and every query word must come from the user's request;
+- ``web.open`` opens a known site by name or a link/domain the user typed themselves.
+
+The model never builds a URL. Text from window titles or web pages therefore can't choose where
+SONU goes or smuggle data out in a link. Results are verified like everything else: the browser's
+window title must change to show the site (e.g. "networkchuck - YouTube") before SONU says done.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import re
+from dataclasses import dataclass
+from difflib import SequenceMatcher
+from typing import Literal, cast
+from urllib.parse import quote_plus, urlsplit
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from sonu.desktop.apps.classes import window_matches
+from sonu.desktop.apps.entry import AppEntry
+from sonu.desktop.apps.resolver import normalize
+from sonu.desktop.hyprland.errors import HyprlandError
+from sonu.desktop.hyprland.models import Window
+from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
+from sonu.tools.context import ToolContext
+from sonu.tools.desktop_tools import chosen_app, resolve_app
+from sonu.verify.checks import Check
+from sonu.world.snapshot import WorldSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class Site:
+    name: str  # shown to the user
+    home: str
+    search: str  # URL template; {q} is the URL-encoded query
+    marker: str  # what the browser's window title shows once the site has loaded
+    words: tuple[str, ...]  # how people name it (normalised)
+
+
+SITES: dict[str, Site] = {
+    "youtube": Site(
+        "YouTube",
+        "https://www.youtube.com/",
+        "https://www.youtube.com/results?search_query={q}",
+        "YouTube",
+        ("youtube", "yt"),
+    ),
+    "github": Site("GitHub", "https://github.com/", "https://github.com/search?q={q}", "GitHub", ("github",)),
+    "wikipedia": Site(
+        "Wikipedia",
+        "https://en.wikipedia.org/",
+        "https://en.wikipedia.org/w/index.php?search={q}",
+        "Wikipedia",
+        ("wikipedia",),
+    ),
+    "archwiki": Site(
+        "ArchWiki",
+        "https://wiki.archlinux.org/",
+        "https://wiki.archlinux.org/index.php?search={q}",
+        "ArchWiki",
+        ("archwiki", "arch wiki"),
+    ),
+    "aur": Site(
+        "AUR", "https://aur.archlinux.org/", "https://aur.archlinux.org/packages?K={q}", "AUR", ("aur",)
+    ),
+    "reddit": Site(
+        "Reddit", "https://www.reddit.com/", "https://www.reddit.com/search/?q={q}", "Reddit", ("reddit",)
+    ),
+}
+ENGINES: dict[str, Site] = {
+    "duckduckgo": Site(
+        "DuckDuckGo",
+        "https://duckduckgo.com/",
+        "https://duckduckgo.com/?q={q}",
+        "DuckDuckGo",
+        ("duckduckgo",),
+    ),
+    "google": Site(
+        "Google", "https://www.google.com/", "https://www.google.com/search?q={q}", "Google", ("google",)
+    ),
+    "brave": Site(
+        "Brave Search",
+        "https://search.brave.com/",
+        "https://search.brave.com/search?q={q}",
+        "Brave",
+        ("brave search",),
+    ),
+    "startpage": Site(
+        "Startpage",
+        "https://www.startpage.com/",
+        "https://www.startpage.com/do/search?q={q}",
+        "Startpage",
+        ("startpage",),
+    ),
+}
+
+SearchSite = Literal["web", "youtube", "github", "wikipedia", "archwiki", "aur", "reddit"]
+
+# Small words a model may add to a query without changing what the user asked for.
+_CONNECTIVES = {"a", "an", "the", "of", "for", "and", "in", "on", "to", "with", "how", "what"}
+_HOST_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
+
+
+def _compact(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", text.casefold())
+
+
+def ungrounded_words(text: str, request: str) -> list[str]:
+    """Words of ``text`` that don't come from the user's request (small spelling fixes allowed)."""
+    request_words = set(normalize(request).split())
+    missing = []
+    for word in normalize(text).split():
+        if word in request_words or word in _CONNECTIVES:
+            continue
+        if len(word) >= 4 and any(SequenceMatcher(None, word, r).ratio() >= 0.8 for r in request_words):
+            continue
+        missing.append(word)
+    return missing
+
+
+def _named_in(site: Site, request: str) -> bool:
+    text = f" {normalize(request)} "
+    return any(f" {word} " in text for word in (*site.words, normalize(site.name)))
+
+
+def _valid_host(host: str) -> bool:
+    if host == "localhost":
+        return True
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        labels = host.split(".")
+        return len(labels) >= 2 and all(_HOST_LABEL.match(label) for label in labels)
+    return True
+
+
+@dataclass(frozen=True, slots=True)
+class _Target:
+    url: str
+    label: str  # "YouTube search for 'networkchuck'", "github.com"
+    marker: str  # compact text expected in the window title; "" if SONU can't know it
+
+
+def site_link(text: str, request: str) -> _Target | ToolOutcome:
+    """A site the user named ("youtube") or a link/domain they typed ("github.com/hyprwm")."""
+    key = normalize(text)
+    for site in (*SITES.values(), *ENGINES.values()):
+        if key in site.words or key == normalize(site.name):
+            if not _named_in(site, request):
+                return ToolOutcome(StepStatus.FAILED, f"SONU only opens sites you named ({site.name} wasn't)")
+            return _Target(site.home, site.name, _compact(site.marker))
+
+    raw = text.strip()
+    url = raw if "://" in raw else f"https://{raw}"
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").rstrip(".").lower()
+        port = parts.port  # raises ValueError for a malformed port
+    except ValueError:
+        return ToolOutcome(StepStatus.FAILED, f"'{raw}' is not a web address")
+    if parts.scheme not in ("https", "http"):
+        return ToolOutcome(StepStatus.FAILED, f"SONU only opens web links (https://…), not '{parts.scheme}:'")
+    if parts.username or parts.password or not host or not _valid_host(host):
+        return ToolOutcome(StepStatus.FAILED, f"'{raw}' is not a web address SONU will open")
+    typed = raw.removeprefix("https://").removeprefix("http://").rstrip("/").casefold()
+    if typed not in request.casefold():
+        return ToolOutcome(StepStatus.FAILED, "SONU only opens links you typed yourself")
+    return _Target(url, host, _compact(_brand(host) if port is None else ""))
+
+
+def _brand(host: str) -> str:
+    """The name a site usually shows in its title: "wiki.archlinux.org" → "archlinux", "bbc.co.uk" → "bbc"."""
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        labels = host.split(".")
+        if len(labels) < 2:
+            return ""
+        name = labels[-2]
+        if len(name) <= 3 and len(labels) >= 3:  # co.uk, com.au
+            name = labels[-3]
+        return name
+    return ""
+
+
+# ---------------------------------------------------------------------------- the shared part
+@dataclass(frozen=True, slots=True)
+class _WebPlan:
+    entry: AppEntry
+    argv: tuple[str, ...]
+    target: _Target
+
+
+def _prepare_browser(
+    target: _Target, browser: str | None, ctx: ToolContext, choice: str | None
+) -> _WebPlan | ToolOutcome:
+    entry = chosen_app(choice, ctx) if choice is not None else resolve_app(browser or "browser", ctx)
+    if isinstance(entry, ToolOutcome):
+        return entry
+    if entry.accepts not in ("url", "urls"):
+        return ToolOutcome(StepStatus.FAILED, f"{entry.name} can't open web links")
+    argv = ctx.launch_argv(entry)
+    if argv is None:
+        return ToolOutcome(StepStatus.FAILED, f"{entry.name} can't be started")
+    return _WebPlan(entry, (*argv, target.url), target)
+
+
+async def _open_in_browser(plan: _WebPlan, ctx: ToolContext) -> ToolOutcome:
+    entry, target = plan.entry, plan.target
+    before = await ctx.desktop.snapshot()
+    titles = {window.address: window.title for window in before.windows}
+    learned = ctx.learned(entry)
+    try:
+        await ctx.desktop.launch(plan.argv)
+    except HyprlandError as exc:
+        return ToolOutcome(StepStatus.FAILED, f"Hyprland refused to start {entry.name}: {exc}")
+
+    def changed(snapshot: WorldSnapshot) -> list[Window]:
+        return [
+            window
+            for window in snapshot.windows
+            if window_matches(entry, (window.window_class, window.initial_class), learned)
+            and titles.get(window.address) != window.title
+        ]
+
+    def loaded(snapshot: WorldSnapshot) -> Window | None:
+        if not target.marker:
+            return next(iter(changed(snapshot)), None)
+        return next((w for w in changed(snapshot) if target.marker in _compact(w.title)), None)
+
+    timeout = ctx.settings.apps.launch_timeout_s
+    window, snapshot = await ctx.desktop.wait_for(loaded, timeout_s=timeout)
+    if window is not None and target.marker:
+        check = Check(f"{entry.name} shows {target.label}", True, {"title_contains": target.marker})
+        return ToolOutcome(StepStatus.DONE, f"Opened {target.label} in {entry.name}", (check,))
+    if window is not None or changed(snapshot):
+        return ToolOutcome(
+            StepStatus.UNVERIFIED,
+            f"Sent {target.label} to {entry.name}, but couldn't confirm the page loaded",
+        )
+    return ToolOutcome(StepStatus.FAILED, f"{entry.name} didn't show {target.label} within {timeout:.0f}s")
+
+
+# ---------------------------------------------------------------------------- web.search
+class SearchArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(min_length=1, max_length=200, description="what to search for, in the user's words")
+    site: SearchSite = Field(
+        default="web",
+        description="where: web (search engine), youtube, github, wikipedia, archwiki, aur or reddit",
+    )
+    browser: str | None = Field(
+        default=None, max_length=80, description="only if the user named a browser, e.g. 'chrome'"
+    )
+
+
+class WebSearch(Tool):
+    name = "web.search"
+    description = "Search a website or the web in the user's browser ('search youtube for X', 'look up X')."
+    risk = Risk.LOW
+    effects = frozenset({Effect.WEB_OPEN, Effect.APP_LAUNCH})
+    Args = SearchArgs
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(SearchArgs, args)
+        missing = ungrounded_words(a.query, ctx.request_text)
+        if missing:
+            return ToolOutcome(
+                StepStatus.FAILED,
+                f"Won't search for '{a.query}': {', '.join(missing)} isn't in your request "
+                "(SONU only sends your own words to websites)",
+            )
+        site = ENGINES[ctx.settings.web.search_engine] if a.site == "web" else SITES[a.site]
+        url = site.search.format(q=quote_plus(a.query.strip()))
+        target = _Target(url, f"{site.name} search for '{a.query.strip()}'", _compact(site.marker))
+        plan = _prepare_browser(target, a.browser, ctx, choice)
+        if isinstance(plan, ToolOutcome):
+            return plan
+        return Prepared(f"Search {site.name} for '{a.query.strip()}' in {plan.entry.name}", plan)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        return await _open_in_browser(cast(_WebPlan, prepared.payload), ctx)
+
+
+# ---------------------------------------------------------------------------- web.open
+class OpenSiteArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    site: str = Field(
+        min_length=1,
+        max_length=300,
+        description="the site or link exactly as the user named it: 'youtube', 'github.com', 'https://…'",
+    )
+    browser: str | None = Field(
+        default=None, max_length=80, description="only if the user named a browser, e.g. 'chrome'"
+    )
+
+
+class OpenSite(Tool):
+    name = "web.open"
+    description = (
+        "Open a website the user named (e.g. youtube, github.com, a https:// link) in their browser."
+    )
+    risk = Risk.LOW
+    effects = frozenset({Effect.WEB_OPEN, Effect.APP_LAUNCH})
+    Args = OpenSiteArgs
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(OpenSiteArgs, args)
+        target = site_link(a.site, ctx.request_text)
+        if isinstance(target, ToolOutcome):
+            return target
+        plan = _prepare_browser(target, a.browser, ctx, choice)
+        if isinstance(plan, ToolOutcome):
+            return plan
+        return Prepared(f"Open {target.label} in {plan.entry.name}", plan)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        return await _open_in_browser(cast(_WebPlan, prepared.payload), ctx)
+
+
+WEB_TOOLS: tuple[Tool, ...] = (WebSearch(), OpenSite())

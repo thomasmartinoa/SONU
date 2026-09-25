@@ -10,8 +10,16 @@ from sonu.tools.registry import ToolRegistry
 from sonu.world.snapshot import WorldSnapshot
 
 
-def steps_plan(*steps: tuple[str, dict[str, Any]], message: str = "") -> Plan:
-    return Plan("steps", message, tuple(PlannedStep(tool, args) for tool, args in steps), model="scripted")
+def steps_plan(
+    *steps: tuple[str, dict[str, Any]], message: str = "", unsupported: tuple[str, ...] = ()
+) -> Plan:
+    return Plan(
+        "steps",
+        message,
+        tuple(PlannedStep(tool, args) for tool, args in steps),
+        unsupported=unsupported,
+        model="scripted",
+    )
 
 
 class ScriptedPlanner:
