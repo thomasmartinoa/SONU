@@ -513,10 +513,7 @@ class WifiNetworkArgs(BaseModel):
 
 class ConnectWifi(Tool):
     name = "settings.wifi_connect"
-    description = (
-        "Connect to a Wi-Fi network this computer has joined before (a saved network). "
-        "Joining a new network is not supported."
-    )
+    description = "Connect to a Wi-Fi network by name (SONU checks that this computer knows it)."
     risk = Risk.LOW  # raised to medium when it would drop the current network
     effects = frozenset({Effect.SETTINGS_CHANGE})
     Args = WifiNetworkArgs
@@ -623,8 +620,8 @@ class BluetoothDeviceArgs(BaseModel):
 class BluetoothDeviceTool(Tool):
     name = "settings.bluetooth_device"
     description = (
-        "Connect or disconnect a Bluetooth device that is already paired (headphones, speaker, mouse, …). "
-        "Pairing a new device is not supported."
+        "Connect or disconnect a Bluetooth device by name or kind, e.g. headphones, speaker, mouse "
+        "(SONU checks that it's paired)."
     )
     risk = Risk.LOW
     effects = frozenset({Effect.SETTINGS_CHANGE})

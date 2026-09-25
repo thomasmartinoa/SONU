@@ -272,8 +272,14 @@ def _without_site_operator(query: str, site: str, request: str) -> tuple[str, st
     Found on real hardware: the model sometimes writes a search-engine operator instead of using
     the site parameter. For a known site the user named, SONU searches that site directly; any
     other operator is left in the query (and then has to pass the grounding check like any word).
+    Also, site "web" while the user named exactly one known site ("play faded on youtube") becomes
+    that site (found in an eval: the model wrote "Searching YouTube" but left the site out).
     """
     match = _SITE_OPERATOR.search(query)
+    if match is None and site == "web":
+        # The model left the site out, but the user named exactly one ("… on youtube"): use it.
+        named = [key for key, known in SITES.items() if _named_in(known, request)]
+        return " ".join(query.split()), named[0] if len(named) == 1 else site
     if match is None or site != "web":
         return " ".join(query.split()), site
     host = match.group(1).lower().removeprefix("www.").split("/")[0]

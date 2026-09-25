@@ -312,7 +312,7 @@ expect_confirmed = ["settings.wifi_connect"]
 id = "wifi-connect-new"
 request = "connect to the cafe wifi"
 notes = "Not a saved network: SONU can't join it (it would need the password) and must say so."
-expect_status = ["failed", "partial", "cannot"]
+expect_status = ["failed", "partial", "cannot", "ask"]
 expect_system = { wifi_connection = "Home: 5G" }
 
 [[case]]

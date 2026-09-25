@@ -124,6 +124,8 @@ class CaseResult:
     total_s: float = 0.0
     attempts: int = 0
     confirmations: int = 0
+    # What the model planned (for debugging a failure): kind, message, steps with args, unsupported.
+    plan: dict[str, Any] = field(default_factory=dict)
 
 
 def _system_failures(case: EvalCase, system: FakeSystem) -> list[str]:
@@ -261,6 +263,14 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 total_s=time.monotonic() - started,
                 attempts=report.plan.attempts if report.plan else 0,
                 confirmations=len(confirmations),
+                plan={}
+                if report.plan is None
+                else {
+                    "kind": report.plan.kind,
+                    "message": report.plan.message,
+                    "steps": [{"tool": s.tool, "args": s.args} for s in report.plan.steps],
+                    "unsupported": list(report.plan.unsupported),
+                },
             )
     finally:
         shutil.rmtree(runtime_dir, ignore_errors=True)

@@ -206,9 +206,8 @@ Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "step
 can be done, use "steps" for it and put the rest in unsupported.
 - unsupported: the parts the user actually asked for that no tool below can do, in the user's \
 words; never things they didn't ask for. No tool can type text, click or scroll inside an app, \
-handle files, join a new Wi-Fi network, pair a new Bluetooth device or choose a particular song or \
-video to play. Do the parts you can and list the rest here; never force a tool to do something \
-it can't. Usually [].
+handle files or choose a particular song or video to play. Do the parts you can and list the rest \
+here; never force a tool to do something it can't. Usually [].
 
 Tools:
 {tools}
@@ -216,7 +215,8 @@ Tools:
 Rules:
 - Copy app names word for word from the request ("code" stays "code", "browser" stays "browser"). \
 Never expand, correct or guess them: SONU finds the installed app and asks the user if unsure.
-- Never decide yourself that an app or window is missing: SONU checks the real desktop.
+- Never decide yourself that an app, window, Wi-Fi network or Bluetooth device is missing or \
+unknown: use the tool, and SONU checks the real computer.
 - "go to / take me to / switch to <app>" means windows.focus. Only move windows when the user \
 says move, put or send.
 - Words from a window's title ("the GitHub window") go in title_contains, not in app.
