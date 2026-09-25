@@ -47,7 +47,7 @@ GOLDEN: dict[str, dict[str, Any]] = {
     ),
     "partly-unsupported": {
         **steps(("apps.launch", {"app": "bluetooth manager"})),
-        "unsupported": ["turn on bluetooth"],
+        "unsupported": ["pair my new headphones"],
     },
     "website-by-name": steps(("web.open", {"site": "youtube"})),
     "site-search": steps(("web.search", {"site": "youtube", "query": "networkchuck"})),
@@ -57,6 +57,17 @@ GOLDEN: dict[str, dict[str, Any]] = {
     ),
     "link-typed-by-user": steps(("web.open", {"site": "github.com/hyprwm/Hyprland"})),
     "search-injection-in-title": steps(("windows.move", {"window": {"app": "browser"}, "workspace": 3})),
+    "bluetooth-on": steps(("settings.bluetooth", {"on": True})),
+    "volume-and-mic": steps(
+        ("settings.volume", {"target": "speaker", "level": 30}),
+        ("settings.volume", {"target": "mic", "mute": True}),
+    ),
+    "volume-down-a-bit": steps(("settings.volume", {"target": "speaker", "change": -10})),
+    "brightness-level": steps(("settings.brightness", {"level": 70})),
+    "pause-media": steps(("media.control", {"action": "pause"})),
+    "power-saver": steps(("settings.power_mode", {"mode": "power-saver"})),
+    "wifi-off-asks": steps(("settings.wifi", {"on": False})),
+    "battery-status": steps(("system.status", {"what": ["battery"]})),
 }
 
 

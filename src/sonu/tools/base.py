@@ -48,6 +48,9 @@ class Effect(StrEnum):
     WORKSPACE_SHOW = "workspace.show"
     WINDOW_CLOSE = "window.close"
     WEB_OPEN = "web.open"  # sends a URL to the user's browser
+    SETTINGS_CHANGE = "settings.change"  # volume, brightness, radios, power mode
+    MEDIA_CONTROL = "media.control"
+    SYSTEM_READ = "system.read"
 
 
 class StepStatus(StrEnum):
@@ -98,6 +101,8 @@ class Prepared:
 
     description: str  # what will happen, in plain words (no window titles)
     payload: Any = None
+    # Raises the risk of this particular step above the tool's own (e.g. turning Wi-Fi *off*).
+    risk: Risk | None = None
 
 
 class Tool(ABC):

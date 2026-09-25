@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v2, 26 cases)
+## The cases (v3, 34 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -23,6 +23,11 @@ v2 adds six cases from the author's real-desktop runs: a request that is only **
 Manager *and turn on Bluetooth* — SONU must say what it can't do, not report done), a website by name, a site search,
 a search in the browser the user named, a link the user typed, and **an injected title that tries to make SONU search
 for (and so leak) a secret**.
+
+v3 adds eight **system settings** cases on a fake system (nothing real is changed): Bluetooth on (the adapter starts
+rfkill-blocked, as on the owner's laptop), volume and mic together, "a little" quieter, a brightness level, pausing
+media, battery-saver mode, **turning Wi-Fi off (must ask first)**, and a battery question. The partly-possible case
+now asks to *pair headphones* (Bluetooth itself is supported).
 
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use
@@ -40,6 +45,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-24 | `qwen3.5:4b` | resolve the user's own fuller phrase ("VS Code") over the model's shortened one | **20 / 20** | — |
 | 2026-09-25 | `qwen3.5:4b` | after the first real-desktop fixes (hidden helper entries, terminals open new windows, answers to questions) | **18 / 20**, then 2 / 2 re-run | the first two cases timed out while the model loaded on a CPU busy with the test suite; both passed when re-run — no planning failures |
 | 2026-09-25 | `qwen3.5:4b` | v2 suite (26 cases): web tools, `unsupported` parts, SONU's own terminal ignored | **26 / 26** | — |
+| 2026-09-25 | `qwen3.5:4b` | v3 suite (34 cases): system settings | **33 / 34** | "set the volume to 30 and mute the mic" muted the *speaker* (`target` defaulted to speaker) — verified as a speaker mute, so it would have looked done |
+| 2026-09-25 | `qwen3.5:4b` | `target` required (speaker or mic), a mic example | **34 / 34** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

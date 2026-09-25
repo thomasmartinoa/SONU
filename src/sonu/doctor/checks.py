@@ -25,6 +25,7 @@ from sonu.desktop.hyprland.ipc import HyprlandClient
 from sonu.doctor.model import CheckResult, DoctorContext, Status
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.ollama import InstalledModel, ModelInfo, OllamaClient, OllamaError, same_model
+from sonu.system.commands import PACKAGES
 
 MIN_PYTHON = (3, 12)
 LUA_ERA_HYPRLAND = (0, 55)
@@ -649,6 +650,41 @@ async def check_tools(ctx: DoctorContext) -> list[CheckResult]:
     ]
 
 
+# ---------------------------------------------------------------------------- system settings
+SETTINGS_PROGRAMS: tuple[tuple[str, str], ...] = (
+    ("wpctl", "volume and mic"),
+    ("brightnessctl", "screen brightness"),
+    ("bluetoothctl", "Bluetooth"),
+    ("rfkill", "unblocking Bluetooth"),
+    ("nmcli", "Wi-Fi"),
+    ("playerctl", "media play/pause/next"),
+    ("powerprofilesctl", "power mode"),
+)
+
+
+async def check_settings_programs(ctx: DoctorContext) -> list[CheckResult]:
+    found = [program for program, _ in SETTINGS_PROGRAMS if ctx.which(program)]
+    missing = [(program, purpose) for program, purpose in SETTINGS_PROGRAMS if program not in found]
+    summary = f"found: {', '.join(found) or 'none'}"
+    hint = None
+    if missing:
+        summary += f" · missing: {', '.join(program for program, _ in missing)}"
+        hint = "; ".join(
+            f"{program} — {purpose} (pacman: {PACKAGES[program]})" for program, purpose in missing
+        )
+    return [
+        CheckResult(
+            "tools.settings",
+            "Desktop tools",
+            "Settings programs",
+            "info" if missing else "ok",
+            summary,
+            hint=hint,
+            details={"found": found, "missing": [program for program, _ in missing]},
+        )
+    ]
+
+
 # ---------------------------------------------------------------------------- integrations
 async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
     info = detect_hypr_theme(ctx.home)
@@ -707,6 +743,7 @@ CHECKS: tuple[Check, ...] = (
     check_hyprland,
     check_ollama,
     check_tools,
+    check_settings_programs,
     check_integrations,
 )
 

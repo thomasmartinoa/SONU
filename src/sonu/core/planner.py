@@ -106,12 +106,42 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
         },
     ),
     (
-        "open pavucontrol and mute the volume",
+        "open thunar and rename my holiday photos",
         {
             "kind": "steps",
-            "message": "Opening pavucontrol. I can't change the volume yet.",
-            "steps": [{"tool": "apps.launch", "args": {"app": "pavucontrol"}}],
-            "unsupported": ["mute the volume"],
+            "message": "Opening Thunar. I can't rename files yet.",
+            "steps": [{"tool": "apps.launch", "args": {"app": "thunar"}}],
+            "unsupported": ["rename my holiday photos"],
+        },
+    ),
+    (
+        "turn the volume down a bit and pause the music",
+        {
+            "kind": "steps",
+            "message": "Lowering the volume and pausing the music.",
+            "steps": [
+                {"tool": "settings.volume", "args": {"target": "speaker", "change": -10}},
+                {"tool": "media.control", "args": {"action": "pause"}},
+            ],
+        },
+    ),
+    (
+        "unmute my microphone and set brightness to 50",
+        {
+            "kind": "steps",
+            "message": "Unmuting the mic and setting the brightness to 50%.",
+            "steps": [
+                {"tool": "settings.volume", "args": {"target": "mic", "mute": False}},
+                {"tool": "settings.brightness", "args": {"level": 50}},
+            ],
+        },
+    ),
+    (
+        "is my wifi on?",
+        {
+            "kind": "steps",
+            "message": "Checking Wi-Fi.",
+            "steps": [{"tool": "system.status", "args": {"what": ["wifi"]}}],
         },
     ),
     ("open it", {"kind": "ask", "message": "Which app should I open?", "steps": []}),
@@ -146,9 +176,9 @@ Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "step
 - kind "reply": chat or a question you can answer without acting. message: the answer. steps: [].
 - kind "cannot": no tool can do any of it. message: say so briefly. steps: [].
 - unsupported: the parts of the request that no tool below can do, in the user's words (for \
-example changing Bluetooth, Wi-Fi, volume or other settings, typing text, clicking or scrolling \
-inside an app, files). Do the parts you can and list the rest here; never force a tool to do \
-something it can't. Usually [].
+example typing text, clicking or scrolling inside an app, files, connecting to a particular \
+Wi-Fi network or pairing a Bluetooth device). Do the parts you can and list the rest here; never \
+force a tool to do something it can't. Usually [].
 
 Tools:
 {tools}
@@ -160,6 +190,8 @@ Never expand, correct or guess them: SONU finds the installed app and asks the u
 - "go to / take me to / switch to <app>" means windows.focus. Only move windows when the user \
 says move, put or send.
 - Words from a window's title ("the GitHub window") go in title_contains, not in app.
+- Volume, mic, brightness, Bluetooth, Wi-Fi, media and power mode have their own tools; \
+"what's my …" / "is … on?" is system.status.
 - apps.launch only opens installed apps. A website (YouTube, GitHub, a link) is web.open; \
 searching one is web.search with the user's own words as the query. If the user named a \
 browser, pass it as browser.

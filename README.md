@@ -49,6 +49,8 @@ sonu close kitty                              # asks first: closing is a medium-
 sonu open VS Code                             # two builds installed? SONU asks which one — pick by number
 sonu move kitty to workspace 3                # several kitty windows? only asks if it can't tell which
 sonu search youtube for networkchuck          # web searches and sites open in your browser, verified
+sonu turn on bluetooth and set the volume to 40
+sonu pause the music · sonu switch to battery saver mode · sonu "how much battery is left?"
 sonu open chrome on 3 and go to github.com
 sonu prompt                                   # a text box for keybinds; result as a notification
 ```
@@ -78,7 +80,9 @@ the `SUPER+SPACE` menu entry and notifications.
 
 ## Documentation
 
-- [Design proposal](docs/PROPOSAL.md) — research, architecture, roadmap, decisions
+- [Project status](docs/STATUS.md) — what works, what's next, open questions, history
+- [Decision log](docs/DECISIONS.md) — every decision and why
+- [Design proposal](docs/PROPOSAL.md) — research, architecture, roadmap
 - [hypr-dotfiles integration](docs/integrations/hypr-dotfiles.md) — keybind, menu entry, notifications
 - [Evals](docs/evals.md) — how planner models are scored, and the results so far
 - [Threat model](docs/threat-model.md)

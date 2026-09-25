@@ -9,6 +9,7 @@ from sonu.config.settings import Settings
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.system.control import SystemControl
 from sonu.world.origin import ancestor_pids
 
 # How common terminals run a program: prefix to put before the program's argv.
@@ -39,6 +40,8 @@ class ToolContext:
     # The browser an earlier step of this task opened ("open chrome … and search …"): web steps
     # that don't name a browser use it. Reset by the engine for every task.
     task_browser: AppEntry | None = None
+    # Volume, brightness, radios, media, power mode (tests and evals pass a SystemControl on a fake).
+    system: SystemControl = field(default_factory=SystemControl)
 
     def learned(self, entry: AppEntry) -> set[str]:
         return self.learned_classes.get(entry.desktop_id, set())

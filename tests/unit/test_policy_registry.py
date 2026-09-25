@@ -6,6 +6,7 @@ import pytest
 
 from sonu.config.settings import AutonomyMode
 from sonu.policy import Policy
+from sonu.tools.base import Risk
 from sonu.tools.desktop_tools import CloseWindow, DescribeDesktop, LaunchApp
 from sonu.tools.registry import MAX_STEPS, ToolRegistry
 
@@ -51,3 +52,14 @@ def test_planner_description_lists_every_tool() -> None:
     assert "- apps.launch (app, workspace, new_window):" in text
     assert "- windows.close (window, all):" in text
     assert "- desktop.describe (no arguments):" in text
+
+
+def test_a_step_can_raise_but_never_lower_its_risk() -> None:
+    from sonu.tools.settings_tools import SetWifi
+
+    policy = Policy("confirm-risky")
+    assert policy.decide(SetWifi(), tainted=True).verdict == "allow"
+    assert policy.decide(SetWifi(), tainted=True, risk=Risk.MEDIUM).verdict == "confirm"
+    close = ToolRegistry().get("windows.close")
+    assert close is not None
+    assert policy.decide(close, tainted=True, risk=Risk.LOW).verdict == "confirm"  # stays medium

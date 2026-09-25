@@ -234,7 +234,8 @@ class Engine:
         dry_run: bool,
         observer: Observer | None,
     ) -> StepRecord:
-        decision = self.policy.decide(tool, tainted=True)
+        decision = self.policy.decide(tool, tainted=True, risk=prepared.risk)
+        risk = max(tool.risk, prepared.risk or tool.risk, key=lambda r: r.rank)
         if dry_run:
             outcome = ToolOutcome(StepStatus.SKIPPED, prepared.description)
             return record(outcome, prepared.description, decision)
@@ -244,9 +245,7 @@ class Engine:
             )
             return record(outcome, prepared.description, decision)
         if decision.verdict == "confirm":
-            approved = await confirm(
-                ConfirmRequest(prepared.description, tool.name, tool.risk, decision.reason)
-            )
+            approved = await confirm(ConfirmRequest(prepared.description, tool.name, risk, decision.reason))
             if not approved:
                 outcome = ToolOutcome(StepStatus.DENIED, f"Skipped (not approved): {prepared.description}")
                 return record(outcome, prepared.description, decision)

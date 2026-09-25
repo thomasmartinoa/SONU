@@ -27,8 +27,9 @@ class Policy:
     def __init__(self, autonomy: AutonomyMode) -> None:
         self.autonomy = autonomy
 
-    def decide(self, tool: Tool, *, tainted: bool) -> PolicyDecision:
-        risk = tool.risk
+    def decide(self, tool: Tool, *, tainted: bool, risk: Risk | None = None) -> PolicyDecision:
+        """``risk`` can raise (never lower) the tool's own risk for one step."""
+        risk = max(tool.risk, risk or tool.risk, key=lambda r: r.rank)
         if risk is Risk.FORBIDDEN:
             return PolicyDecision("deny", f"{tool.name} is never allowed")
         if risk is Risk.READ_ONLY:

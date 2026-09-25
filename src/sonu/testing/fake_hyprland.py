@@ -94,6 +94,8 @@ class FakeApp:
     # Browsers: a link on the command line opens in the running browser's most recent window (a new
     # tab) and its title becomes "<url> - <title>". False: the page never loads (title unchanged).
     shows_pages: bool = True
+    # Seconds a page takes to load after the tab opens (the title first reads "Loading…").
+    page_load_s: float = 0.0
 
 
 def make_monitor(name: str = "eDP-1", *, monitor_id: int = 0, active_workspace: int = 1) -> dict[str, Any]:
@@ -347,8 +349,13 @@ class FakeHyprland:
         await asyncio.sleep(app.delay_s)
         if not app.shows_pages:
             return
+        address = window["address"].removeprefix("0x")
+        if app.page_load_s:
+            window["title"] = f"Loading… - {app.title}"
+            await self.emit("windowtitlev2", f"{address},{window['title']}")
+            await asyncio.sleep(app.page_load_s)
         window["title"] = f"{url} - {app.title}"
-        await self.emit("windowtitlev2", f"{window['address'].removeprefix('0x')},{window['title']}")
+        await self.emit("windowtitlev2", f"{address},{window['title']}")
 
     async def _open(self, app: FakeApp, rule_workspace: int | None, title: str | None = None) -> None:
         await asyncio.sleep(app.delay_s)
