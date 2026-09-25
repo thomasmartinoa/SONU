@@ -17,7 +17,6 @@ import asyncio
 import ipaddress
 import re
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from typing import Literal, cast
 from urllib.parse import quote_plus, urlsplit
 
@@ -31,6 +30,7 @@ from sonu.desktop.hyprland.models import Window
 from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.desktop_tools import chosen_app, resolve_app
+from sonu.tools.grounding import ungrounded_words
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -103,8 +103,6 @@ ENGINES: dict[str, Site] = {
 
 SearchSite = Literal["web", "youtube", "github", "wikipedia", "archwiki", "aur", "reddit"]
 
-# Small words a model may add to a query without changing what the user asked for.
-_CONNECTIVES = {"a", "an", "the", "of", "for", "and", "in", "on", "to", "with", "how", "what"}
 _HOST_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
 # How long an already-running browser gets to react (a window title changes) to a link.
 WEB_REACT_S = 8.0
@@ -114,19 +112,6 @@ _SITE_OPERATOR = re.compile(r"(?<!\S)site:(\S+)", re.IGNORECASE)
 
 def _compact(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.casefold())
-
-
-def ungrounded_words(text: str, request: str) -> list[str]:
-    """Words of ``text`` that don't come from the user's request (small spelling fixes allowed)."""
-    request_words = set(normalize(request).split())
-    missing = []
-    for word in normalize(text).split():
-        if word in request_words or word in _CONNECTIVES:
-            continue
-        if len(word) >= 4 and any(SequenceMatcher(None, word, r).ratio() >= 0.8 for r in request_words):
-            continue
-        missing.append(word)
-    return missing
 
 
 def _named_in(site: Site, request: str) -> bool:
@@ -287,8 +272,14 @@ def _without_site_operator(query: str, site: str, request: str) -> tuple[str, st
     Found on real hardware: the model sometimes writes a search-engine operator instead of using
     the site parameter. For a known site the user named, SONU searches that site directly; any
     other operator is left in the query (and then has to pass the grounding check like any word).
+    Also, site "web" while the user named exactly one known site ("play faded on youtube") becomes
+    that site (found in an eval: the model wrote "Searching YouTube" but left the site out).
     """
     match = _SITE_OPERATOR.search(query)
+    if match is None and site == "web":
+        # The model left the site out, but the user named exactly one ("… on youtube"): use it.
+        named = [key for key, known in SITES.items() if _named_in(known, request)]
+        return " ".join(query.split()), named[0] if len(named) == 1 else site
     if match is None or site != "web":
         return " ".join(query.split()), site
     host = match.group(1).lower().removeprefix("www.").split("/")[0]

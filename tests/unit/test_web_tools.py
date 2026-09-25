@@ -7,7 +7,8 @@ import pytest
 from sonu.desktop.hyprland import Window
 from sonu.testing.fake_hyprland import make_window
 from sonu.tools.base import ToolOutcome
-from sonu.tools.web_tools import site_link, ungrounded_words
+from sonu.tools.grounding import ungrounded_words
+from sonu.tools.web_tools import site_link
 from sonu.world.origin import ancestor_pids, find_origin
 
 
@@ -18,7 +19,7 @@ from sonu.world.origin import ancestor_pids, find_origin
         ("networkchuck", "search youtube for networkchuk channel", []),  # spelling fix allowed
         ("NetworkChuck channel", "search youtube for networkchuk channel", []),
         ("hyprland plugins", "look up the best hyprland plugins", []),
-        ("my password is hunter2", "search youtube for cats", ["my", "password", "is", "hunter2"]),
+        ("my password is hunter2", "search youtube for cats", ["password", "is", "hunter2"]),
         ("cats zsh history", "search youtube for cats", ["zsh", "history"]),
     ],
 )

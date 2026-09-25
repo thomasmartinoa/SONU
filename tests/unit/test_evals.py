@@ -68,6 +68,15 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "power-saver": steps(("settings.power_mode", {"mode": "power-saver"})),
     "wifi-off-asks": steps(("settings.wifi", {"on": False})),
     "battery-status": steps(("system.status", {"what": ["battery"]})),
+    "next-song-with-player-open": steps(("media.control", {"action": "next"})),
+    "play-a-specific-song": {"kind": "cannot", "message": "I can't pick songs yet.", "steps": []},
+    "song-on-youtube": {
+        **steps(("web.search", {"site": "youtube", "query": "faded"})),
+        "unsupported": ["start playing it"],
+    },
+    "wifi-connect-saved": steps(("settings.wifi_connect", {"network": "hithere"})),
+    "wifi-connect-new": steps(("settings.wifi_connect", {"network": "cafe"})),
+    "headphones-connect": steps(("settings.bluetooth_device", {"device": "headphones"})),
 }
 
 

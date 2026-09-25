@@ -770,3 +770,13 @@ async def test_site_operator_becomes_a_site_search(harness: Harness) -> None:
     report = await harness.engine(plans).run(request, confirm=Confirmations(False))
     assert report.status == "done", report.lines()
     assert harness.fake.launched[-1][-1] == "https://github.com/search?q=thomasmartinoa+dotfiles"
+
+
+@pytest.mark.anyio
+async def test_search_goes_to_the_site_the_user_named(harness: Harness) -> None:
+    # Found in an eval: the model said "Searching YouTube" but left site out (→ the web engine).
+    request = "play faded on youtube"
+    plans = {request: steps_plan(("web.search", {"query": "faded"}), unsupported=("start playing it",))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert harness.fake.launched[-1][-1] == "https://www.youtube.com/results?search_query=faded"
+    assert report.status == "partial"

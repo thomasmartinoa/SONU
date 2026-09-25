@@ -272,3 +272,52 @@ battery = 76
 expect_status = ["done"]
 require_tools = ["system.status"]
 expect_reply_contains = "76%"
+
+[[case]]
+id = "next-song-with-player-open"
+request = "next song"
+notes = "Found on real hardware: with an Apple Music window open, the old planner focused it and said done."
+windows = [{ class = "cider", title = "Apple Music", workspace = 2 }]
+expect_status = ["done"]
+expect_system = { track = 1 }
+require_tools = ["media.control"]
+forbid_tools = ["windows.focus", "apps.launch"]
+
+# ---- found on the owner's laptop with the settings tools (v4)
+
+[[case]]
+id = "play-a-specific-song"
+request = "play me faded"
+notes = "Found on real hardware: SONU pressed play on whatever was loaded and said done. It can't pick songs."
+system = { player = "Paused" }
+expect_status = ["partial", "cannot"]
+
+[[case]]
+id = "song-on-youtube"
+request = "play faded on youtube"
+notes = "It can search YouTube, but must not claim it started the song."
+expect_status = ["partial"]
+expect_windows = [{ class = "zen", title_contains = "search_query=faded" }]
+require_tools = ["web.search"]
+
+[[case]]
+id = "wifi-connect-saved"
+request = "connect to wifi named hithere"
+notes = "A saved network: switching from the current one asks first (evals approve)."
+expect_status = ["done"]
+expect_system = { wifi_connection = "hithere" }
+expect_confirmed = ["settings.wifi_connect"]
+
+[[case]]
+id = "wifi-connect-new"
+request = "connect to the cafe wifi"
+notes = "Not a saved network: SONU can't join it (it would need the password) and must say so."
+expect_status = ["failed", "partial", "cannot", "ask"]
+expect_system = { wifi_connection = "Home: 5G" }
+
+[[case]]
+id = "headphones-connect"
+request = "connect my headphones"
+notes = "Bluetooth starts off and rfkill-blocked; the headphones are found by kind (bluez icon)."
+expect_status = ["done"]
+expect_system = { bt_connected = ["WH-1000XM4"] }
