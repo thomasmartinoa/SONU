@@ -33,6 +33,7 @@ Add a row when something is decided (in the same PR); don't re-open a decision w
 | D23 | 2026-09-25 | **Graphify is not used for now** | See below | Claude (owner: "only if it's good") |
 | D24 | 2026-09-25 | Settings tools use **the same programs as the owner's rice**: `wpctl` (volume capped at 100%), `brightnessctl` (skip the NVIDIA backlight device), `rfkill unblock` before `bluetoothctl power on`, `nmcli radio wifi`, `playerctl`, `powerprofilesctl`; every change is read back to verify it; turning Wi-Fi or networking **off** asks first | Proven on this laptop by the rice; turning the network off can cut a remote session | Claude |
 | D25 | 2026-09-25 | Supply chain: CI actions pinned by SHA, `uv.lock` with hashes, Dependabot with a 7-day cooldown; dependency bumps merge only with green CI (rich 15 merged this way) | LiteLLM compromise (March 2026) | Claude |
+| D26 | 2026-09-25 | Settings safety: a step may **raise** its tool's risk (never lower it) — turning Wi-Fi off is medium risk and asks; brightness never below **5%**; volume never above **100%**; evals and tests use a fake system, so they can never change real settings | A dark screen or a cut connection is hard to undo by voice or keybind | Claude |
 
 ## D23 — Graphify (why not now)
 

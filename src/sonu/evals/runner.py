@@ -14,8 +14,9 @@ import tomllib
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from sonu.config.settings import AppsSettings, Settings, VerifySettings
 from sonu.core.engine import ConfirmRequest, Engine
@@ -26,8 +27,10 @@ from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.llm.chat import ChatModel
 from sonu.policy.engine import Policy
+from sonu.system.control import SystemControl
 from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
+from sonu.testing.fake_system import FakeSystem
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 
@@ -75,6 +78,22 @@ class EvalCase(_Model):
     forbid_tools: list[str] = Field(default_factory=list)
     # True: the plan must list something it can't do; False: it must not (unset: either).
     expect_unsupported: bool | None = None
+    # System settings: FakeSystem fields to start from, and what they must be at the end. A number
+    # matches within 0.011; {"below" = x} / {"above" = x} compare. "brightness" is the screen's %.
+    system: dict[str, Any] = Field(default_factory=dict)
+    expect_system: dict[str, Any] = Field(default_factory=dict)
+    battery: int | None = None  # a battery at this percent (discharging)
+    expect_confirmed: list[str] = Field(default_factory=list)  # tools that must have asked first
+    expect_reply_contains: str | None = None  # text the report must contain
+
+    @field_validator("system", "expect_system")
+    @classmethod
+    def _known_fields(cls, value: dict[str, Any]) -> dict[str, Any]:
+        unknown = set(value) - set(FakeSystem.__dataclass_fields__) - {"brightness"}
+        if unknown:
+            raise ValueError(f"unknown system fields: {sorted(unknown)}")
+        return value
+
     require_tools: list[str] = Field(default_factory=list)
 
 
@@ -107,8 +126,38 @@ class CaseResult:
     confirmations: int = 0
 
 
-def check_expectations(case: EvalCase, report: TaskReport, fake: FakeHyprland) -> list[str]:
+def _system_failures(case: EvalCase, system: FakeSystem) -> list[str]:
+    failures = []
+    for name, wanted in case.expect_system.items():
+        actual = getattr(system, name)
+        if isinstance(wanted, dict):
+            ok = ("below" not in wanted or actual < wanted["below"]) and (
+                "above" not in wanted or actual > wanted["above"]
+            )
+        elif isinstance(wanted, float | int) and not isinstance(wanted, bool):
+            ok = abs(actual - wanted) <= 0.011
+        else:
+            ok = actual == wanted
+        if not ok:
+            failures.append(f"{name} should be {wanted}, is {actual}")
+    return failures
+
+
+def check_expectations(
+    case: EvalCase,
+    report: TaskReport,
+    fake: FakeHyprland,
+    system: FakeSystem | None = None,
+    confirmed: list[str] | None = None,
+) -> list[str]:
     failures: list[str] = []
+    if system is not None:
+        failures.extend(_system_failures(case, system))
+    failures.extend(
+        f"{tool} should have asked first" for tool in case.expect_confirmed if tool not in (confirmed or [])
+    )
+    if case.expect_reply_contains and case.expect_reply_contains not in "\n".join(report.lines()):
+        failures.append(f"the reply should mention {case.expect_reply_contains!r}")
     if report.status not in case.expect_status:
         detail = report.error or "; ".join(report.lines())[:200]
         failures.append(f"status {report.status!r} not in {case.expect_status} ({detail})")
@@ -172,6 +221,12 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
             }
             catalog = AppCatalog.load(env, which=lambda name: f"/usr/bin/{name}")
             desktop = await HyprlandDesktop.connect(fake.instance)
+            system = FakeSystem(**case.system)
+            power_supply = workdir / "power_supply"
+            if case.battery is not None:
+                (power_supply / "BAT1").mkdir(parents=True, exist_ok=True)
+                (power_supply / "BAT1" / "capacity").write_text(f"{case.battery}\n")
+                (power_supply / "BAT1" / "status").write_text("Discharging\n")
             settings = Settings(apps=AppsSettings(launch_timeout_s=3.0), verify=VerifySettings(timeout_s=2.0))
             ctx = ToolContext(
                 desktop,
@@ -179,6 +234,8 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 settings,
                 default_terminal="kitty",
                 which=lambda name: f"/usr/bin/{name}",
+                ancestors=frozenset,
+                system=SystemControl(system, power_supply=power_supply),
             )
             engine = Engine(
                 planner=LLMPlanner(model),
@@ -193,7 +250,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 return True
 
             report = await engine.run(case.request, confirm=approve)
-            failures = check_expectations(case, report, fake)
+            failures = check_expectations(case, report, fake, system, [c.tool for c in confirmations])
             return CaseResult(
                 case_id=case.id,
                 passed=not failures,

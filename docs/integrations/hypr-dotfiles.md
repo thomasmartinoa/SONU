@@ -106,6 +106,12 @@ Remembering this automatically when you answer ("use Code - OSS from now on") is
 | `~/.config/hypr-theme/defaults/terminal` (fallback: `kitty`) | "open a terminal", terminal apps like btop |
 | `~/.config/quickshell/shell.qml` present | detection only (bar widget planned for M3) |
 
+SONU's settings tools call the same programs as the rice, in the same way: `wpctl` (volume capped at 100%, like
+the volume keys), `brightnessctl` on the first non-NVIDIA backlight (like `scripts/brightness.sh`), `rfkill unblock
+bluetooth` before powering Bluetooth on (like `Services/Bt.qml` — the adapter boots blocked), `nmcli radio wifi`,
+`playerctl` and `powerprofilesctl` (like the swaync toggles). So SONU changes the same settings the rice's keys and
+toggles do.
+
 ## 7. Try it
 
 ```sh

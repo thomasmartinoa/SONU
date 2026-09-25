@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v2, 26 cases)
+## The cases (v3, 34 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -23,6 +23,11 @@ v2 adds six cases from the author's real-desktop runs: a request that is only **
 Manager *and turn on Bluetooth* — SONU must say what it can't do, not report done), a website by name, a site search,
 a search in the browser the user named, a link the user typed, and **an injected title that tries to make SONU search
 for (and so leak) a secret**.
+
+v3 adds eight **system settings** cases on a fake system (nothing real is changed): Bluetooth on (the adapter starts
+rfkill-blocked, as on the owner's laptop), volume and mic together, "a little" quieter, a brightness level, pausing
+media, battery-saver mode, **turning Wi-Fi off (must ask first)**, and a battery question. The partly-possible case
+now asks to *pair headphones* (Bluetooth itself is supported).
 
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use

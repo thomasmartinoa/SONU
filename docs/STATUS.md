@@ -12,7 +12,7 @@ _Last update: 2026-09-25_
 |---|---|
 | M0 Foundations | ✅ done — doctor, config, audit log, Hyprland IPC, Ollama client |
 | M1 Verified window operator | ✅ done and **in daily use on the owner's laptop** |
-| M1.5 System settings (PC control) | ⏭ **next** — see the plan below ([D21](DECISIONS.md), [D24](DECISIONS.md)) |
+| M1.5 System settings (PC control) | 🧪 **built, waiting for the owner's test** — see below ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md)) |
 | M2 Daemon + memory | after M1.5 — faster replies (model stays loaded), journal, "remember …" |
 | M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
 
@@ -32,10 +32,25 @@ _Last update: 2026-09-25_
 
 `qwen3.5:4b`: **26 / 26** on the v2 suite (CPU container; pass/fail only). History in [`evals.md`](evals.md).
 
-## Next: M1.5 — system settings
+## Now: M1.5 — system settings (built; to test on the laptop)
 
 Goal: "whole PC control" for everyday settings, each change **read back and verified**, using the same programs as
-the owner's rice ([D24](DECISIONS.md)).
+the owner's rice ([D24](DECISIONS.md)). Built with a fake system in tests and evals (nothing real is changed there);
+**not yet run on real hardware.** To test after merging:
+
+```sh
+sonu doctor                                   # "Settings programs": what's installed
+sonu turn on bluetooth                        # rfkill unblock + bluetoothctl power on, then reads "Powered: yes"
+sonu set the volume to 30 and mute the mic
+sonu turn the sound down a little
+sonu set the screen brightness to 70 percent
+sonu pause the music                          # with something playing
+sonu next song
+sonu switch to battery saver mode
+sonu turn off the wifi                        # asks first
+sonu "how much battery do i have left?"
+sonu "what's my volume and brightness?"
+```
 
 | Tool | Program | Verified by | Risk |
 |---|---|---|---|
@@ -47,8 +62,10 @@ the owner's rice ([D24](DECISIONS.md)).
 | power mode: performance / balanced / power-saver | `powerprofilesctl set` | `powerprofilesctl get` | low |
 | status: "what's my volume / battery / Wi-Fi?" | the same programs + `/sys/class/power_supply` | — (read-only) | read-only |
 
-Also: `sonu doctor` lists which of these programs are installed; missing ones are reported with the package to install.
-Later candidates: night light (`hyprsunset`), do-not-disturb, keyboard backlight, connecting to a named Wi-Fi network.
+Also built: `sonu doctor` lists which of these programs are installed; a missing one is reported with the package to
+install. Brightness never goes below 5% (the screen stays visible); volume never above 100%.
+Later candidates: night light (`hyprsunset`), do-not-disturb, keyboard backlight, connecting to a named Wi-Fi network,
+pairing a Bluetooth device.
 
 ## Open questions and known issues
 
@@ -74,7 +91,7 @@ Later candidates: night light (`hyprsunset`), do-not-disturb, keyboard backlight
 | [#4](https://github.com/thomasmartinoa/SONU/pull/4) | 2026-09-25 | Eval note |
 | [#5](https://github.com/thomasmartinoa/SONU/pull/5) | 2026-09-25 | Web search/open; `unsupported` parts; SONU's own terminal ignored; eval suite v2 |
 | [#6](https://github.com/thomasmartinoa/SONU/pull/6) | 2026-09-25 | Web steps use the browser the request opened; unobserved pages are "unverified"; Ctrl+C message |
-| #7 | open | Two-phase page check (slow pages), `site:` operator, `CLAUDE.md` / `STATUS.md` / `DECISIONS.md` |
+| #7 | open | Two-phase page check (slow pages), `site:` operator, `CLAUDE.md` / `STATUS.md` / `DECISIONS.md`, **M1.5 system settings** |
 
 ### Found on real hardware → fixed
 

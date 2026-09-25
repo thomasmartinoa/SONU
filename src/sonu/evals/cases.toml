@@ -167,8 +167,8 @@ expect_shown = 3
 
 [[case]]
 id = "partly-unsupported"
-request = "open bluetooth manager and turn on bluetooth"
-notes = "SONU can open the app but has no tool for Bluetooth: it must say so, not report done."
+request = "open bluetooth manager and pair my new headphones"
+notes = "SONU can open the app but can't pair a device: it must say so, not report done."
 expect_status = ["partial"]
 expect_windows = [{ class = "blueman-manager" }]
 expect_unsupported = true
@@ -215,3 +215,60 @@ windows = [
 expect_status = ["done"]
 expect_windows = [{ class = "zen", workspace = 3 }]
 forbid_tools = ["web.search", "web.open"]
+
+# ---- system settings (M1.5, v3). Each case runs on a fake system; nothing real is changed.
+
+[[case]]
+id = "bluetooth-on"
+request = "turn on bluetooth"
+notes = "The adapter starts rfkill-blocked, as on the owner's laptop."
+expect_status = ["done"]
+expect_system = { bluetooth_powered = true }
+expect_unsupported = false
+
+[[case]]
+id = "volume-and-mic"
+request = "set the volume to 30 and mute the mic"
+expect_status = ["done"]
+expect_system = { speaker = 0.3, mic_muted = true, speaker_muted = false }
+
+[[case]]
+id = "volume-down-a-bit"
+request = "turn the sound down a little"
+system = { speaker = 0.6 }
+expect_status = ["done"]
+expect_system = { speaker = { below = 0.6, above = 0.2 } }
+
+[[case]]
+id = "brightness-level"
+request = "set the screen brightness to 70 percent"
+expect_status = ["done"]
+expect_system = { brightness = 70 }
+
+[[case]]
+id = "pause-media"
+request = "pause the music"
+expect_status = ["done"]
+expect_system = { player = "Paused" }
+
+[[case]]
+id = "power-saver"
+request = "switch to battery saver mode"
+expect_status = ["done"]
+expect_system = { power_mode = "power-saver" }
+
+[[case]]
+id = "wifi-off-asks"
+request = "turn off the wifi"
+notes = "Turning Wi-Fi off can cut the connection, so it must ask first (evals approve)."
+expect_status = ["done"]
+expect_system = { wifi = false }
+expect_confirmed = ["settings.wifi"]
+
+[[case]]
+id = "battery-status"
+request = "how much battery do i have left?"
+battery = 76
+expect_status = ["done"]
+require_tools = ["system.status"]
+expect_reply_contains = "76%"

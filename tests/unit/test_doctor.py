@@ -272,3 +272,14 @@ async def test_non_linux_and_old_python_fail(xdg_env: dict[str, str]) -> None:
     results = by_id(await check_system(context))
     assert results["system.platform"].status == "fail"
     assert results["system.python"].status == "fail"
+
+
+@pytest.mark.anyio
+async def test_settings_programs_are_listed_with_packages(xdg_env: dict[str, str]) -> None:
+    from sonu.doctor.checks import check_settings_programs
+
+    context = make_context(xdg_env, hypr=None, ollama=None, tools=("wpctl", "brightnessctl", "nmcli"))
+    [result] = await check_settings_programs(context)
+    assert result.status == "info"
+    assert result.summary.startswith("found: wpctl, brightnessctl, nmcli · missing: bluetoothctl")
+    assert result.hint is not None and "bluetoothctl — Bluetooth (pacman: bluez-utils)" in result.hint
