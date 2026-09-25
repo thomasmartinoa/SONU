@@ -29,6 +29,10 @@ _PLAYERCTL: dict[str, str] = {
 }
 _VOLUME = re.compile(r"Volume:\s*([0-9]+(?:\.[0-9]+)?)(\s*\[MUTED\])?")
 _POWERED = re.compile(r"^\s*Powered:\s*(yes|no)\s*$", re.MULTILINE)
+_DEVICE_LINE = re.compile(r"^Device ((?:[0-9A-F]{2}:){5}[0-9A-F]{2}) (.+)$", re.MULTILINE)
+_MAC = re.compile(r"^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$")
+_WIFI_TYPE = "802-11-wireless"
+CONNECT_TIMEOUT_S = 25.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +51,14 @@ class Backlight:
     current: int
     percent: int
     maximum: int
+
+
+@dataclass(frozen=True, slots=True)
+class BluetoothDevice:
+    mac: str
+    name: str
+    icon: str  # e.g. "audio-headphones", "input-keyboard" (bluez's device class)
+    connected: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +101,37 @@ def parse_bluetooth_powered(text: str) -> bool | None:
     return None if match is None else match.group(1) == "yes"
 
 
+def split_terse(line: str) -> list[str]:
+    """One line of ``nmcli -t`` output: fields split on ":", with "\\:" and "\\\\" unescaped."""
+    fields, current, index = [], [], 0
+    while index < len(line):
+        char = line[index]
+        if char == "\\" and index + 1 < len(line):
+            current.append(line[index + 1])
+            index += 2
+            continue
+        if char == ":":
+            fields.append("".join(current))
+            current = []
+        else:
+            current.append(char)
+        index += 1
+    fields.append("".join(current))
+    return fields
+
+
+def parse_bluetooth_info(mac: str, text: str) -> BluetoothDevice:
+    """``bluetoothctl info MAC`` → name, icon and whether it's connected."""
+
+    def field(name: str) -> str:
+        match = re.search(rf"^\s*{name}:\s*(.*)$", text, re.MULTILINE)
+        return match.group(1).strip() if match else ""
+
+    return BluetoothDevice(
+        mac, field("Name") or field("Alias") or mac, field("Icon"), field("Connected") == "yes"
+    )
+
+
 class SystemControl:
     def __init__(
         self, runner: CommandRunner | None = None, *, power_supply: Path = Path("/sys/class/power_supply")
@@ -99,8 +142,8 @@ class SystemControl:
     def available(self, program: str) -> bool:
         return self.runner.available(program)
 
-    async def _run(self, *argv: str) -> CommandResult:
-        result = await self.runner.run(argv)
+    async def _run(self, *argv: str, timeout_s: float = 5.0) -> CommandResult:
+        result = await self.runner.run(argv, timeout_s=timeout_s)
         if not result.ok:
             raise CommandError(result.problem())
         return result
@@ -152,12 +195,55 @@ class SystemControl:
         # Exit codes vary between bluez versions; the tool reads "Powered:" back instead.
         await self.runner.run(("bluetoothctl", "power", "on" if on else "off"))
 
+    async def paired_devices(self) -> list[BluetoothDevice]:
+        result = await self.runner.run(("bluetoothctl", "devices", "Paired"))
+        if not result.ok or not result.stdout.strip():
+            result = await self.runner.run(("bluetoothctl", "paired-devices"))  # bluez < 5.65
+        devices = []
+        for mac, _ in _DEVICE_LINE.findall(result.stdout):
+            devices.append(await self.bluetooth_device(mac))
+        return devices
+
+    async def bluetooth_device(self, mac: str) -> BluetoothDevice:
+        if not _MAC.match(mac):
+            raise CommandError(f"Not a Bluetooth address: {mac!r}")
+        return parse_bluetooth_info(mac, (await self.runner.run(("bluetoothctl", "info", mac))).stdout)
+
+    async def connect_bluetooth(self, mac: str, connect: bool) -> None:
+        if not _MAC.match(mac):
+            raise CommandError(f"Not a Bluetooth address: {mac!r}")
+        # Exit codes vary; the tool reads "Connected:" back instead.
+        await self.runner.run(
+            ("bluetoothctl", "connect" if connect else "disconnect", mac), timeout_s=CONNECT_TIMEOUT_S
+        )
+
     # ------------------------------------------------------------------ Wi-Fi (nmcli)
     async def wifi_enabled(self) -> bool:
         return (await self._run("nmcli", "radio", "wifi")).stdout.strip() == "enabled"
 
     async def set_wifi(self, on: bool) -> None:
         await self._run("nmcli", "radio", "wifi", "on" if on else "off")
+
+    async def wifi_saved(self) -> list[str]:
+        """Names of the Wi-Fi networks NetworkManager has saved (it knows their passwords)."""
+        result = await self._run("nmcli", "-t", "-f", "NAME,TYPE", "connection", "show")
+        return [
+            fields[0]
+            for line in result.stdout.splitlines()
+            if len(fields := split_terse(line)) >= 2 and fields[1] == _WIFI_TYPE
+        ]
+
+    async def wifi_active(self) -> str | None:
+        result = await self._run("nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active")
+        for line in result.stdout.splitlines():
+            fields = split_terse(line)
+            if len(fields) >= 2 and fields[1] == _WIFI_TYPE:
+                return fields[0]
+        return None
+
+    async def connect_wifi(self, name: str) -> None:
+        """Activate a saved network; the name is passed as one argv element (never through a shell)."""
+        await self._run("nmcli", "--wait", "20", "connection", "up", "id", name, timeout_s=CONNECT_TIMEOUT_S)
 
     # ------------------------------------------------------------------ media (playerctl)
     async def player_status(self) -> str | None:
@@ -197,6 +283,7 @@ __all__ = [
     "AudioTarget",
     "Backlight",
     "Battery",
+    "BluetoothDevice",
     "CommandError",
     "PlayerAction",
     "PowerMode",

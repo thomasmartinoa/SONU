@@ -144,6 +144,34 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
             "steps": [{"tool": "system.status", "args": {"what": ["wifi"]}}],
         },
     ),
+    (
+        "connect my headphones and switch to the office wifi",
+        {
+            "kind": "steps",
+            "message": "Connecting your headphones and switching to the office Wi-Fi.",
+            "steps": [
+                {"tool": "settings.bluetooth_device", "args": {"device": "headphones"}},
+                {"tool": "settings.wifi_connect", "args": {"network": "office"}},
+            ],
+        },
+    ),
+    (
+        "play bohemian rhapsody on youtube",
+        {
+            "kind": "steps",
+            "message": "Searching YouTube for Bohemian Rhapsody. I can't start the video myself yet.",
+            "steps": [{"tool": "web.search", "args": {"site": "youtube", "query": "bohemian rhapsody"}}],
+            "unsupported": ["start playing it"],
+        },
+    ),
+    (
+        "play some lofi",
+        {
+            "kind": "cannot",
+            "message": "I can't pick songs yet. I can play or pause your player, or search YouTube.",
+            "steps": [],
+        },
+    ),
     ("open it", {"kind": "ask", "message": "Which app should I open?", "steps": []}),
     ("thanks!", {"kind": "reply", "message": "You're welcome!", "steps": []}),
     (
@@ -176,9 +204,9 @@ Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "step
 - kind "reply": chat or a question you can answer without acting. message: the answer. steps: [].
 - kind "cannot": no tool can do any of it. message: say so briefly. steps: [].
 - unsupported: the parts of the request that no tool below can do, in the user's words (for \
-example typing text, clicking or scrolling inside an app, files, connecting to a particular \
-Wi-Fi network or pairing a Bluetooth device). Do the parts you can and list the rest here; never \
-force a tool to do something it can't. Usually [].
+example typing text, clicking or scrolling inside an app, files, joining a new Wi-Fi network, \
+pairing a new Bluetooth device, choosing a particular song or video to play). Do the parts you \
+can and list the rest here; never force a tool to do something it can't. Usually [].
 
 Tools:
 {tools}
@@ -192,6 +220,9 @@ says move, put or send.
 - Words from a window's title ("the GitHub window") go in title_contains, not in app.
 - Volume, mic, brightness, Bluetooth, Wi-Fi, media and power mode have their own tools; \
 "what's my …" / "is … on?" is system.status.
+- media.control only plays, pauses or skips what is already in the player. "Play <a song, artist \
+or video>" can't be done with it: say so (on YouTube: web.search it, and list starting it as \
+unsupported).
 - apps.launch only opens installed apps. A website (YouTube, GitHub, a link) is web.open; \
 searching one is web.search with the user's own words as the query. If the user named a \
 browser, pass it as browser.

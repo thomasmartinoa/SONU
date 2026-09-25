@@ -17,7 +17,6 @@ import asyncio
 import ipaddress
 import re
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from typing import Literal, cast
 from urllib.parse import quote_plus, urlsplit
 
@@ -31,6 +30,7 @@ from sonu.desktop.hyprland.models import Window
 from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.desktop_tools import chosen_app, resolve_app
+from sonu.tools.grounding import ungrounded_words
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -103,8 +103,6 @@ ENGINES: dict[str, Site] = {
 
 SearchSite = Literal["web", "youtube", "github", "wikipedia", "archwiki", "aur", "reddit"]
 
-# Small words a model may add to a query without changing what the user asked for.
-_CONNECTIVES = {"a", "an", "the", "of", "for", "and", "in", "on", "to", "with", "how", "what"}
 _HOST_LABEL = re.compile(r"^(?!-)[a-z0-9-]{1,63}(?<!-)$")
 # How long an already-running browser gets to react (a window title changes) to a link.
 WEB_REACT_S = 8.0
@@ -114,19 +112,6 @@ _SITE_OPERATOR = re.compile(r"(?<!\S)site:(\S+)", re.IGNORECASE)
 
 def _compact(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.casefold())
-
-
-def ungrounded_words(text: str, request: str) -> list[str]:
-    """Words of ``text`` that don't come from the user's request (small spelling fixes allowed)."""
-    request_words = set(normalize(request).split())
-    missing = []
-    for word in normalize(text).split():
-        if word in request_words or word in _CONNECTIVES:
-            continue
-        if len(word) >= 4 and any(SequenceMatcher(None, word, r).ratio() >= 0.8 for r in request_words):
-            continue
-        missing.append(word)
-    return missing
 
 
 def _named_in(site: Site, request: str) -> bool:

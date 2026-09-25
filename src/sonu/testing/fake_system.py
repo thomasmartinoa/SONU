@@ -33,6 +33,17 @@ class FakeSystem:
     bluetooth_blocked: bool = True  # how the owner's laptop boots
     bluetooth_powered: bool = False
     wifi: bool = True
+    wifi_networks: list[str] = field(
+        default_factory=lambda: ["Home: 5G", "hithere"]
+    )  # saved in NetworkManager
+    wifi_connection: str | None = "Home: 5G"
+    # Paired Bluetooth devices: MAC → [name, icon, connected]
+    bt_devices: dict[str, list[object]] = field(
+        default_factory=lambda: {
+            "AA:BB:CC:DD:EE:01": ["WH-1000XM4", "audio-headphones", False],
+            "AA:BB:CC:DD:EE:02": ["MX Keys", "input-keyboard", False],
+        }
+    )
     player: str | None = "Playing"  # None: no player running
     tracks: list[str] = field(
         default_factory=lambda: ["Artist One Song", "Artist Two Song", "Artist Three Song"]
@@ -48,6 +59,11 @@ class FakeSystem:
         device = next((d for d in self.backlights if "nvidia" not in d), next(iter(self.backlights)))
         current, maximum = self.backlights[device]
         return round(current * 100 / maximum)
+
+    @property
+    def bt_connected(self) -> list[str]:
+        """Names of the connected Bluetooth devices."""
+        return sorted(str(device[0]) for device in self.bt_devices.values() if device[2])
 
     def available(self, program: str) -> bool:
         return program in self.installed
@@ -128,15 +144,59 @@ class FakeSystem:
             if args[1] == "on" and self.bluetooth_blocked:
                 return 1, "Failed to set power on: org.bluez.Error.Failed\n", ""
             self.bluetooth_powered = args[1] == "on"
+            if not self.bluetooth_powered:
+                for device in self.bt_devices.values():
+                    device[2] = False
             return 0, f"Changing power {args[1]} succeeded\n", ""
+        if args == ["devices", "Paired"]:
+            return 0, "".join(f"Device {mac} {d[0]}\n" for mac, d in self.bt_devices.items()), ""
+        if args[:1] == ["info"] and args[1] in self.bt_devices:
+            name, icon, connected = self.bt_devices[args[1]]
+            return (
+                0,
+                (
+                    f"Device {args[1]} (public)\n\tName: {name}\n\tAlias: {name}\n\tIcon: {icon}\n"
+                    f"\tPaired: yes\n\tConnected: {'yes' if connected else 'no'}\n"
+                ),
+                "",
+            )
+        if args[:1] in (["connect"], ["disconnect"]) and args[1] in self.bt_devices:
+            if not self.bluetooth_powered:
+                return 1, "Failed to connect: org.bluez.Error.NotReady\n", ""
+            self.bt_devices[args[1]][2] = args[0] == "connect"
+            return 0, "Connection successful\n" if args[0] == "connect" else "Successful disconnected\n", ""
         return 1, "", "unsupported\n"
+
+    @staticmethod
+    def _terse(name: str) -> str:
+        return name.replace("\\", "\\\\").replace(":", "\\:")
 
     def _nmcli(self, args: list[str]) -> tuple[int, str, str]:
         if args == ["radio", "wifi"]:
             return 0, ("enabled" if self.wifi else "disabled") + "\n", ""
         if args[:2] == ["radio", "wifi"]:
             self.wifi = args[2] == "on"
+            if not self.wifi:
+                self.wifi_connection = None
             return 0, "", ""
+        if args == ["-t", "-f", "NAME,TYPE", "connection", "show"]:
+            lines = [f"{self._terse(n)}:802-11-wireless" for n in self.wifi_networks]
+            return 0, "\n".join([*lines, "Wired connection 1:802-3-ethernet"]) + "\n", ""
+        if args == ["-t", "-f", "NAME,TYPE", "connection", "show", "--active"]:
+            active = f"{self._terse(self.wifi_connection)}:802-11-wireless\n" if self.wifi_connection else ""
+            return 0, active + "lo:loopback\n", ""
+        if args[:5] == ["--wait", "20", "connection", "up", "id"]:
+            name = args[5]
+            if name not in self.wifi_networks:
+                return 10, "", f"Error: unknown connection '{name}'.\n"
+            if not self.wifi:
+                return (
+                    4,
+                    "",
+                    "Error: Connection activation failed: No suitable device found for this connection.\n",
+                )
+            self.wifi_connection = name
+            return 0, "Connection successfully activated\n", ""
         return 1, "", "unsupported\n"
 
     def _playerctl(self, args: list[str]) -> tuple[int, str, str]:

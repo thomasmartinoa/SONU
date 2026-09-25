@@ -1,7 +1,7 @@
 # SONU — Design Proposal
 
-> **Status:** v0.4 — milestones **M0 and M1 done** (M1 in daily use on the owner's laptop); **M1.5 system settings
-> next**. Current progress: [`STATUS.md`](STATUS.md); every decision: [`DECISIONS.md`](DECISIONS.md).
+> **Status:** v0.5 — milestones **M0, M1 and M1.5 done** and in daily use on the owner's laptop; **M2 (daemon +
+> memory) next**. Current progress: [`STATUS.md`](STATUS.md); every decision: [`DECISIONS.md`](DECISIONS.md).
 > **Date:** 2026-09-25
 > **Scope:** Architecture, research findings, security model, and roadmap for SONU (System-Oriented Neural Utility).
 > Decisions are also recorded as ADRs in [`docs/adr/`](adr/); the threat model lives in [`threat-model.md`](threat-model.md).
@@ -601,7 +601,7 @@ Order changed after the decisions: voice moves up to **M3** (right after the dae
 |---|---|---|---|
 | **M0 ✅** | Foundations | Repo scaffold, Apache-2.0, CI, config/paths, logging, hash-chained audit log, Hyprland IPC client + event stream (read-only), Ollama inventory client, FakeHyprland, `sonu doctor`, ADRs, threat model | `uv run sonu doctor` reports Hyprland/Ollama/GPU status correctly on your machine; CI green |
 | **M1 ✅** | Verified window operator | Hyprland dialects (Lua + hyprlang), XDG app catalog + resolver, world model + event-driven waiter, tools (launch, move, focus, show workspace, close, describe), verifier, policy + confirmations (terminal / rofi), Ollama planner with schema-constrained plans + repair, `sonu ask` / `sonu prompt` / `sonu eval`, FakeHyprland end-to-end tests; after real use: pick-list answers, web search/open, `unsupported` parts, 26 eval cases | Wrong-workspace placement auto-corrected ✅; missing apps reported honestly ✅; every action audited ✅; `sonu eval`: `qwen3.5:4b` 26/26 ([evals](evals.md)); verified on the owner's laptop ✅ ([STATUS](STATUS.md)); still to measure: the VS Code/Chromium example in ≥ 9/10 runs |
-| **M1.5 🧪** | System settings (PC control) | Volume and mic, brightness, Bluetooth, Wi-Fi, media keys, power mode, and a read-only status ("what's my battery?") — the same programs as the owner's rice, every change read back ([D24](DECISIONS.md)); `sonu doctor` lists what's installed | Each setting changed and verified on the owner's laptop; turning Wi-Fi off asks first; eval cases for settings requests |
+| **M1.5 ✅** | System settings (PC control) | Volume and mic, brightness, Bluetooth (+ paired devices), Wi-Fi (+ saved networks), media keys, power mode, and a read-only status ("what's my battery?") — the same programs as the owner's rice, every change read back ([D24](DECISIONS.md)); `sonu doctor` lists what's installed | Each setting changed and verified on the owner's laptop; turning Wi-Fi off asks first; eval cases for settings requests |
 | **M2** | Daemon + memory | `sonud` service, activity journal (30-day default retention), preferences ("remember …"), episodes, layout save/restore, routines, privacy controls | "What was I working on yesterday?" answered from the journal; `sonu layout save/restore` verified; retention/forget work |
 | **M3** | Voice | Push-to-talk, STT, TTS, then the "Hey Sonu" wake word; latency budget; VRAM scheduling; Quickshell bar widget | Spoken M1–M2 commands with measured end-to-end latency; no high-risk confirmation by voice alone |
 | **M4** | Projects & dev workflows | Project discovery, open project in VS Code / VSCodium, dev-server tool (allowlisted scripts from `package.json`/`Makefile`, port detection, `HttpOk` verification), open URL, side-by-side layouts, close-by-project | "Open my AI Shop Assistant project and start the dev server" works end-to-end with verification |

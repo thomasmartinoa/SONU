@@ -13,10 +13,22 @@ from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from sonu.desktop.apps.resolver import normalize
 from sonu.system.commands import CommandError, ProgramMissing
-from sonu.system.control import AudioTarget, PlayerAction, PowerMode, Volume
-from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome, outcome_from_checks
+from sonu.system.control import AudioTarget, BluetoothDevice, PlayerAction, PowerMode, Volume
+from sonu.tools.base import (
+    Choice,
+    Choices,
+    Effect,
+    Prepared,
+    Risk,
+    StepStatus,
+    Tool,
+    ToolOutcome,
+    outcome_from_checks,
+)
 from sonu.tools.context import ToolContext
+from sonu.tools.grounding import ungrounded_words
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -285,7 +297,10 @@ _EXPECTED_STATUS = {"play": "Playing", "pause": "Paused", "stop": "Stopped"}
 
 class MediaControl(Tool):
     name = "media.control"
-    description = "Play, pause, skip or go back in the music or video that is playing (any media player)."
+    description = (
+        "Play, pause, skip or go back in the media player that is already open. It cannot choose or "
+        "search for a particular song, artist or video."
+    )
     risk = Risk.LOW
     effects = frozenset({Effect.MEDIA_CONTROL})
     Args = MediaArgs
@@ -444,11 +459,241 @@ class SystemStatus(Tool):
             return f"{label}: unknown ({exc})"
 
 
+# ---------------------------------------------------------------------------- settings.wifi_connect
+CONNECT_VERIFY_S = 15.0
+# Words that describe the kind of thing rather than name it ("my home wifi network").
+_GENERIC = {
+    "my",
+    "the",
+    "a",
+    "an",
+    "to",
+    "named",
+    "called",
+    "wifi",
+    "wi",
+    "fi",
+    "network",
+    "bluetooth",
+    "device",
+}
+
+
+def _ungrounded(text: str, ctx: ToolContext, what: str) -> ToolOutcome | None:
+    missing = ungrounded_words(text, ctx.request_text)
+    if missing:
+        return ToolOutcome(
+            StepStatus.FAILED, f"Won't use {what} '{text}': {', '.join(missing)} isn't in your request"
+        )
+    return None
+
+
+def match_networks(words: str, saved: list[str]) -> list[str]:
+    """Saved networks the user's words name: the whole name ("hi there" → "hithere") or every word."""
+    wanted = normalize(words).replace(" ", "")
+    exact = [name for name in saved if normalize(name).replace(" ", "") == wanted]
+    if exact:
+        return exact
+    tokens = [token for token in normalize(words).split() if token not in _GENERIC]
+    return [
+        name
+        for name in saved
+        if tokens
+        and all(t in normalize(name).split() or t in normalize(name).replace(" ", "") for t in tokens)
+    ]
+
+
+class WifiNetworkArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    network: str = Field(
+        min_length=1, max_length=64, description="the Wi-Fi network's name as the user said it"
+    )
+
+
+class ConnectWifi(Tool):
+    name = "settings.wifi_connect"
+    description = (
+        "Connect to a Wi-Fi network this computer has joined before (a saved network). "
+        "Joining a new network is not supported."
+    )
+    risk = Risk.LOW  # raised to medium when it would drop the current network
+    effects = frozenset({Effect.SETTINGS_CHANGE})
+    Args = WifiNetworkArgs
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(WifiNetworkArgs, args)
+        if problem := _missing(ctx, "nmcli"):
+            return problem
+        try:
+            if choice is not None:
+                name = choice
+            else:
+                if problem := _ungrounded(a.network, ctx, "the network"):
+                    return problem
+                matches = match_networks(a.network, await ctx.system.wifi_saved())
+                if not matches:
+                    return ToolOutcome(
+                        StepStatus.FAILED,
+                        f"'{a.network}' isn't a saved Wi-Fi network — SONU can only connect to networks this "
+                        "computer has joined before (a new one needs its password)",
+                    )
+                if len(matches) > 1:
+                    return ToolOutcome(
+                        StepStatus.NEEDS_INPUT,
+                        f"several saved networks match '{a.network}'",
+                        question=f"Which network did you mean: {' or '.join(matches[:4])}?",
+                        choices=Choices("Which Wi-Fi network?", tuple(Choice(n, n) for n in matches[:6])),
+                    )
+                name = matches[0]
+            active = await ctx.system.wifi_active()
+        except CommandError as exc:
+            return _failed(exc)
+        if active == name:
+            return Prepared(f"'{name}' is already connected", name)
+        if active is not None:
+            # Switching networks drops the current connection (and anything using it): ask first.
+            return Prepared(f"Switch Wi-Fi from '{active}' to '{name}'", name, risk=Risk.MEDIUM)
+        return Prepared(f"Connect to the Wi-Fi network '{name}'", name)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        name = cast(str, prepared.payload)
+        try:
+            if await ctx.system.wifi_active() != name:
+                if not await ctx.system.wifi_enabled():
+                    await ctx.system.set_wifi(True)
+                    await _settle(ctx.system.wifi_enabled, bool, ctx.settings.verify.timeout_s)
+                await ctx.system.connect_wifi(name)
+            active = await _settle(ctx.system.wifi_active, lambda n: n == name, CONNECT_VERIFY_S)
+        except CommandError as exc:
+            return _failed(exc)
+        check = Check(f"Wi-Fi is connected to '{name}'", active == name, {"connected": active == name})
+        return outcome_from_checks([check], f"Connected to '{name}'", f"Couldn't connect to '{name}'")
+
+
+# ---------------------------------------------------------------------------- settings.bluetooth_device
+# Kind words → the start of bluez's "Icon:" for that kind of device.
+_DEVICE_KINDS = {
+    "headphones": "audio-head",
+    "headphone": "audio-head",
+    "headset": "audio-head",
+    "earbuds": "audio-head",
+    "earphones": "audio-head",
+    "buds": "audio-head",
+    "speaker": "audio-card",
+    "speakers": "audio-card",
+    "mouse": "input-mouse",
+    "keyboard": "input-keyboard",
+    "controller": "input-gaming",
+    "gamepad": "input-gaming",
+    "phone": "phone",
+}
+
+
+def match_devices(words: str, devices: list[BluetoothDevice]) -> list[BluetoothDevice]:
+    """Paired devices the user's words name — by a word of the name ("sony") or by kind ("headphones")."""
+    tokens = [token for token in normalize(words).split() if token not in _GENERIC]
+    found = []
+    for device in devices:
+        name = normalize(device.name)
+        by_name = any(
+            t in name.split() or (len(t) >= 3 and t in name.replace(" ", ""))
+            for t in tokens
+            if t not in _DEVICE_KINDS
+        )
+        by_kind = any(device.icon.startswith(_DEVICE_KINDS[t]) for t in tokens if t in _DEVICE_KINDS)
+        if by_name or by_kind:
+            found.append(device)
+    return found
+
+
+class BluetoothDeviceArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    device: str = Field(
+        min_length=1,
+        max_length=80,
+        description="the paired device as the user named it, e.g. 'headphones', 'sony'",
+    )
+    connect: bool = Field(default=True, description="true to connect, false to disconnect")
+
+
+class BluetoothDeviceTool(Tool):
+    name = "settings.bluetooth_device"
+    description = (
+        "Connect or disconnect a Bluetooth device that is already paired (headphones, speaker, mouse, …). "
+        "Pairing a new device is not supported."
+    )
+    risk = Risk.LOW
+    effects = frozenset({Effect.SETTINGS_CHANGE})
+    Args = BluetoothDeviceArgs
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(BluetoothDeviceArgs, args)
+        if problem := _missing(ctx, "bluetoothctl"):
+            return problem
+        verb = "Connect" if a.connect else "Disconnect"
+        try:
+            if choice is not None:
+                device = await ctx.system.bluetooth_device(choice)
+            else:
+                if problem := _ungrounded(a.device, ctx, "the device"):
+                    return problem
+                matches = match_devices(a.device, await ctx.system.paired_devices())
+                if not matches:
+                    return ToolOutcome(
+                        StepStatus.FAILED,
+                        f"No paired Bluetooth device matches '{a.device}' — pair it once in "
+                        "Bluetooth Manager, then SONU can connect it",
+                    )
+                if len(matches) > 1:
+                    return ToolOutcome(
+                        StepStatus.NEEDS_INPUT,
+                        f"several paired devices match '{a.device}'",
+                        question=f"Which device: {' or '.join(d.name for d in matches[:4])}?",
+                        choices=Choices(
+                            f"Which device should I {verb.lower()}?",
+                            tuple(Choice(d.name, d.mac) for d in matches[:6]),
+                        ),
+                    )
+                device = matches[0]
+        except CommandError as exc:
+            return _failed(exc)
+        return Prepared(f"{verb} {device.name}", (device, a.connect))
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        device, connect = cast(tuple[BluetoothDevice, bool], prepared.payload)
+        word = "connected" if connect else "disconnected"
+        try:
+            if connect and not await ctx.system.bluetooth_powered():
+                await ctx.system.set_bluetooth(True)
+                await _settle(ctx.system.bluetooth_powered, bool, ctx.settings.verify.timeout_s)
+            await ctx.system.connect_bluetooth(device.mac, connect)
+            after = await _settle(
+                lambda: ctx.system.bluetooth_device(device.mac),
+                lambda d: d.connected is connect,
+                CONNECT_VERIFY_S,
+            )
+        except CommandError as exc:
+            return _failed(exc)
+        check = Check(f"{device.name} is {word}", after.connected is connect, {"connected": after.connected})
+        hint = " (is it switched on and in range?)" if connect else ""
+        return outcome_from_checks(
+            [check], f"{device.name} is {word}", f"{device.name} didn't get {word}{hint}"
+        )
+
+
 SETTINGS_TOOLS: tuple[Tool, ...] = (
     SetVolume(),
     SetBrightness(),
     SetBluetooth(),
+    BluetoothDeviceTool(),
     SetWifi(),
+    ConnectWifi(),
     MediaControl(),
     SetPowerMode(),
     SystemStatus(),

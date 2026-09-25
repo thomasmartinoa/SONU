@@ -89,7 +89,7 @@ class EvalCase(_Model):
     @field_validator("system", "expect_system")
     @classmethod
     def _known_fields(cls, value: dict[str, Any]) -> dict[str, Any]:
-        unknown = set(value) - set(FakeSystem.__dataclass_fields__) - {"brightness"}
+        unknown = set(value) - set(FakeSystem.__dataclass_fields__) - {"brightness", "bt_connected"}
         if unknown:
             raise ValueError(f"unknown system fields: {sorted(unknown)}")
         return value

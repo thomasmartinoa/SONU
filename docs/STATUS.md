@@ -12,8 +12,8 @@ _Last update: 2026-09-25_
 |---|---|
 | M0 Foundations | ✅ done — doctor, config, audit log, Hyprland IPC, Ollama client |
 | M1 Verified window operator | ✅ done and **in daily use on the owner's laptop** |
-| M1.5 System settings (PC control) | 🧪 **built, waiting for the owner's test** — see below ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md)) |
-| M2 Daemon + memory | after M1.5 — faster replies (model stays loaded), journal, "remember …" |
+| M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
+| M2 Daemon + memory | ⏭ **next** — faster replies (model stays loaded), journal, "remember …" |
 | M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -25,7 +25,11 @@ _Last update: 2026-09-25_
 - Pick lists for "which one?" questions, in the terminal.
 - `search youtube for …`, `open chrome on workspace 3 and search youtube for …`, `search for …` (DuckDuckGo),
   `open github.com/…` — confirmed from the browser's window title.
-- "open bluetooth manager and turn on bluetooth" → opens it and reports "✖ Can't do this yet: turn on bluetooth".
+- Settings (M1.5): Bluetooth on (through the rfkill block the laptop boots with), volume 30% + mic mute, "a little"
+  quieter, brightness 70/10/50%, pause / resume / next / previous (Apple Music), battery-saver mode, Wi-Fi off
+  (asked first) and on, battery status; `sonu doctor` finds all seven settings programs.
+- Partial requests are honest: "connect to wifi named hithere" turned Wi-Fi on and reported the rest as not possible
+  (before `settings.wifi_connect` existed).
 - NitroSense key sends `XF86Launch1`.
 
 ### Eval suite
@@ -33,40 +37,39 @@ _Last update: 2026-09-25_
 `qwen3.5:4b`: **34 / 34** on the v3 suite, incl. 8 settings cases (CPU container; pass/fail only). History in
 [`evals.md`](evals.md).
 
-## Now: M1.5 — system settings (built; to test on the laptop)
+## M1.5 — system settings (done)
 
-Goal: "whole PC control" for everyday settings, each change **read back and verified**, using the same programs as
-the owner's rice ([D24](DECISIONS.md)). Built with a fake system in tests and evals (nothing real is changed there);
-**not yet run on real hardware.** To test after merging:
-
-```sh
-sonu doctor                                   # "Settings programs": what's installed
-sonu turn on bluetooth                        # rfkill unblock + bluetoothctl power on, then reads "Powered: yes"
-sonu set the volume to 30 and mute the mic
-sonu turn the sound down a little
-sonu set the screen brightness to 70 percent
-sonu pause the music                          # with something playing
-sonu next song
-sonu switch to battery saver mode
-sonu turn off the wifi                        # asks first
-sonu "how much battery do i have left?"
-sonu "what's my volume and brightness?"
-```
+Every change is **read back and verified**, using the same programs as the owner's rice ([D24](DECISIONS.md)).
 
 | Tool | Program | Verified by | Risk |
 |---|---|---|---|
-| volume: set / up / down / mute / unmute (output and mic) | `wpctl` (`@DEFAULT_AUDIO_SINK@`, capped at 100%) | `wpctl get-volume` | low |
-| brightness: set / up / down | `brightnessctl` (first non-NVIDIA backlight) | `brightnessctl -m` | low |
-| Bluetooth on / off | `rfkill unblock bluetooth` + `bluetoothctl power on/off` | `bluetoothctl show` → `Powered:` | low |
-| Wi-Fi on / off | `nmcli radio wifi on/off` | `nmcli radio wifi` | on: low · **off: medium (asks)** |
-| media: play / pause / next / previous | `playerctl` | `playerctl status` / metadata change | low |
-| power mode: performance / balanced / power-saver | `powerprofilesctl set` | `powerprofilesctl get` | low |
-| status: "what's my volume / battery / Wi-Fi?" | the same programs + `/sys/class/power_supply` | — (read-only) | read-only |
+| volume: set / up / down / mute / unmute (speaker or mic — always stated) | `wpctl` (capped at 100%) | `wpctl get-volume` | low |
+| brightness: set / up / down | `brightnessctl` (first non-NVIDIA backlight; never below 5%) | `brightnessctl -m` | low |
+| Bluetooth on / off | `rfkill unblock bluetooth` + `bluetoothctl power` | `bluetoothctl show` → `Powered:` | low |
+| Bluetooth device connect / disconnect (already paired; by name or kind: "headphones") | `bluetoothctl connect` | `bluetoothctl info` → `Connected:` | low |
+| Wi-Fi on / off | `nmcli radio wifi` | `nmcli radio wifi` | on: low · **off: asks** |
+| Wi-Fi connect to a **saved** network | `nmcli connection up id …` | active connection | **asks when it drops the current network** |
+| media: play / pause / next / previous / stop (what's already in the player) | `playerctl` | status / track change | low |
+| power mode | `powerprofilesctl` | `powerprofilesctl get` | low |
+| status: volume, mic, brightness, Bluetooth, Wi-Fi, media, power mode, battery | the same + sysfs | — | read-only |
 
-Also built: `sonu doctor` lists which of these programs are installed; a missing one is reported with the package to
-install. Brightness never goes below 5% (the screen stays visible); volume never above 100%.
-Later candidates: night light (`hyprsunset`), do-not-disturb, keyboard backlight, connecting to a named Wi-Fi network,
-pairing a Bluetooth device.
+Not possible yet, and reported as such: picking a particular song or video ("play Faded" — SONU can search YouTube
+for it but not start it), joining a **new** Wi-Fi network (needs its password), pairing a **new** Bluetooth device.
+Later candidates: night light (`hyprsunset`), do-not-disturb, keyboard backlight.
+
+To try the newest additions (after merging):
+
+```sh
+sonu connect to wifi named hithere            # a saved network; asks first because it leaves the current one
+sonu connect my headphones                    # a paired device, found by kind or name
+sonu play me faded                            # should say it can't pick songs yet — not "done"
+sonu play faded on youtube                    # searches YouTube; says it can't start the video itself
+```
+
+## Next: M2 — daemon + memory
+
+Faster replies (the model stays loaded; no process start per request), the activity journal (30-day retention),
+"remember …" preferences (e.g. "use Code - OSS from now on"), layouts. Plan in [`PROPOSAL.md`](PROPOSAL.md#8-roadmap).
 
 ## Open questions and known issues
 
@@ -92,7 +95,8 @@ pairing a Bluetooth device.
 | [#4](https://github.com/thomasmartinoa/SONU/pull/4) | 2026-09-25 | Eval note |
 | [#5](https://github.com/thomasmartinoa/SONU/pull/5) | 2026-09-25 | Web search/open; `unsupported` parts; SONU's own terminal ignored; eval suite v2 |
 | [#6](https://github.com/thomasmartinoa/SONU/pull/6) | 2026-09-25 | Web steps use the browser the request opened; unobserved pages are "unverified"; Ctrl+C message |
-| #7 | open | Two-phase page check (slow pages), `site:` operator, `CLAUDE.md` / `STATUS.md` / `DECISIONS.md`, **M1.5 system settings** |
+| [#7](https://github.com/thomasmartinoa/SONU/pull/7) | 2026-09-25 | Two-phase page check (slow pages), `site:` operator, `CLAUDE.md` / `STATUS.md` / `DECISIONS.md`, **M1.5 system settings** |
+| #8 | open | Honest "play <song>"; connect to saved Wi-Fi networks and paired Bluetooth devices; M1.5 verified on the laptop |
 
 ### Found on real hardware → fixed
 
@@ -112,4 +116,6 @@ pairing a Bluetooth device.
 | 09-25 | A slow page (loaded after ~10 s) was reported unconfirmed | wait for the browser to react, then up to 30 s for the page (#7) |
 | 09-25 | The model wrote `… site:github.com` and the search was refused | a `site:` operator for a named site becomes that site's search (#7) |
 | 09-25 | (eval) "…and mute the mic" muted the speaker — and verified it | speaker/mic must always be stated (#7) |
-| 09-25 | "next song" (before #7) focused the Apple Music window and said done | `media.control`; eval case with a player window open — passes (#7) |
+| 09-25 | "next song" (before #7) focused the Apple Music window and said done | `media.control`; eval case with a player window open — passes (#8) |
+| 09-25 | "play me faded" pressed play on whatever was loaded and said done | media.control can't pick songs: the planner must say so; eval cases (#8) |
+| 09-25 | "connect to wifi named hithere" — not possible yet (reported honestly) | `settings.wifi_connect` for saved networks; `settings.bluetooth_device` for paired devices (#8) |

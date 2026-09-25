@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -85,16 +85,19 @@ class Rig:
     ctx: ToolContext
 
     async def run(
-        self, *steps: tuple[str, dict[str, object]], confirm: bool = True, dry_run: bool = False
+        self, *steps: tuple[str, Mapping[str, object]], confirm: bool = True, dry_run: bool = False
     ) -> tuple[TaskReport, Confirmations]:
+        # The request is made of the steps' own words, so name grounding passes unless a test
+        # runs a different request on purpose.
+        request = " ".join(str(value) for _, args in steps for value in args.values()) or "r"
         confirmations = Confirmations(confirm)
         engine = Engine(
-            planner=ScriptedPlanner({"r": steps_plan(*steps)}),
+            planner=ScriptedPlanner({request: steps_plan(*((tool, dict(args)) for tool, args in steps))}),
             registry=ToolRegistry(),
             ctx=self.ctx,
             policy=Policy("confirm-risky"),
         )
-        report = await engine.run("r", confirm=confirmations, dry_run=dry_run)
+        report = await engine.run(request, confirm=confirmations, dry_run=dry_run)
         return report, confirmations
 
 
@@ -263,3 +266,79 @@ async def test_bluetooth_service_not_running_is_explained(rig: Rig) -> None:
     [line] = report.lines()
     assert line.startswith("✖ bluetoothctl didn't finish within 5s")
     assert line.endswith("is the Bluetooth service running? (systemctl start bluetooth)")
+
+
+# ---------------------------------------------------------------- Wi-Fi networks and Bluetooth devices
+def test_nmcli_terse_fields_unescape_colons() -> None:
+    from sonu.system.control import split_terse
+
+    assert split_terse(r"Home\: 5G:802-11-wireless") == ["Home: 5G", "802-11-wireless"]
+    assert split_terse(r"back\\slash:802-11-wireless") == ["back\\slash", "802-11-wireless"]
+
+
+def test_matching_names_from_the_users_words() -> None:
+    from sonu.tools.settings_tools import match_networks
+
+    saved = ["Home: 5G", "hithere", "Office 2G", "Office 5G"]
+    assert match_networks("hi there", saved) == ["hithere"]
+    assert match_networks("home", saved) == ["Home: 5G"]
+    assert match_networks("office wifi", saved) == ["Office 2G", "Office 5G"]
+    assert match_networks("cafe", saved) == []
+
+
+@pytest.mark.anyio
+async def test_switching_to_a_saved_network_asks_first(rig: Rig) -> None:
+    request = ("settings.wifi_connect", {"network": "hithere"})
+    report, confirmations = await rig.run(request, confirm=False)
+    assert [r.description for r in confirmations.seen] == ["Switch Wi-Fi from 'Home: 5G' to 'hithere'"]
+    assert report.status == "declined" and rig.system.wifi_connection == "Home: 5G"
+    report, _ = await rig.run(request, confirm=True)
+    assert report.lines() == ["✔ Connected to 'hithere'"]
+    assert rig.system.wifi_connection == "hithere"
+
+
+@pytest.mark.anyio
+async def test_connecting_with_wifi_off_turns_it_on_without_asking(rig: Rig) -> None:
+    rig.system.wifi, rig.system.wifi_connection = False, None
+    report, confirmations = await rig.run(("settings.wifi_connect", {"network": "hithere"}))
+    assert confirmations.seen == []  # nothing to lose: no current network
+    assert report.lines() == ["✔ Connected to 'hithere'"]
+
+
+@pytest.mark.anyio
+async def test_unknown_or_ungrounded_networks_are_refused(rig: Rig) -> None:
+    report, _ = await rig.run(("settings.wifi_connect", {"network": "cafe"}))
+    assert "isn't a saved Wi-Fi network" in report.lines()[0]
+    # Engine sets the request per task; here the request never mentioned "hithere".
+    planner_step = ("settings.wifi_connect", {"network": "hithere"})
+    engine = Engine(
+        planner=ScriptedPlanner({"move the browser to 3": steps_plan(planner_step)}),
+        registry=ToolRegistry(),
+        ctx=rig.ctx,
+        policy=Policy("confirm-risky"),
+    )
+    report = await engine.run("move the browser to 3", confirm=Confirmations(True))
+    assert report.lines() == ["✖ Won't use the network 'hithere': hithere isn't in your request"]
+    assert rig.system.wifi_connection == "Home: 5G"
+
+
+@pytest.mark.anyio
+async def test_headphones_are_found_by_kind_and_bluetooth_is_turned_on(rig: Rig) -> None:
+    report, _ = await rig.run(("settings.bluetooth_device", {"device": "headphones"}))
+    assert report.lines() == ["✔ WH-1000XM4 is connected"]
+    assert rig.system.bluetooth_powered and rig.system.bt_connected == ["WH-1000XM4"]
+
+
+@pytest.mark.anyio
+async def test_bluetooth_device_by_name_and_disconnect(rig: Rig) -> None:
+    rig.system.bluetooth_blocked, rig.system.bluetooth_powered = False, True
+    report, _ = await rig.run(("settings.bluetooth_device", {"device": "mx keys"}))
+    assert report.lines() == ["✔ MX Keys is connected"]
+    report, _ = await rig.run(("settings.bluetooth_device", {"device": "mx keys", "connect": False}))
+    assert report.lines() == ["✔ MX Keys is disconnected"] and rig.system.bt_connected == []
+
+
+@pytest.mark.anyio
+async def test_bluetooth_device_not_paired(rig: Rig) -> None:
+    report, _ = await rig.run(("settings.bluetooth_device", {"device": "speaker"}))
+    assert report.lines()[0].startswith("✖ No paired Bluetooth device matches 'speaker' — pair it once")
