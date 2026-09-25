@@ -39,6 +39,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-24 | `qwen3.5:4b` | clearer rules, app labels, request-word safety nets | **19 / 20** | shortened "VS Code" to "code" and opened Code - OSS without asking |
 | 2026-09-24 | `qwen3.5:4b` | resolve the user's own fuller phrase ("VS Code") over the model's shortened one | **20 / 20** | — |
 | 2026-09-25 | `qwen3.5:4b` | after the first real-desktop fixes (hidden helper entries, terminals open new windows, answers to questions) | **18 / 20**, then 2 / 2 re-run | the first two cases timed out while the model loaded on a CPU busy with the test suite; both passed when re-run — no planning failures |
+| 2026-09-25 | `qwen3.5:4b` | v2 suite (26 cases): web tools, `unsupported` parts, SONU's own terminal ignored | **26 / 26** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that
