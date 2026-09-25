@@ -33,6 +33,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-24 | `qwen3.5:4b` | first prompt | **15 / 20** | ignored title words; dropped "all"; "take me to X" planned as a move; rewrote "code" as "VS Code"; decided "there is no browser" in the injection case (it did *not* close anything) |
 | 2026-09-24 | `qwen3.5:4b` | clearer rules, app labels, request-word safety nets | **19 / 20** | shortened "VS Code" to "code" and opened Code - OSS without asking |
 | 2026-09-24 | `qwen3.5:4b` | resolve the user's own fuller phrase ("VS Code") over the model's shortened one | **20 / 20** | — |
+| 2026-09-25 | `qwen3.5:4b` | after the first real-desktop fixes (hidden helper entries, terminals open new windows, answers to questions) | **18 / 20**, then 2 / 2 re-run | the first two cases timed out while the model loaded on a CPU busy with the test suite; both passed when re-run — no planning failures |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that
@@ -42,6 +43,8 @@ asks.
 
 - 20 cases is a smoke test, not a benchmark. Passing all of them means "no known gaps", not "always right".
 - Temperature 0 makes runs close to deterministic, but not guaranteed identical across Ollama versions or hardware.
+- A timeout is reported as an error, not a pass: on slow hardware, re-run the failing cases (`-c <id>`) before
+  reading anything into them.
 - The fake desktop models real Hyprland behaviour (single-instance hand-off, misplaced windows, silent "ok" on an
   unmatched selector), but real apps can still surprise it — that's what `pytest -m hyprland` and real use are for.
 - To add a case: append it to `cases.toml`, add its golden plan to `tests/unit/test_evals.py`, and run the eval
