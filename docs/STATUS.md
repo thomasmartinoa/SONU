@@ -34,8 +34,8 @@ _Last update: 2026-09-25_
 
 ### Eval suite
 
-`qwen3.5:4b`: **34 / 34** on the v3 suite, incl. 8 settings cases (CPU container; pass/fail only). History in
-[`evals.md`](evals.md).
+`qwen3.5:4b`: **40 / 40** on the v4 suite (CPU container; pass/fail only). History, including the runs that failed
+while the prompt wording settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
 

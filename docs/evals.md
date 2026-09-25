@@ -53,12 +53,19 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-25 | `qwen3.5:4b` | v2 suite (26 cases): web tools, `unsupported` parts, SONU's own terminal ignored | **26 / 26** | — |
 | 2026-09-25 | `qwen3.5:4b` | v3 suite (34 cases): system settings | **33 / 34** | "set the volume to 30 and mute the mic" muted the *speaker* (`target` defaulted to speaker) — verified as a speaker mute, so it would have looked done |
 | 2026-09-25 | `qwen3.5:4b` | `target` required (speaker or mic), a mic example | **34 / 34** | — |
+| 2026-09-25 | `qwen3.5:4b` | v4 suite (40 cases): honest "play <song>", Wi-Fi/Bluetooth connect | **38 / 40** | refused to open Bluetooth Manager ("cannot"); added an unasked "can't join a new network" to a working connect |
+| 2026-09-25 | `qwen3.5:4b` | "do every part you can; list only what was asked" | **37 / 40** | decided by itself that Wi-Fi networks weren't saved; left `site: youtube` out of a YouTube search |
+| 2026-09-25 | `qwen3.5:4b` | never decide a network/device is missing; search the one site the user named | **39 / 40** | opened Bluetooth Manager for "pair my headphones" and reported done (pairing wasn't listed as impossible any more) |
+| 2026-09-25 | `qwen3.5:4b` | pairing listed again; "opening an app is not doing the task in it" | **40 / 40** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that
 asks.
 
 ## Reading the results honestly
+
+- Small models react strongly to wording: each rule change above fixed one case and broke another until the
+  wording settled. Always re-run the **whole** suite after touching the prompt, never only the failing case.
 
 - 20 cases is a smoke test, not a benchmark. Passing all of them means "no known gaps", not "always right".
 - Temperature 0 makes runs close to deterministic, but not guaranteed identical across Ollama versions or hardware.
