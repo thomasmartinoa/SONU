@@ -202,11 +202,13 @@ Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "step
 - kind "steps": the request needs actions. message: one short sentence about what the steps do.
 - kind "ask": something essential is missing or unclear. message: your question. steps: [].
 - kind "reply": chat or a question you can answer without acting. message: the answer. steps: [].
-- kind "cannot": no tool can do any of it. message: say so briefly. steps: [].
-- unsupported: the parts of the request that no tool below can do, in the user's words (for \
-example typing text, clicking or scrolling inside an app, files, joining a new Wi-Fi network, \
-pairing a new Bluetooth device, choosing a particular song or video to play). Do the parts you \
-can and list the rest here; never force a tool to do something it can't. Usually [].
+- kind "cannot": no tool can do any part of it. message: say so briefly. steps: []. If one part \
+can be done, use "steps" for it and put the rest in unsupported.
+- unsupported: the parts the user actually asked for that no tool below can do, in the user's \
+words; never things they didn't ask for. No tool can type text, click or scroll inside an app, \
+handle files, join a new Wi-Fi network, pair a new Bluetooth device or choose a particular song or \
+video to play. Do the parts you can and list the rest here; never force a tool to do something \
+it can't. Usually [].
 
 Tools:
 {tools}
