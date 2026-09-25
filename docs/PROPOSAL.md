@@ -321,6 +321,8 @@ Request: *"Open VS Code and Chromium, put VS Code on workspace 3 and Chromium on
    Entity resolution is **deterministic**: "VS Code" → the installed desktop entry (e.g. `code-oss.desktop`).
    If two builds are installed, SONU uses your stored preference or asks.
    If VS Code is already open, the tool follows your preference (reuse & move vs. open a new window).
+   Terminals are the exception: "open kitty" always opens another terminal, so SONU never moves the terminal
+   you are typing in (found on the author's desktop).
 3. **Policy** — `apps.launch` is *low risk* (spawns a process, creates a window) → allowed in the default mode.
    The plan is shown in `--explain` / `--dry-run`.
 4. **Execute** — s1 and s2 are independent → run concurrently. Each uses event-driven placement (§2.2).

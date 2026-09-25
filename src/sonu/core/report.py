@@ -13,7 +13,9 @@ from sonu.core.planning import Plan
 from sonu.policy.engine import PolicyDecision
 from sonu.tools.base import StepStatus, ToolOutcome
 
-TaskStatus = Literal["done", "planned", "partial", "failed", "needs-input", "ask", "reply", "cannot", "error"]
+TaskStatus = Literal[
+    "done", "planned", "partial", "failed", "declined", "needs-input", "ask", "reply", "cannot", "error"
+]
 
 ICONS = {
     StepStatus.DONE: "✔",
@@ -35,6 +37,11 @@ class StepRecord:
     decision: PolicyDecision | None = None
     # The value the user picked when the step asked (a desktop id or window address), if any.
     choice: str | None = None
+
+    @property
+    def asked(self) -> bool:
+        """The step needed the user's approval (so a DENIED step means "not approved", not "forbidden")."""
+        return self.decision is not None and self.decision.verdict == "confirm"
 
     def audit_data(self) -> dict[str, Any]:
         return {
@@ -80,6 +87,8 @@ class TaskReport:
             return "done"
         if StepStatus.DONE in statuses:
             return "partial"
+        if all(record.outcome.status is StepStatus.DENIED and record.asked for record in self.steps):
+            return "declined"
         return "failed"
 
     @property
@@ -144,6 +153,7 @@ class TaskReport:
             "planned": "Dry run — nothing was changed",
             "partial": "Partly done — see the steps below",
             "failed": "Not done",
+            "declined": "Nothing changed — not approved",
             "needs-input": "I need an answer before continuing",
             "ask": "Question",
             "reply": "SONU",

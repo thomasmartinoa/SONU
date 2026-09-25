@@ -91,6 +91,15 @@ def _resolve_app(app: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
     return resolution.entry
 
 
+def _is_terminal(entry: AppEntry) -> bool:
+    return "TerminalEmulator" in entry.categories
+
+
+def _short(text: str, limit: int = 48) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
 def _chosen_app(desktop_id: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
     entry = ctx.resolver.catalog.by_id(desktop_id)
     if entry is None:
@@ -106,6 +115,7 @@ def _target_windows(
     *,
     verb: str,
     choice: str | None,
+    already_at: str | None = None,
 ) -> tuple[Window, ...] | ToolOutcome:
     """The window(s) a move/close step means — or a question with the matching windows as choices."""
     match = find_windows(target, snapshot, ctx)
@@ -117,10 +127,20 @@ def _target_windows(
         chosen = tuple(window for window in match.windows if window.address == choice)
         return chosen or ToolOutcome(StepStatus.FAILED, "The window you picked is no longer open")
     windows = _pick(match.windows, target, all_, ctx)
+    if already_at is not None and len(windows) > 1:
+        # Moving a window to where it already is changes nothing: only the others are candidates.
+        elsewhere = tuple(w for w in windows if w.workspace.name != already_at)
+        windows = elsewhere or windows
     if len(windows) > 1 and not (all_ or wants_all(ctx.request_text)):
+        active = snapshot.active_window
         shown = windows[:MAX_CHOICES]
         options = tuple(
-            Choice(window_label(w) + (f" — {w.title[:60]}" if w.title else ""), w.address) for w in shown
+            Choice(
+                window_label(w, focused=active is not None and w.address == active.address)
+                + (f" — {_short(w.title)}" if w.title else ""),
+                w.address,
+            )
+            for w in shown
         )
         return ToolOutcome(
             StepStatus.NEEDS_INPUT,
@@ -166,7 +186,7 @@ class LaunchApp(Tool):
     name = "apps.launch"
     description = (
         "Open an installed app, optionally on a workspace. If the app is already open, its existing window "
-        "is moved there (or focused) instead, unless new_window is true."
+        "is moved there (or focused) instead, unless new_window is true. Terminals always open a new window."
     )
     risk = Risk.LOW
     effects = frozenset({Effect.APP_LAUNCH, Effect.WINDOW_MOVE, Effect.WINDOW_FOCUS})
@@ -189,7 +209,9 @@ class LaunchApp(Tool):
             for window in snapshot.windows
             if window_matches(entry, (window.window_class, window.initial_class), ctx.learned(entry))
         ]
-        if existing and not a.new_window and ctx.settings.apps.reuse_existing:
+        # A terminal is opened fresh: "open kitty" means another terminal, never the one you're typing in.
+        reuse = ctx.settings.apps.reuse_existing and not a.new_window and not _is_terminal(entry)
+        if existing and reuse:
             window = snapshot.by_recency(existing)[0]
             if target and window.workspace.name != target.value:
                 return Prepared(
@@ -350,7 +372,9 @@ class MoveWindow(Tool):
         if isinstance(target, ToolOutcome):
             return target
         target = _require(target, "workspace")
-        windows = _target_windows(a.window, a.all, ctx, snapshot, verb="move", choice=choice)
+        windows = _target_windows(
+            a.window, a.all, ctx, snapshot, verb="move", choice=choice, already_at=target.value
+        )
         if isinstance(windows, ToolOutcome):
             return windows
         labels = ", ".join(window_label(w) for w in windows)
