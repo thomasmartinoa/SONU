@@ -51,6 +51,7 @@ sonu move kitty to workspace 3                # several kitty windows? only asks
 sonu search youtube for networkchuck          # web searches and sites open in your browser, verified
 sonu turn on bluetooth and set the volume to 40
 sonu pause the music · sonu switch to battery saver mode · sonu "how much battery is left?"
+sonu play faded on youtube · sonu remind me in 20 minutes to stretch · sonu screenshot this window
 sonu open chrome on 3 and go to github.com
 sonu prompt                                   # a text box for keybinds; result as a notification
 ```
@@ -82,6 +83,7 @@ the `SUPER+SPACE` menu entry and notifications.
 
 - [Project status](docs/STATUS.md) — what works, what's next, open questions, history
 - [Decision log](docs/DECISIONS.md) — every decision and why
+- [Capabilities](docs/CAPABILITIES.md) — everything SONU can do, and everything planned, with how
 - [Design proposal](docs/PROPOSAL.md) — research, architecture, roadmap
 - [hypr-dotfiles integration](docs/integrations/hypr-dotfiles.md) — keybind, menu entry, notifications
 - [Evals](docs/evals.md) — how planner models are scored, and the results so far

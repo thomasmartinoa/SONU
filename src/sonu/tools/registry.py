@@ -13,6 +13,8 @@ from typing import Any
 
 from sonu.tools.base import Tool
 from sonu.tools.desktop_tools import DEFAULT_TOOLS
+from sonu.tools.everyday_tools import EVERYDAY_TOOLS
+from sonu.tools.media_tools import MEDIA_TOOLS
 from sonu.tools.settings_tools import SETTINGS_TOOLS
 from sonu.tools.web_tools import WEB_TOOLS
 
@@ -39,7 +41,10 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 class ToolRegistry:
-    def __init__(self, tools: Iterable[Tool] = (*DEFAULT_TOOLS, *WEB_TOOLS, *SETTINGS_TOOLS)) -> None:
+    def __init__(
+        self,
+        tools: Iterable[Tool] = (*DEFAULT_TOOLS, *WEB_TOOLS, *MEDIA_TOOLS, *SETTINGS_TOOLS, *EVERYDAY_TOOLS),
+    ) -> None:
         self._tools = {tool.name: tool for tool in tools}
 
     def get(self, name: str) -> Tool | None:

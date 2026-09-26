@@ -51,6 +51,8 @@ class Effect(StrEnum):
     SETTINGS_CHANGE = "settings.change"  # volume, brightness, radios, power mode
     MEDIA_CONTROL = "media.control"
     SYSTEM_READ = "system.read"
+    SCHEDULE = "schedule"  # something happens later (a reminder)
+    SCREEN_CAPTURE = "screen.capture"
 
 
 class StepStatus(StrEnum):

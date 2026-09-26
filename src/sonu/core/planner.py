@@ -156,20 +156,41 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
         },
     ),
     (
-        "play bohemian rhapsody on youtube",
+        "put on some lofi beats",
         {
             "kind": "steps",
-            "message": "Searching YouTube for Bohemian Rhapsody. I can't start the video myself yet.",
-            "steps": [{"tool": "web.search", "args": {"site": "youtube", "query": "bohemian rhapsody"}}],
-            "unsupported": ["start playing it"],
+            "message": "Playing lofi beats from YouTube.",
+            "steps": [{"tool": "media.play", "args": {"query": "lofi beats"}}],
         },
     ),
     (
-        "play some lofi",
+        "remind me in 20 minutes to stretch and dim the screen",
         {
-            "kind": "cannot",
-            "message": "I can't pick songs yet. I can play or pause your player, or search YouTube.",
-            "steps": [],
+            "kind": "steps",
+            "message": "Setting a reminder for 20 minutes and dimming the screen.",
+            "steps": [
+                {"tool": "reminders.set", "args": {"text": "stretch", "in_minutes": 20}},
+                {"tool": "settings.brightness", "args": {"change": -20}},
+            ],
+        },
+    ),
+    (
+        "screenshot this window and turn on the night light",
+        {
+            "kind": "steps",
+            "message": "Taking a screenshot of the window and turning on the night light.",
+            "steps": [
+                {"tool": "screen.capture", "args": {"what": "window"}},
+                {"tool": "desktop.shell", "args": {"action": "night_light_on"}},
+            ],
+        },
+    ),
+    (
+        "how hot is my laptop running?",
+        {
+            "kind": "steps",
+            "message": "Checking the laptop's health.",
+            "steps": [{"tool": "system.status", "args": {"what": ["temperature", "cpu", "gpu"]}}],
         },
     ),
     ("open it", {"kind": "ask", "message": "Which app should I open?", "steps": []}),
@@ -206,8 +227,8 @@ Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "step
 can be done, use "steps" for it and put the rest in unsupported.
 - unsupported: the parts the user actually asked for that no tool below can do, in the user's \
 words; never things they didn't ask for. No tool can type text, click or scroll inside an app, \
-handle files, pair a new Bluetooth device or choose a particular song or video to play. Do the \
-parts you can and list the rest here; opening an app is not doing the task in it. Usually [].
+handle files, pair a new Bluetooth device or play something on Spotify or Apple Music by name. Do \
+the parts you can and list the rest here; opening an app is not doing the task in it. Usually [].
 
 Tools:
 {tools}
@@ -222,9 +243,10 @@ says move, put or send.
 - Words from a window's title ("the GitHub window") go in title_contains, not in app.
 - Volume, mic, brightness, Bluetooth, Wi-Fi, media and power mode have their own tools; \
 "what's my …" / "is … on?" is system.status.
-- media.control only plays, pauses or skips what is already in the player. "Play <a song, artist \
-or video>" can't be done with it: say so (on YouTube: web.search it, and list starting it as \
-unsupported).
+- "Play <a song, artist or video>" is media.play (it plays it from YouTube). media.control only \
+plays, pauses or skips what is already playing.
+- Reminders and timers are reminders.set; screenshots are screen.capture; night light, keeping the \
+screen awake, do-not-disturb, clearing notifications and locking are desktop.shell.
 - apps.launch only opens installed apps. A website (YouTube, GitHub, a link) is web.open; \
 searching one is web.search with the user's own words as the query. If the user named a \
 browser, pass it as browser.

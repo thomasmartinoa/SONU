@@ -142,6 +142,8 @@ class FakeHyprland:
         self.windows: list[dict[str, Any]] = []
         self.monitors: list[dict[str, Any]] = [make_monitor()]
         self.active_address: str | None = None
+        # Called with every http(s) link a fake browser is started with (e.g. FakeSystem.page_opened).
+        self.on_url: Callable[[str], None] | None = None
         self.requests: list[str] = []
         self.dispatch_handler: Callable[[str], str] | None = None
         # Launch simulation: argv[0] basename -> behaviour. Unknown commands open nothing.
@@ -337,6 +339,8 @@ class FakeHyprland:
             return "ok"  # real Hyprland reports ok even if the program fails to start
         rule_workspace = int(parsed.workspace) if parsed.workspace else None
         url = next((arg for arg in argv[1:] if arg.startswith(("https://", "http://"))), None)
+        if url and self.on_url is not None:
+            self.on_url(url)
         running = sorted(self.windows_of_class(app.window_class), key=lambda w: w["focusHistoryID"])
         if url and running:
             self._background(self._load_page(app, running[0], url))

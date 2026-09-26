@@ -26,6 +26,16 @@ PACKAGES: dict[str, str] = {
     "nmcli": "networkmanager",
     "playerctl": "playerctl",
     "powerprofilesctl": "power-profiles-daemon",
+    "yt-dlp": "yt-dlp",
+    "grim": "grim",
+    "slurp": "slurp",
+    "wl-copy": "wl-clipboard",
+    "wl-paste": "wl-clipboard",
+    "systemd-run": "systemd",
+    "systemctl": "systemd",
+    "notify-send": "libnotify",
+    "qs": "quickshell",
+    "nvidia-smi": "nvidia-utils",
 }
 
 
@@ -62,7 +72,14 @@ class CommandResult:
 class CommandRunner(Protocol):
     def available(self, program: str) -> bool: ...
 
-    async def run(self, argv: Sequence[str], *, timeout_s: float = DEFAULT_TIMEOUT_S) -> CommandResult: ...
+    async def run(
+        self,
+        argv: Sequence[str],
+        *,
+        timeout_s: float = DEFAULT_TIMEOUT_S,
+        input_bytes: bytes | None = None,
+        capture: bool = True,
+    ) -> CommandResult: ...
 
 
 class SubprocessRunner:
@@ -72,25 +89,35 @@ class SubprocessRunner:
     def available(self, program: str) -> bool:
         return self.which(program) is not None
 
-    async def run(self, argv: Sequence[str], *, timeout_s: float = DEFAULT_TIMEOUT_S) -> CommandResult:
+    async def run(
+        self,
+        argv: Sequence[str],
+        *,
+        timeout_s: float = DEFAULT_TIMEOUT_S,
+        input_bytes: bytes | None = None,
+        capture: bool = True,
+    ) -> CommandResult:
+        """``capture=False`` for programs that fork a background helper (wl-copy): the helper would
+        keep our output pipes open, so their output goes to /dev/null and only the exit is awaited."""
         path = self.which(argv[0])
         if path is None:
             raise ProgramMissing(argv[0])
         env = {**os.environ, "LC_ALL": "C", "LANG": "C"}
+        output = asyncio.subprocess.PIPE if capture else asyncio.subprocess.DEVNULL
         try:
             process = await asyncio.create_subprocess_exec(
                 path,
                 *argv[1:],
-                stdin=asyncio.subprocess.DEVNULL,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+                stdin=asyncio.subprocess.PIPE if input_bytes is not None else asyncio.subprocess.DEVNULL,
+                stdout=output,
+                stderr=output,
                 env=env,
             )
         except OSError as exc:
             raise CommandError(f"Couldn't start {argv[0]}: {exc}") from exc
         try:
             async with asyncio.timeout(timeout_s):
-                out, err = await process.communicate()
+                out, err = await process.communicate(input_bytes)
         except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 process.kill()
@@ -99,6 +126,6 @@ class SubprocessRunner:
         return CommandResult(
             tuple(argv),
             process.returncode or 0,
-            out.decode("utf-8", errors="replace"),
-            err.decode("utf-8", errors="replace"),
+            (out or b"").decode("utf-8", errors="replace"),
+            (err or b"").decode("utf-8", errors="replace"),
         )

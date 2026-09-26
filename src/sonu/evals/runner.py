@@ -48,6 +48,19 @@ EVAL_APPS: dict[str, FakeApp] = {
 ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty"}
 
 
+# FakeSystem properties an eval may check besides its fields.
+_SYSTEM_PROPERTIES = {
+    "brightness",
+    "bt_connected",
+    "videos_playing",
+    "reminders",
+    "night_light",
+    "keep_awake",
+    "do_not_disturb",
+    "screenshots",
+}
+
+
 class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -89,7 +102,7 @@ class EvalCase(_Model):
     @field_validator("system", "expect_system")
     @classmethod
     def _known_fields(cls, value: dict[str, Any]) -> dict[str, Any]:
-        unknown = set(value) - set(FakeSystem.__dataclass_fields__) - {"brightness", "bt_connected"}
+        unknown = set(value) - set(FakeSystem.__dataclass_fields__) - _SYSTEM_PROPERTIES
         if unknown:
             raise ValueError(f"unknown system fields: {sorted(unknown)}")
         return value
@@ -169,7 +182,9 @@ def check_expectations(
             for w in fake.windows
             if w["class"] == expected.window_class
             and (expected.workspace is None or w["workspace"]["id"] == expected.workspace)
-            and (expected.title_contains is None or expected.title_contains in w["title"])
+            and (
+                expected.title_contains is None or expected.title_contains.casefold() in w["title"].casefold()
+            )
         ]
         wanted = expected.count
         if (wanted is None and not matches) or (wanted is not None and len(matches) != wanted):
@@ -224,6 +239,11 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
             catalog = AppCatalog.load(env, which=lambda name: f"/usr/bin/{name}")
             desktop = await HyprlandDesktop.connect(fake.instance)
             system = FakeSystem(**case.system)
+            fake.on_url = system.page_opened
+            sys_dir = workdir / "sys" / "class" / "thermal" / "thermal_zone0"
+            sys_dir.mkdir(parents=True, exist_ok=True)
+            (sys_dir / "type").write_text("x86_pkg_temp\n")
+            (sys_dir / "temp").write_text("61000\n")
             power_supply = workdir / "power_supply"
             if case.battery is not None:
                 (power_supply / "BAT1").mkdir(parents=True, exist_ok=True)
@@ -237,7 +257,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 default_terminal="kitty",
                 which=lambda name: f"/usr/bin/{name}",
                 ancestors=frozenset,
-                system=SystemControl(system, power_supply=power_supply),
+                system=SystemControl(system, power_supply=power_supply, sys=workdir / "sys", home=workdir),
             )
             engine = Engine(
                 planner=LLMPlanner(model),
