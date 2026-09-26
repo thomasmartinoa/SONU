@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv sync:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(uv run mypy:*)",
+      "Bash(uv run pytest:*)",
+      "Bash(uv run sonu doctor:*)",
+      "Bash(uv run sonu eval:*)",
+      "Bash(uv run sonu audit:*)",
+      "Bash(uv run sonu --dry-run:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(hyprctl -j clients)",
+      "Bash(hyprctl -j workspaces)",
+      "Bash(hyprctl -j monitors)",
+      "Bash(hyprctl -j activewindow)",
+      "Bash(hyprctl version)"
+    ],
+    "deny": [
+      "Bash(sudo:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push -u origin main:*)"
+    ]
+  }
+}

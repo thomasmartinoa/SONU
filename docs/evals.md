@@ -61,6 +61,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-25 | `qwen3.5:4b` | "do every part you can; list only what was asked" | **37 / 40** | decided by itself that Wi-Fi networks weren't saved; left `site: youtube` out of a YouTube search |
 | 2026-09-25 | `qwen3.5:4b` | never decide a network/device is missing; search the one site the user named | **39 / 40** | opened Bluetooth Manager for "pair my headphones" and reported done (pairing wasn't listed as impossible any more) |
 | 2026-09-25 | `qwen3.5:4b` | pairing listed again; "opening an app is not doing the task in it" | **40 / 40** | — |
+| 2026-09-25 | `qwen3.5:4b` | v5 suite (46 cases): play on YouTube, reminders, screenshots, the rice's switches, laptop health | **45 / 46**, then 3 / 3 re-run | "search youtube for networkchuck" searched for "NetworkChuck" — right, but the eval compared window titles case-sensitively. The check now ignores case; the case and both play cases passed when re-run (after two timeouts while the model loaded) |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

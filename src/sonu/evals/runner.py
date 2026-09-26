@@ -182,7 +182,9 @@ def check_expectations(
             for w in fake.windows
             if w["class"] == expected.window_class
             and (expected.workspace is None or w["workspace"]["id"] == expected.workspace)
-            and (expected.title_contains is None or expected.title_contains in w["title"])
+            and (
+                expected.title_contains is None or expected.title_contains.casefold() in w["title"].casefold()
+            )
         ]
         wanted = expected.count
         if (wanted is None and not matches) or (wanted is not None and len(matches) != wanted):

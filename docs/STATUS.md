@@ -13,7 +13,8 @@ _Last update: 2026-09-25_
 | M0 Foundations | ✅ done — doctor, config, audit log, Hyprland IPC, Ollama client |
 | M1 Verified window operator | ✅ done and **in daily use on the owner's laptop** |
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
-| M2 Daemon + memory | ⏭ **next** — faster replies (model stays loaded), journal, "remember …" |
+| Capability batch 1 | 🧪 built — play on YouTube, reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md)); to try on the laptop |
+| M2 Daemon + memory | ⏭ after batch 2 — faster replies (model stays loaded), journal, "remember …" |
 | M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -34,8 +35,9 @@ _Last update: 2026-09-25_
 
 ### Eval suite
 
-`qwen3.5:4b`: **40 / 40** on the v4 suite (CPU container; pass/fail only). History, including the runs that failed
-while the prompt wording settled, in [`evals.md`](evals.md).
+`qwen3.5:4b`: **46 / 46** on the v5 suite (45 / 46 on the first run: the eval's own title check was case-sensitive;
+fixed and re-run). CPU container; pass/fail only. History, including the runs that failed while the prompt wording
+settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
 
@@ -53,9 +55,8 @@ Every change is **read back and verified**, using the same programs as the owner
 | power mode | `powerprofilesctl` | `powerprofilesctl get` | low |
 | status: volume, mic, brightness, Bluetooth, Wi-Fi, media, power mode, battery | the same + sysfs | — | read-only |
 
-Not possible yet, and reported as such: picking a particular song or video ("play Faded" — SONU can search YouTube
-for it but not start it), joining a **new** Wi-Fi network (needs its password), pairing a **new** Bluetooth device.
-Later candidates: night light (`hyprsunset`), do-not-disturb, keyboard backlight.
+Not possible yet, and reported as such: joining a **new** Wi-Fi network (needs its password), pairing a **new**
+Bluetooth device. Playing a particular song, the night light and do-not-disturb came in batch 1 (below).
 
 Verified on the laptop after #8: connecting a saved network by a loose name ("paulkt_5g" → "Paul_KT_5G", asked
 first), refusing an unknown one ("hithere").
@@ -83,10 +84,21 @@ sonu turn on the night light and do not disturb me
 sonu "how is my laptop doing?"
 ```
 
-## Next: M2 — daemon + memory
+## Next steps (in order)
 
-Faster replies (the model stays loaded; no process start per request), the activity journal (30-day retention),
-"remember …" preferences (e.g. "use Code - OSS from now on"), layouts. Plan in [`PROPOSAL.md`](PROPOSAL.md#8-roadmap).
+1. **The owner tries batch 1 on the laptop** (commands above). Every finding becomes a regression test, a fix and a
+   row in the table at the bottom.
+2. **Batch 2** — the ⏭ items in [`CAPABILITIES.md`](CAPABILITIES.md), roughly in this order:
+   - windows: fullscreen, floating, pin; "put X and Y side by side" (check the Lua dispatcher names in Hyprland
+     0.56's source first);
+   - open a folder or file ("open my downloads"), "open my last download";
+   - "what's playing?", list and cancel reminders, the rice's volume/brightness popup after SONU changes them;
+   - clipboard (read-only answer, never sent anywhere), wallpaper and theme through the rice;
+   - Spotify by name; local music with `mpv`;
+   - suspend / reboot / shut down (high risk, always asks); screen recording.
+3. **M2 — daemon + memory**: faster replies (the model stays loaded; no process start per request), the activity
+   journal (30-day retention), "remember …" preferences (e.g. "use Code - OSS from now on"), layouts. Plan in
+   [`PROPOSAL.md`](PROPOSAL.md#8-roadmap).
 
 ## Open questions and known issues
 
@@ -118,7 +130,7 @@ Faster replies (the model stays loaded; no process start per request), the activ
 | [#6](https://github.com/thomasmartinoa/SONU/pull/6) | 2026-09-25 | Web steps use the browser the request opened; unobserved pages are "unverified"; Ctrl+C message |
 | [#7](https://github.com/thomasmartinoa/SONU/pull/7) | 2026-09-25 | Two-phase page check (slow pages), `site:` operator, `CLAUDE.md` / `STATUS.md` / `DECISIONS.md`, **M1.5 system settings** |
 | [#8](https://github.com/thomasmartinoa/SONU/pull/8) | 2026-09-25 | Honest "play <song>"; connect to saved Wi-Fi networks and paired Bluetooth devices; M1.5 verified on the laptop |
-| #9 | open | `CAPABILITIES.md`; batch 1: play on YouTube, reminders, screenshots, rice switches, laptop health |
+| #9 | open | `CAPABILITIES.md`; batch 1: play on YouTube, reminders, screenshots, rice switches, laptop health; eval suite v5; notes for Claude Code on the laptop |
 
 ### Found on real hardware → fixed
 

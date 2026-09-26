@@ -71,6 +71,28 @@ Typed pydantic `Args` (`extra="forbid"`) · `risk` + `effects` · `prepare()` re
 the model needs one (tests validate every example) · an eval case + golden plan (`tests/unit/test_evals.py`) · a
 threat-model row if it adds a new risk · `docs/STATUS.md`.
 
+## Working on the owner's laptop
+
+Claude Code also runs on the owner's laptop (the real Arch + Hyprland machine), which can check what the cloud
+container can't:
+
+- `uv run pytest -m "hyprland or ollama"` (read-only checks against the real desktop and Ollama), and `sonu eval` on
+  the GPU (minutes instead of an hour).
+- `uv run sonu doctor`, `uv run sonu --dry-run <request>`, `uv run sonu audit tail`, `hyprctl -j clients`. Use
+  `uv run sonu` for the branch's code; the owner's everyday `sonu` is the `uv tool install` copy of `main`.
+- Real-hardware findings directly: reproduce, then write the regression test ("found on real hardware").
+- The rice's real names (Quickshell IPC functions, Hyprland config): read `~/.config/quickshell`, `~/.config/hypr` or
+  the hypr-dotfiles clone. Never edit the owner's dotfiles from a SONU session.
+
+Rules there:
+
+- A real `sonu` request acts on the owner's real desktop. `--dry-run` first. Run one for real only when the owner
+  asked, or when it's harmless and undone at once (open an app, change the volume and set it back). Never turn off
+  Wi-Fi, close windows, lock the screen, suspend or send anything anywhere unless the owner said so in the session.
+- No `sudo`: when a package is missing, tell the owner the `pacman` command.
+- Same workflow as everywhere: a feature branch, a PR, the owner merges. `.claude/settings.json` pre-approves the
+  build/test commands and refuses `sudo` and pushes to `main`.
+
 ## The owner's machine
 
 Acer Nitro · Arch · Hyprland 0.56.2 (Lua config) · RTX 3070 Ti Laptop 8 GB · 32 GB RAM · Ollama (`qwen3.5:4b`) ·

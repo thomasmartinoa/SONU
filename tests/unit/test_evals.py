@@ -116,6 +116,12 @@ async def test_wrong_plans_fail_with_reasons(tmp_path: Path) -> None:
     assert not result.passed
     assert any("VSCodium should not be open" in failure for failure in result.failures)
 
+    # The words' case doesn't matter: the model may keep the capitals of a name (seen in a real-model run).
+    site = cases["site-search"]
+    capitals = steps(("web.search", {"query": "NetworkChuck", "site": "youtube"}))
+    result = await run_case(site, ScriptedChatModel({site.request: capitals}), tmp_path / "c")
+    assert result.passed, result.failures
+
 
 def test_eval_cli_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, xdg_env: dict[str, str]) -> None:
     import json
