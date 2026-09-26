@@ -82,6 +82,11 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "wifi-connect-saved": steps(("settings.wifi_connect", {"network": "hithere"})),
     "wifi-connect-new": steps(("settings.wifi_connect", {"network": "cafe"})),
     "headphones-connect": steps(("settings.bluetooth_device", {"device": "headphones"})),
+    "dnd-off-keeps-notifications": steps(
+        ("desktop.shell", {"action": "night_light_off"}), ("desktop.shell", {"action": "do_not_disturb_off"})
+    ),
+    "how-is-my-laptop": steps(("system.status", {"what": ["health"]})),
+    "play-with-a-title-on-screen": steps(("media.play", {"query": "faded", "browser": "chromium"})),
 }
 
 

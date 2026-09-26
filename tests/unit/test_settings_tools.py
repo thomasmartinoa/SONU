@@ -21,6 +21,7 @@ from sonu.system import (
     parse_volume,
     pick_backlight,
 )
+from sonu.system.commands import program_env
 from sonu.testing.fake_hyprland import FakeHyprland
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
 from sonu.testing.fake_system import FakeSystem
@@ -66,6 +67,18 @@ async def test_real_runner_uses_argv_c_locale_and_explains_missing_programs() ->
         ProgramMissing, match=r"wpctl isn't installed \(install: sudo pacman -S wireplumber\)"
     ):
         await SubprocessRunner(which=lambda name: None).run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"])
+
+
+def test_programs_run_without_sonus_virtualenv() -> None:
+    # Found on real hardware: `uv run sonu "how is my laptop doing?"` → "Power mode: unknown
+    # (powerprofilesctl failed: ModuleNotFoundError: No module named 'gi')".
+    environ = {"PATH": "/home/u/SONU/.venv/bin:/usr/local/bin:/usr/bin", "VIRTUAL_ENV": "/home/u/SONU/.venv"}
+    env = program_env(environ, prefix="/home/u/SONU/.venv", base_prefix="/usr")
+    assert env["PATH"] == "/usr/local/bin:/usr/bin"
+    assert "VIRTUAL_ENV" not in env
+    assert (env["LC_ALL"], env["LANG"]) == ("C", "C")
+    # Not in a virtualenv (the system's Python): PATH is left alone.
+    assert program_env(environ, prefix="/usr", base_prefix="/usr")["PATH"] == environ["PATH"]
 
 
 # ---------------------------------------------------------------- the tools, end to end

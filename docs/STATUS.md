@@ -4,7 +4,7 @@ The living record of where SONU is: what works on real hardware, what's next, wh
 **Updated in every PR.** Design and research live in [`PROPOSAL.md`](PROPOSAL.md); decisions in
 [`DECISIONS.md`](DECISIONS.md).
 
-_Last update: 2026-09-25_
+_Last update: 2026-09-27_
 
 ## Where we are
 
@@ -13,7 +13,7 @@ _Last update: 2026-09-25_
 | M0 Foundations | ✅ done — doctor, config, audit log, Hyprland IPC, Ollama client |
 | M1 Verified window operator | ✅ done and **in daily use on the owner's laptop** |
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
-| Capability batch 1 | 🧪 built — play on YouTube, reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md)); to try on the laptop |
+| Capability batch 1 | ✅ tried on the laptop (2026-09-27) — reminders, screenshots, rice switches, laptop health work; **play on YouTube can't start or confirm playback yet** (below) ([`CAPABILITIES.md`](CAPABILITIES.md)) |
 | M2 Daemon + memory | ⏭ after batch 2 — faster replies (model stays loaded), journal, "remember …" |
 | M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
 
@@ -32,11 +32,15 @@ _Last update: 2026-09-25_
 - Partial requests are honest: "connect to wifi named hithere" turned Wi-Fi on and reported the rest as not possible
   (before `settings.wifi_connect` existed).
 - NitroSense key sends `XF86Launch1`.
+- Batch 1 (2026-09-27, Claude Code on the laptop, #10): reminder (timer fired, notification sent), screenshot of the
+  window (a real capture in `~/Pictures/screenshot/`), night light and do-not-disturb on/off, "how is my laptop
+  doing?" (CPU, memory, temperatures, GPU, disk, uptime), power mode. `play faded on youtube` found and opened the
+  right video but reported "couldn't confirm it's playing" — correctly: see the open questions.
 
 ### Eval suite
 
-`qwen3.5:4b`: **46 / 46** on the v5 suite (45 / 46 on the first run: the eval's own title check was case-sensitive;
-fixed and re-run). CPU container; pass/fail only. History, including the runs that failed while the prompt wording
+`qwen3.5:4b`: **49 / 49** on the v6 suite (2026-09-27, the laptop's GPU, ~1.1 s mean planning; 48 / 49 first: a
+prompt rule broke "go to youtube" and was dropped). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
@@ -61,7 +65,7 @@ Bluetooth device. Playing a particular song, the night light and do-not-disturb 
 Verified on the laptop after #8: connecting a saved network by a loose name ("paulkt_5g" → "Paul_KT_5G", asked
 first), refusing an unknown one ("hithere").
 
-## Now: capability batch 1 (built; to try on the laptop)
+## Capability batch 1 (tried on the laptop)
 
 The owner asked for the full map of what SONU could do — it's [`CAPABILITIES.md`](CAPABILITIES.md) — and for SONU
 to cover things without being asked one by one. Batch 1:
@@ -74,7 +78,7 @@ to cover things without being asked one by one. Batch 1:
 | `desktop.shell` | night light, keep awake, do-not-disturb, clear notifications, lock | the rice's Quickshell switches (`qs ipc call …`), each state read back |
 | `system.status` | + "how's my laptop?": CPU, memory, temperature, GPU, disk, uptime; Wi-Fi shows the network | `/proc`, `/sys`, `nvidia-smi` (read-only) |
 
-To try after merging (`sudo pacman -S --needed yt-dlp slurp wl-clipboard` first if `sonu doctor` lists them missing):
+Commands used to try it (all helper programs are installed on the laptop):
 
 ```sh
 sonu play faded on youtube                    # should say "Playing '…Faded…' on YouTube in Zen Browser"
@@ -86,8 +90,8 @@ sonu "how is my laptop doing?"
 
 ## Next steps (in order)
 
-1. **The owner tries batch 1 on the laptop** (commands above). Every finding becomes a regression test, a fix and a
-   row in the table at the bottom.
+1. **Play on YouTube** — decide how SONU starts and confirms playback on this laptop (open question below), then
+   re-try `sonu play faded on youtube`.
 2. **Batch 2** — the ⏭ items in [`CAPABILITIES.md`](CAPABILITIES.md), roughly in this order:
    - windows: fullscreen, floating, pin; "put X and Y side by side" (check the Lua dispatcher names in Hyprland
      0.56's source first);
@@ -112,8 +116,21 @@ sonu "how is my laptop doing?"
 - M1 exit criterion not yet measured formally: the VS Code + Chromium placement example in ≥ 9/10 runs.
 - **`sonu resume song` printed nothing at all** (2026-09-25, not reproduced yet): every path prints at least a line;
   `sonu audit tail` after running it again should show what happened.
-- Whether Zen/Firefox exposes YouTube to the media controls (MPRIS) on the owner's laptop decides if `media.play` can
-  confirm playback; if not, it reports "couldn't confirm it's playing" rather than done.
+- **Play on YouTube doesn't work on the laptop yet** (2026-09-27). Zen: the video opens **paused** (Firefox blocks
+  audible autoplay for pages opened from outside) and Firefox registers with the media controls (MPRIS) only while
+  something plays, so SONU can neither press play nor confirm it. Chromium: the video **plays** (it has a live audio
+  stream) but Chromium never appeared in the media controls either (`playerctl -l`: "No players found"). SONU
+  reports "couldn't confirm it's playing" in both cases — honest, but not useful. Options: (a) the owner allows
+  autoplay for youtube.com in Zen (site settings → Autoplay → Allow audio and video); (b) SONU checks playback from
+  the browser's PipeWire audio stream instead of MPRIS (works for Chromium today, and for Zen with (a)); (c) play
+  through `mpv` + `yt-dlp` instead of the browser (MPRIS via mpv, fully controllable). Also worth checking: does
+  Chromium show up in `playerctl -l` when YouTube is played by hand?
+- **"turn off the night light and do not disturb"** is read by `qwen3.5:4b` as "…and turn do-not-disturb **on**",
+  even with that exact sentence as a prompt example (tried and removed). The English is ambiguous; the report says
+  "Do-not-disturb is on", so it's visible. "turn off do not disturb" works (eval `dnd-off-keeps-notifications`).
+- The rice's night light: `Night.qml` polls `pgrep hyprsunset` the instant `hypr-nightlight off` returns, while
+  hyprsunset takes ~0.2 s to exit, so it shows "on" until its next 10-s poll. SONU now works around it (below); the
+  rice could wait for the process to exit in `off()` (for the owner's dotfiles — not edited from SONU).
 
 ## History
 
@@ -130,7 +147,8 @@ sonu "how is my laptop doing?"
 | [#6](https://github.com/thomasmartinoa/SONU/pull/6) | 2026-09-25 | Web steps use the browser the request opened; unobserved pages are "unverified"; Ctrl+C message |
 | [#7](https://github.com/thomasmartinoa/SONU/pull/7) | 2026-09-25 | Two-phase page check (slow pages), `site:` operator, `CLAUDE.md` / `STATUS.md` / `DECISIONS.md`, **M1.5 system settings** |
 | [#8](https://github.com/thomasmartinoa/SONU/pull/8) | 2026-09-25 | Honest "play <song>"; connect to saved Wi-Fi networks and paired Bluetooth devices; M1.5 verified on the laptop |
-| #9 | open | `CAPABILITIES.md`; batch 1: play on YouTube, reminders, screenshots, rice switches, laptop health; eval suite v5; notes for Claude Code on the laptop |
+| [#9](https://github.com/thomasmartinoa/SONU/pull/9) | 2026-09-27 | `CAPABILITIES.md`; batch 1: play on YouTube, reminders, screenshots, rice switches, laptop health; eval suite v5; notes for Claude Code on the laptop |
+| #10 | open | Batch 1 tried on the laptop: planner re-asks when a query isn't the user's words; night light off re-asked when the rice lags; helpers run without SONU's virtualenv; planner rules for laptop health, do-not-disturb off, play queries; eval suite v6 |
 
 ### Found on real hardware → fixed
 
@@ -154,3 +172,9 @@ sonu "how is my laptop doing?"
 | 09-25 | "play me faded" pressed play on whatever was loaded and said done | media.control can't pick songs: the planner must say so; eval cases (#8) |
 | 09-25 | "connect to wifi named hithere" — not possible yet (reported honestly) | `settings.wifi_connect` for saved networks; `settings.bluetooth_device` for paired devices (#8) |
 | 09-25 | "play faded on youtube" opened YouTube, then "No media player is running" | `media.play`: find, open, press play, check it's playing (#9) |
+| 09-27 | `uv run sonu` → "Power mode: unknown (powerprofilesctl failed: No module named 'gi')": the venv's Python ran the system script | system programs run without SONU's virtualenv on PATH (#10) |
+| 09-27 | "how is my laptop doing?" reported volume, brightness, Wi-Fi… instead of the laptop's health | planner rule → `what: ["health"]`; eval `how-is-my-laptop` (#10) |
+| 09-27 | "turn off the night light" → "✖ night light is on" although hyprsunset had stopped (the rice's status lags) | re-send on/off once if the state hasn't changed after 1 s (#10) |
+| 09-27 | "turn off … do not disturb" cleared all notifications (and a second time turned DND on) | planner rule: DND off is `do_not_disturb_off`, clearing only when asked; eval `dnd-off-keeps-notifications` (#10) |
+| 09-27 | "play faded on youtube in chromium" used "Alan Walker - Faded" (from Zen's window title) and was refused | the planner checks the user-words arguments and asks the model again ([D33](DECISIONS.md)); eval `play-with-a-title-on-screen` (#10) |
+| 09-27 | The plan's message said "Playing 'faded' by The Smashing Pumpkins" (made up) | prompt: media.play's query is the user's words only — the same request now says "Playing faded on YouTube" (a broader "never add facts" rule broke "go to youtube" in the evals and was dropped) (#10) |

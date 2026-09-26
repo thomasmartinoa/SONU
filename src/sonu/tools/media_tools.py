@@ -74,6 +74,7 @@ class PlayMedia(Tool):
     risk = Risk.LOW
     effects = frozenset({Effect.WEB_OPEN, Effect.MEDIA_CONTROL, Effect.APP_LAUNCH})
     Args = PlayArgs
+    grounded = ("query",)
 
     async def prepare(
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None

@@ -54,7 +54,7 @@ def fake_with(
 
 def test_every_example_is_a_valid_plan() -> None:
     for request, reply in EXAMPLES:
-        assert _problems(_PlanModel.model_validate(reply), REGISTRY) == [], request
+        assert _problems(_PlanModel.model_validate(reply), REGISTRY, request) == [], request
 
 
 def test_system_prompt_has_tools_rules_and_quoted_desktop() -> None:
@@ -119,6 +119,42 @@ async def test_repairs_bad_arguments_with_exact_errors() -> None:
     feedback = fake.chat_requests[1]["messages"][-1]["content"]
     assert "step 1 (apps.launch)" in feedback
     assert "application" in feedback
+
+
+@pytest.mark.anyio
+async def test_words_not_from_the_request_are_sent_back() -> None:
+    # Found on real hardware: with Zen showing "Alan Walker - Faded - YouTube", "play faded on
+    # youtube in chromium" was planned with that title as the query, and media.play refused it.
+    copied = {
+        "kind": "steps",
+        "message": "",
+        "steps": [{"tool": "media.play", "args": {"query": "Alan Walker - Faded", "browser": "chromium"}}],
+    }
+    fixed = {
+        "kind": "steps",
+        "message": "",
+        "steps": [{"tool": "media.play", "args": {"query": "faded", "browser": "chromium"}}],
+    }
+    fake = fake_with(copied, fixed)
+    plan = await make_planner(fake).plan("play faded on youtube in chromium", SNAPSHOT, REGISTRY)
+    assert plan.attempts == 2
+    assert plan.steps[0].args["query"] == "faded"
+    feedback = fake.chat_requests[1]["messages"][-1]["content"]
+    assert "step 1 (media.play): query must use only the user's own words" in feedback
+    assert "'alan', 'walker'" in feedback
+
+
+def test_site_operator_and_small_spelling_fixes_are_not_sent_back() -> None:
+    plan = _PlanModel.model_validate(
+        {
+            "kind": "steps",
+            "steps": [
+                {"tool": "web.search", "args": {"query": "dotfile site:github.com", "site": "web"}},
+                {"tool": "settings.wifi_connect", "args": {"network": "paulkt 5g"}},
+            ],
+        }
+    )
+    assert _problems(plan, REGISTRY, "search dotfiles in github and connect to paulkt 5g") == []
 
 
 @pytest.mark.anyio

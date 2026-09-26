@@ -8,6 +8,7 @@ anything is wrong, the model gets one chance to repair its answer with the exact
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Mapping
 from typing import Any, Literal
@@ -16,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from sonu.core.planning import Plan, PlannedStep, PlanningError
 from sonu.llm.chat import ChatMessage, ChatModel, ChatModelError
+from sonu.tools.grounding import ungrounded_words
 from sonu.tools.registry import MAX_STEPS, MAX_UNSUPPORTED, ToolRegistry
 from sonu.world.snapshot import WorldSnapshot
 
@@ -242,11 +244,15 @@ unknown: use the tool, and SONU checks the real computer.
 says move, put or send.
 - Words from a window's title ("the GitHub window") go in title_contains, not in app.
 - Volume, mic, brightness, Bluetooth, Wi-Fi, media and power mode have their own tools; \
-"what's my …" / "is … on?" is system.status.
-- "Play <a song, artist or video>" is media.play (it plays it from YouTube). media.control only \
-plays, pauses or skips what is already playing.
+"what's my …" / "is … on?" is system.status; "how is my laptop doing?" is system.status with \
+what ["health"].
+- "Play <a song, artist or video>" is media.play (it plays it from YouTube); its query is the \
+user's words only, and a browser they named goes in browser. media.control only plays, pauses or \
+skips what is already playing.
 - Reminders and timers are reminders.set; screenshots are screen.capture; night light, keeping the \
-screen awake, do-not-disturb, clearing notifications and locking are desktop.shell.
+screen awake, do-not-disturb, clearing notifications and locking are desktop.shell. "Turn off do \
+not disturb" is do_not_disturb_off; clear_notifications only when the user says clear or dismiss \
+notifications.
 - apps.launch only opens installed apps. A website (YouTube, GitHub, a link) is web.open; \
 searching one is web.search with the user's own words as the query. If the user named a \
 browser, pass it as browser.
@@ -290,7 +296,11 @@ def build_system_prompt(
     )
 
 
-def _problems(plan: _PlanModel, registry: ToolRegistry) -> list[str]:
+# web.search turns a "site:github.com" operator into its site itself, so it isn't the model's words.
+_SITE_OPERATOR = re.compile(r"\bsite:\S+", re.IGNORECASE)
+
+
+def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[str]:
     problems: list[str] = []
     if plan.kind == "steps" and not plan.steps:
         problems.append('kind is "steps" but there are no steps')
@@ -308,6 +318,19 @@ def _problems(plan: _PlanModel, registry: ToolRegistry) -> list[str]:
         except ValidationError as exc:
             details = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:3])
             problems.append(f"step {index + 1} ({step.tool}): {details}")
+            continue
+        for name in tool.grounded:
+            value = step.args.get(name)
+            if not isinstance(value, str):
+                continue
+            # Found on real hardware: "play faded on youtube in chromium" became "Alan Walker - Faded",
+            # copied from a window title. The tool refuses that; asking the model again fixes the plan.
+            if missing := ungrounded_words(_SITE_OPERATOR.sub(" ", value), request):
+                problems.append(
+                    f"step {index + 1} ({step.tool}): {name} must use only the user's own words; "
+                    f"{', '.join(repr(word) for word in missing)} are not in the request "
+                    "(keep the other arguments)"
+                )
     return problems
 
 
@@ -352,7 +375,7 @@ class LLMPlanner:
                 last_problem = f"not valid plan JSON ({exc.errors()[0]['msg']})"
                 problems = [last_problem]
             else:
-                problems = _problems(parsed, registry)
+                problems = _problems(parsed, registry, request)
                 if not problems or attempt == self.max_attempts:
                     # On the last attempt, hand over what we have: the engine reports bad steps
                     # individually instead of failing the whole request.

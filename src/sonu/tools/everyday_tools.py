@@ -36,10 +36,16 @@ def _missing(ctx: ToolContext, *programs: str) -> ToolOutcome | None:
     return None
 
 
-async def _settle(read: Callable[[], Awaitable[str]], ok: Callable[[str], bool], ctx: ToolContext) -> str:
+async def _settle(
+    read: Callable[[], Awaitable[str]],
+    ok: Callable[[str], bool],
+    ctx: ToolContext,
+    *,
+    within_s: float | None = None,
+) -> str:
     """Re-read a switch's state until it's what we asked for (e.g. hyprsunset takes a moment)."""
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + ctx.settings.verify.timeout_s
+    deadline = loop.time() + (ctx.settings.verify.timeout_s if within_s is None else within_s)
     while True:
         value = await read()
         if ok(value) or loop.time() >= deadline:
@@ -274,7 +280,18 @@ class DesktopShell(Tool):
         if prefix in _SWITCHES:
             target, label = _SWITCHES[prefix]
             await call(target, state)
-            status = await _settle(lambda: call(target, "status"), lambda s: s == state, ctx)
+            status = await _settle(
+                lambda: call(target, "status"),
+                lambda s: s == state,
+                ctx,
+                within_s=min(1.0, ctx.settings.verify.timeout_s / 2),
+            )
+            if status != state and "not installed" not in status:
+                # Found on real hardware: the rice reads whether hyprsunset runs the moment "off"
+                # returns, while hyprsunset is still exiting (~0.2 s), and then shows "on" until its
+                # next poll 10 s later. On and off are idempotent; asking again makes it look afresh.
+                await call(target, state)
+                status = await _settle(lambda: call(target, "status"), lambda s: s == state, ctx)
             if "not installed" in status:
                 return ToolOutcome(
                     StepStatus.FAILED, f"The {label} needs {status.replace(' not installed', '')}"

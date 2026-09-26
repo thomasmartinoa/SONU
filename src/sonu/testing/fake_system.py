@@ -85,6 +85,9 @@ class FakeSystem:
     shell: dict[str, str] = field(
         default_factory=lambda: {"nightlight": "off", "caffeine": "off", "dnd": "false", "lock": "unlocked"}
     )
+    # Switches whose status lags behind once, like the rice's night light (its status still says the
+    # old state after on/off until it's asked again).
+    stale_once: set[str] = field(default_factory=set)
     notifications: int = 3
     gpu_line: str = "12, 55, 4143, 8192"
     last_input: bytes | None = None
@@ -358,6 +361,9 @@ class FakeSystem:
         target, function = args[2], args[3]
         if target in ("nightlight", "caffeine"):
             if function in ("on", "off"):
+                if target in self.stale_once and self.shell[target] != function:
+                    self.stale_once.discard(target)
+                    return 0, "", ""
                 self.shell[target] = function
                 return 0, "", ""
             return 0, self.shell[target] + "\n", ""

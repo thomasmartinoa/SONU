@@ -227,6 +227,17 @@ async def test_do_not_disturb_reaches_the_asked_state_whatever_it_was(rig: Rig) 
 
 
 @pytest.mark.anyio
+async def test_night_light_off_is_asked_again_when_the_rice_shows_the_old_state(rig: Rig) -> None:
+    # Found on real hardware: "turn off the night light" stopped hyprsunset, but the rice's status
+    # said "on" for up to 10 s and SONU reported "night light is on".
+    rig.system.shell["nightlight"] = "on"
+    rig.system.stale_once.add("nightlight")
+    report = await rig.run("r", ("desktop.shell", {"action": "night_light_off"}))
+    assert report.lines() == ["✔ Night light is off"]
+    assert rig.system.night_light == "off"
+
+
+@pytest.mark.anyio
 async def test_night_light_needs_hyprsunset(rig: Rig) -> None:
     async def not_installed(target: str, function: str) -> str:
         return "hyprsunset not installed" if function == "status" else ""

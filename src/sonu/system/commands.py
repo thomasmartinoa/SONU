@@ -11,8 +11,10 @@ import asyncio
 import contextlib
 import os
 import shutil
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 DEFAULT_TIMEOUT_S = 5.0
@@ -82,6 +84,25 @@ class CommandRunner(Protocol):
     ) -> CommandResult: ...
 
 
+def program_env(
+    environ: dict[str, str] | None = None, *, prefix: str = sys.prefix, base_prefix: str = sys.base_prefix
+) -> dict[str, str]:
+    """The environment for system programs: the C locale, and none of SONU's own virtualenv.
+
+    Found on real hardware: under ``uv run`` the virtualenv's ``bin`` comes first on PATH, so
+    ``#!/usr/bin/env python3`` programs (powerprofilesctl) got SONU's Python instead of the
+    system's, without the modules they need ("No module named 'gi'").
+    """
+    env = dict(os.environ if environ is None else environ)
+    if prefix != base_prefix:  # running inside a virtualenv
+        venv_bin = (Path(prefix) / "bin").resolve()
+        paths = env.get("PATH", "").split(os.pathsep)
+        env["PATH"] = os.pathsep.join(p for p in paths if p and Path(p).resolve() != venv_bin)
+        env.pop("VIRTUAL_ENV", None)
+        env.pop("VIRTUAL_ENV_PROMPT", None)
+    return {**env, "LC_ALL": "C", "LANG": "C"}
+
+
 class SubprocessRunner:
     def __init__(self, which: Callable[[str], str | None] = shutil.which) -> None:
         self.which = which
@@ -102,7 +123,7 @@ class SubprocessRunner:
         path = self.which(argv[0])
         if path is None:
             raise ProgramMissing(argv[0])
-        env = {**os.environ, "LC_ALL": "C", "LANG": "C"}
+        env = program_env()
         output = asyncio.subprocess.PIPE if capture else asyncio.subprocess.DEVNULL
         try:
             process = await asyncio.create_subprocess_exec(
