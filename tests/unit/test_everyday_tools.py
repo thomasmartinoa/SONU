@@ -176,6 +176,17 @@ async def test_sound_from_another_app_doesnt_count(rig: Rig) -> None:
 
 
 @pytest.mark.anyio
+async def test_the_browser_the_user_named_is_used_when_the_plan_leaves_it_out(rig: Rig) -> None:
+    # Found on real hardware: "play faded on youtube in firefox" was planned without a browser and
+    # played in Zen (the default) — reported as done.
+    report = await rig.run("play faded in chromium", ("media.play", {"query": "faded"}), dry_run=True)
+    assert report.lines() == ["· would: Play 'faded' from YouTube in Chromium"]
+    # Two browsers named: SONU can't tell which one this step is for, so the default stays.
+    report = await rig.run("play faded in chromium or zen", ("media.play", {"query": "faded"}), dry_run=True)
+    assert report.lines() == ["· would: Play 'faded' from YouTube in Zen Browser"]
+
+
+@pytest.mark.anyio
 async def test_play_needs_yt_dlp_and_the_users_words(rig: Rig) -> None:
     report = await rig.run("play faded", ("media.play", {"query": "my private notes"}))
     assert "isn't in your request" in report.lines()[0]
