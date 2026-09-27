@@ -5,6 +5,9 @@
 2. That video's page opens in the browser.
 3. SONU finds the browser in the system media controls (MPRIS, the interface media keys use),
    presses play if the browser held the video back (autoplay rules), and checks it's playing.
+   A browser that isn't in the media controls (found on real hardware: Chromium, and Firefox/Zen
+   until something plays) counts as playing when it starts a *new* audio stream (PipeWire) from
+   its own process — sound that was already playing before SONU opened the page never counts.
 
 The lookup happens in ``execute``, so a dry run sends nothing to YouTube.
 """
@@ -18,14 +21,16 @@ from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sonu.desktop.apps.classes import window_matches
 from sonu.desktop.apps.entry import AppEntry
 from sonu.system.commands import CommandError, ProgramMissing
-from sonu.system.control import Video
+from sonu.system.control import AudioStream, Video
 from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.grounding import ungrounded_words
 from sonu.tools.web_tools import Target, WebPlan, compact, open_in_browser, prepare_browser
 from sonu.verify.checks import Check
+from sonu.world.origin import ancestor_pids
 from sonu.world.snapshot import WorldSnapshot
 
 PLAYER_APPEAR_S = 12.0  # the page has to load before the browser registers its media session
@@ -109,6 +114,7 @@ class PlayMedia(Tool):
         if video is None:
             return ToolOutcome(StepStatus.FAILED, f"YouTube found nothing for '{plan.query}'")
         where = f"'{video.title}' on YouTube in {plan.entry.name}"
+        before = await _stream_serials(ctx)
         opened = await open_in_browser(
             WebPlan(
                 plan.entry,
@@ -118,26 +124,35 @@ class PlayMedia(Tool):
             ctx,
         )
         try:
-            return await self._make_it_play(video, where, opened, ctx)
+            return await self._make_it_play(video, where, opened, plan.entry, before, ctx)
         except CommandError as exc:
             return ToolOutcome(
                 StepStatus.UNVERIFIED, f"Opened {where}, but couldn't check it's playing ({exc})"
             )
 
     @staticmethod
-    async def _make_it_play(video: Video, where: str, opened: ToolOutcome, ctx: ToolContext) -> ToolOutcome:
-        if not ctx.system.available("playerctl"):
+    async def _make_it_play(
+        video: Video,
+        where: str,
+        opened: ToolOutcome,
+        entry: AppEntry,
+        before: frozenset[int] | None,
+        ctx: ToolContext,
+    ) -> ToolOutcome:
+        mpris = ctx.system.available("playerctl")
+        if not mpris and before is None:
             return ToolOutcome(
                 StepStatus.UNVERIFIED,
                 f"Opened {where}, but can't check it's playing ({ProgramMissing('playerctl')})",
             )
 
-        async def find() -> tuple[str, str | None] | None:
-            for name in await ctx.system.players():
-                status, title = await ctx.system.player_state(name)
-                if same_title(title, video.title):
-                    return name, status
-            return None
+        async def find() -> tuple[str, str | None] | AudioStream | None:
+            if mpris:
+                for name in await ctx.system.players():
+                    status, title = await ctx.system.player_state(name)
+                    if same_title(title, video.title):
+                        return name, status
+            return await _new_browser_sound(entry, before, ctx) if before is not None else None
 
         found = await _settle(
             find, lambda f: f is not None, min(PLAYER_APPEAR_S, ctx.settings.web.load_timeout_s)
@@ -145,11 +160,26 @@ class PlayMedia(Tool):
         if found is None:
             if opened.status is StepStatus.FAILED:
                 return opened
+            heard = f"no sound from {entry.name}, and " if before is not None else ""
             return ToolOutcome(
                 StepStatus.UNVERIFIED,
-                f"Opened {where}, but couldn't confirm it's playing "
-                "(the browser didn't show up in the system's media controls)",
+                f"Opened {where}, but couldn't confirm it's playing ({heard}{entry.name} isn't in the "
+                f"system's media controls). If it's paused, {entry.name} blocked autoplay: allowing "
+                "autoplay for youtube.com in its site settings lets SONU start videos.",
             )
+        if isinstance(found, AudioStream):
+            check = Check(
+                f"{entry.name} started playing sound",
+                True,
+                {"stream": found.serial, "pid": found.pid},
+            )
+            if opened.status is not StepStatus.DONE:
+                return ToolOutcome(
+                    StepStatus.UNVERIFIED,
+                    f"{entry.name} started playing sound, but couldn't confirm it opened {where}",
+                    (*opened.checks, check),
+                )
+            return ToolOutcome(StepStatus.DONE, f"Playing {where}", (*opened.checks, check))
         name, status = found
         pressed = status != "Playing"
         if pressed:  # the browser held it back (autoplay rules): press play, like the media key would
@@ -165,6 +195,43 @@ class PlayMedia(Tool):
                 (check,),
             )
         return ToolOutcome(StepStatus.DONE, f"Playing {where}", (check,))
+
+
+async def _stream_serials(ctx: ToolContext) -> frozenset[int] | None:
+    """The audio streams that exist before SONU opens the page; None if they can't be read."""
+    if not ctx.system.available("pw-dump"):
+        return None
+    try:
+        return frozenset(stream.serial for stream in await ctx.system.audio_streams())
+    except CommandError:
+        return None
+
+
+async def _new_browser_sound(entry: AppEntry, before: frozenset[int], ctx: ToolContext) -> AudioStream | None:
+    """A stream that started after SONU opened the page, plays now, and comes from the browser's
+    own process (a window's process or one of its children — browsers play sound from a helper)."""
+    try:
+        streams = [
+            stream
+            for stream in await ctx.system.audio_streams()
+            if stream.running and stream.serial not in before and stream.pid
+        ]
+    except CommandError:
+        return None
+    if not streams:
+        return None
+    snapshot = await ctx.desktop.snapshot()
+    learned = ctx.learned(entry)
+    browser = {
+        window.pid
+        for window in snapshot.windows
+        if window.pid > 1 and window_matches(entry, (window.window_class, window.initial_class), learned)
+    }
+    for stream in streams:
+        pid = stream.pid or 0
+        if pid in browser or browser & ancestor_pids(pid, proc=ctx.system.proc):
+            return stream
+    return None
 
 
 async def _status(ctx: ToolContext, name: str) -> str | None:

@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v6, 49 cases)
+## The cases (v6, 50 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -42,7 +42,8 @@ awake and a laptop-health question.
 v6 (batch 1 tried on the laptop) adds three findings from real use: "turn off night light and turn off do not
 disturb" must not clear the notifications, "how is my laptop doing?" must report the laptop's health, and "play
 faded on youtube in chromium" while Zen shows "Alan Walker - Faded" must still search for the user's words and play
-in Chromium.
+in Chromium. A 50th case plays in a browser that isn't in the media controls but autoplays: SONU must confirm it
+from the browser's new audio stream.
 
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use
@@ -69,6 +70,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-25 | `qwen3.5:4b` | v5 suite (46 cases): play on YouTube, reminders, screenshots, the rice's switches, laptop health | **45 / 46**, then 3 / 3 re-run | "search youtube for networkchuck" searched for "NetworkChuck" — right, but the eval compared window titles case-sensitively. The check now ignores case; the case and both play cases passed when re-run (after two timeouts while the model loaded) |
 | 2026-09-27 | `qwen3.5:4b` | v6 suite (49 cases) on the laptop's GPU; rules for laptop health, do-not-disturb off, play queries; a "message: never add facts the user didn't give" rule | **48 / 49** | "go to youtube" launched the browser app instead of `web.open`. Dropping the message rule fixed it (the play-query rule alone already stopped the made-up artist) |
 | 2026-09-27 | `qwen3.5:4b` | v6 without the message rule; the planner sends back queries that aren't the user's words | **49 / 49** | — (the repair round is visible as `attempts: 2` in `play-with-a-title-on-screen`). Not in the suite: "turn off the night light and do not disturb" stays "…and turn DND on", even with that exact sentence as an example |
+| 2026-09-27 | `qwen3.5:4b` | + `song-in-a-browser-without-media-controls` (playback confirmed by sound) | **50 / 50** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

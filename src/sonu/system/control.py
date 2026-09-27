@@ -8,6 +8,7 @@ The exact behaviours copied from the rice (hypr-dotfiles) are noted where they m
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import shutil
 from dataclasses import dataclass
@@ -79,6 +80,15 @@ class Video:
 
 
 @dataclass(frozen=True, slots=True)
+class AudioStream:
+    """An app's sound output, as PipeWire sees it."""
+
+    serial: int  # PipeWire's object.serial: never reused while PipeWire runs
+    pid: int | None  # the process that plays it (application.process.id)
+    running: bool  # sound is flowing now (not paused, corked or idle)
+
+
+@dataclass(frozen=True, slots=True)
 class Battery:
     name: str
     percent: int
@@ -110,6 +120,28 @@ def pick_backlight(listing: str) -> str | None:
     preferred = [device for device in devices if "nvidia" not in device.lower()]
     candidates = preferred or devices
     return candidates[0] if candidates else None
+
+
+def parse_audio_streams(text: str) -> list[AudioStream]:
+    """``pw-dump`` (JSON) → the audio output streams of apps."""
+    try:
+        objects = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise CommandError(f"Unexpected pw-dump output: {exc}") from None
+    streams = []
+    for obj in objects if isinstance(objects, list) else []:
+        info = obj.get("info") if isinstance(obj, dict) else None
+        if not isinstance(info, dict):
+            continue
+        props = info.get("props")
+        if not isinstance(props, dict) or props.get("media.class") != "Stream/Output/Audio":
+            continue
+        serial, pid = props.get("object.serial"), props.get("application.process.id")
+        if not isinstance(serial, int):
+            continue
+        pid = int(pid) if isinstance(pid, int | str) and str(pid).isdigit() else None
+        streams.append(AudioStream(serial, pid, info.get("state") == "running"))
+    return streams
 
 
 def parse_bluetooth_powered(text: str) -> bool | None:
@@ -300,6 +332,10 @@ class SystemControl:
 
     async def play_player(self, name: str) -> None:
         await self._run("playerctl", "-p", name, "play")
+
+    async def audio_streams(self) -> list[AudioStream]:
+        """Apps' sound outputs (``pw-dump``, read-only): lets SONU hear that a browser plays."""
+        return parse_audio_streams((await self._run("pw-dump")).stdout)
 
     # ------------------------------------------------------------------ YouTube (yt-dlp, read-only lookup)
     async def find_video(self, query: str) -> Video | None:

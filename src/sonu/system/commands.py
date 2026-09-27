@@ -27,6 +27,7 @@ PACKAGES: dict[str, str] = {
     "rfkill": "util-linux",
     "nmcli": "networkmanager",
     "playerctl": "playerctl",
+    "pw-dump": "pipewire",
     "powerprofilesctl": "power-profiles-daemon",
     "yt-dlp": "yt-dlp",
     "grim": "grim",

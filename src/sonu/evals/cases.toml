@@ -397,3 +397,13 @@ expect_status = ["done"]
 expect_windows = [{ class = "chromium", title_contains = "youtube.com/watch" }]
 expect_system = { videos_playing = 1 }
 require_tools = ["media.play"]
+
+[[case]]
+id = "song-in-a-browser-without-media-controls"
+request = "play lofi beats in chromium"
+notes = "Found on real hardware: Chromium plays but isn't in the media controls; SONU must hear it (PipeWire)."
+system = { browser_mpris = false, browser_autoplay = true }
+expect_status = ["done"]
+expect_windows = [{ class = "chromium", title_contains = "youtube.com/watch" }]
+expect_system = { videos_playing = 1 }
+require_tools = ["media.play"]

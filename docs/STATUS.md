@@ -13,7 +13,7 @@ _Last update: 2026-09-27_
 | M0 Foundations | ✅ done — doctor, config, audit log, Hyprland IPC, Ollama client |
 | M1 Verified window operator | ✅ done and **in daily use on the owner's laptop** |
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
-| Capability batch 1 | ✅ tried on the laptop (2026-09-27) — reminders, screenshots, rice switches, laptop health work; **play on YouTube can't start or confirm playback yet** (below) ([`CAPABILITIES.md`](CAPABILITIES.md)) |
+| Capability batch 1 | ✅ tried on the laptop (2026-09-27) — reminders, screenshots, rice switches, laptop health work; play on YouTube now also confirms playback by sound ([D34](DECISIONS.md)) — **to re-try on the laptop** with autoplay allowed in Zen ([`CAPABILITIES.md`](CAPABILITIES.md)) |
 | M2 Daemon + memory | ⏭ after batch 2 — faster replies (model stays loaded), journal, "remember …" |
 | M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
 
@@ -39,7 +39,7 @@ _Last update: 2026-09-27_
 
 ### Eval suite
 
-`qwen3.5:4b`: **49 / 49** on the v6 suite (2026-09-27, the laptop's GPU, ~1.1 s mean planning; 48 / 49 first: a
+`qwen3.5:4b`: **50 / 50** on the v6 suite (2026-09-27, the laptop's GPU, ~1.1 s mean planning; 48 / 49 first: a
 prompt rule broke "go to youtube" and was dropped). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -90,8 +90,11 @@ sonu "how is my laptop doing?"
 
 ## Next steps (in order)
 
-1. **Play on YouTube** — decide how SONU starts and confirms playback on this laptop (open question below), then
-   re-try `sonu play faded on youtube`.
+1. **Play on YouTube, again on the laptop** — the owner allows autoplay for youtube.com in Zen (Zen → youtube.com →
+   the site-information icon left of the address → Autoplay → *Allow audio and video*), then
+   `uv run sonu play faded on youtube` and `… in chromium`. Expected: "✔ Playing '…Faded…'", confirmed by the media
+   controls or by the browser's new audio stream ([D34](DECISIONS.md)). The helper-process check (Chromium plays
+   sound from a child process) is tested with a fake `/proc`, not yet on the laptop.
 2. **Batch 2** — the ⏭ items in [`CAPABILITIES.md`](CAPABILITIES.md), roughly in this order:
    - windows: fullscreen, floating, pin; "put X and Y side by side" (check the Lua dispatcher names in Hyprland
      0.56's source first);
@@ -119,12 +122,10 @@ sonu "how is my laptop doing?"
 - **Play on YouTube doesn't work on the laptop yet** (2026-09-27). Zen: the video opens **paused** (Firefox blocks
   audible autoplay for pages opened from outside) and Firefox registers with the media controls (MPRIS) only while
   something plays, so SONU can neither press play nor confirm it. Chromium: the video **plays** (it has a live audio
-  stream) but Chromium never appeared in the media controls either (`playerctl -l`: "No players found"). SONU
-  reports "couldn't confirm it's playing" in both cases — honest, but not useful. Options: (a) the owner allows
-  autoplay for youtube.com in Zen (site settings → Autoplay → Allow audio and video); (b) SONU checks playback from
-  the browser's PipeWire audio stream instead of MPRIS (works for Chromium today, and for Zen with (a)); (c) play
-  through `mpv` + `yt-dlp` instead of the browser (MPRIS via mpv, fully controllable). Also worth checking: does
-  Chromium show up in `playerctl -l` when YouTube is played by hand?
+  stream) but Chromium never appeared in the media controls either (`playerctl -l`: "No players found"). The owner
+  chose (a) allow autoplay for youtube.com in Zen and (b) confirm playback from the browser's new PipeWire audio
+  stream — (b) is built ([D34](DECISIONS.md)), (a) is the owner's step in Zen. Still unknown: why Chromium never
+  registers with MPRIS (does it show in `playerctl -l` when YouTube is played by hand?).
 - **"turn off the night light and do not disturb"** is read by `qwen3.5:4b` as "…and turn do-not-disturb **on**",
   even with that exact sentence as a prompt example (tried and removed). The English is ambiguous; the report says
   "Do-not-disturb is on", so it's visible. "turn off do not disturb" works (eval `dnd-off-keeps-notifications`).
@@ -148,7 +149,7 @@ sonu "how is my laptop doing?"
 | [#7](https://github.com/thomasmartinoa/SONU/pull/7) | 2026-09-25 | Two-phase page check (slow pages), `site:` operator, `CLAUDE.md` / `STATUS.md` / `DECISIONS.md`, **M1.5 system settings** |
 | [#8](https://github.com/thomasmartinoa/SONU/pull/8) | 2026-09-25 | Honest "play <song>"; connect to saved Wi-Fi networks and paired Bluetooth devices; M1.5 verified on the laptop |
 | [#9](https://github.com/thomasmartinoa/SONU/pull/9) | 2026-09-27 | `CAPABILITIES.md`; batch 1: play on YouTube, reminders, screenshots, rice switches, laptop health; eval suite v5; notes for Claude Code on the laptop |
-| #10 | open | Batch 1 tried on the laptop: planner re-asks when a query isn't the user's words; night light off re-asked when the rice lags; helpers run without SONU's virtualenv; planner rules for laptop health, do-not-disturb off, play queries; eval suite v6 |
+| #10 | open | Batch 1 tried on the laptop: planner re-asks when a query isn't the user's words; night light off re-asked when the rice lags; helpers run without SONU's virtualenv; planner rules for laptop health, do-not-disturb off, play queries; playback confirmed by sound when the browser isn't in the media controls; eval suite v6 |
 
 ### Found on real hardware → fixed
 
@@ -177,4 +178,5 @@ sonu "how is my laptop doing?"
 | 09-27 | "turn off the night light" → "✖ night light is on" although hyprsunset had stopped (the rice's status lags) | re-send on/off once if the state hasn't changed after 1 s (#10) |
 | 09-27 | "turn off … do not disturb" cleared all notifications (and a second time turned DND on) | planner rule: DND off is `do_not_disturb_off`, clearing only when asked; eval `dnd-off-keeps-notifications` (#10) |
 | 09-27 | "play faded on youtube in chromium" used "Alan Walker - Faded" (from Zen's window title) and was refused | the planner checks the user-words arguments and asks the model again ([D33](DECISIONS.md)); eval `play-with-a-title-on-screen` (#10) |
+| 09-27 | Chromium played the video but wasn't in the media controls → "couldn't confirm it's playing" | a new audio stream from the browser's process confirms it ([D34](DECISIONS.md)) (#10) |
 | 09-27 | The plan's message said "Playing 'faded' by The Smashing Pumpkins" (made up) | prompt: media.play's query is the user's words only — the same request now says "Playing faded on YouTube" (a broader "never add facts" rule broke "go to youtube" in the evals and was dropped) (#10) |

@@ -8,15 +8,18 @@ power mode that may be unavailable.
 
 from __future__ import annotations
 
+import json
 import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from sonu.system.commands import CommandError, CommandResult, ProgramMissing
+from sonu.testing.fake_hyprland import FAKE_PID_BASE, app_pid
 
 ALL_PROGRAMS = frozenset(
     {
         "wpctl",
+        "pw-dump",
         "brightnessctl",
         "bluetoothctl",
         "rfkill",
@@ -79,6 +82,8 @@ class FakeSystem:
     other_players: dict[str, list[str]] = field(default_factory=dict)
     browser_autoplay: bool = False  # False: the browser holds a new video back until "play"
     browser_mpris: bool = True  # False: the browser never shows up in the media controls
+    # Apps' sound outputs (pw-dump): [serial, pid, running]. A page the browser autoplays adds one.
+    streams: list[list[int | bool]] = field(default_factory=list)
     timers: dict[str, str] = field(default_factory=dict)  # systemd unit → notification text
     area: str | None = "10,20 300x200"  # what slurp returns (None: the user cancelled)
     clipboard_type: str | None = None
@@ -111,19 +116,28 @@ class FakeSystem:
 
     @property
     def videos_playing(self) -> int:
-        return sum(1 for _, status in self.other_players.values() if status == "Playing")
+        players = sum(1 for _, status in self.other_players.values() if status == "Playing")
+        if self.browser_mpris:
+            return players
+        # Without media controls, a browser's video shows only as sound.
+        return players + sum(1 for _, pid, running in self.streams if running and int(pid) >= FAKE_PID_BASE)
 
     @property
     def reminders(self) -> int:
         return len(self.timers)
 
-    def page_opened(self, url: str) -> None:
-        """The fake browser opened ``url``: a YouTube watch page registers a media player (MPRIS)."""
-        if "youtube.com/watch" in url and self.last_video and self.browser_mpris:
+    def page_opened(self, url: str, window_class: str = "zen") -> None:
+        """The fake browser opened ``url``: a YouTube watch page registers a media player (MPRIS),
+        and makes sound if the browser lets it autoplay."""
+        if "youtube.com/watch" not in url or not self.last_video:
+            return
+        if self.browser_mpris:
             self.other_players["firefox.instance_1_42"] = [
                 self.last_video[1],
                 "Playing" if self.browser_autoplay else "Paused",
             ]
+        if self.browser_autoplay:
+            self.streams.append([100 + len(self.streams), app_pid(window_class), True])
 
     @property
     def brightness(self) -> int:
@@ -316,6 +330,24 @@ class FakeSystem:
         if args == ["play"]:
             player[1] = "Playing"
         return 0, "", ""
+
+    def _pw_dump(self, args: list[str]) -> tuple[int, str, str]:
+        nodes = [
+            {
+                "id": 50 + int(serial),
+                "type": "PipeWire:Interface:Node",
+                "info": {
+                    "state": "running" if running else "idle",
+                    "props": {
+                        "media.class": "Stream/Output/Audio",
+                        "object.serial": serial,
+                        "application.process.id": pid,
+                    },
+                },
+            }
+            for serial, pid, running in self.streams
+        ]
+        return 0, json.dumps([{"id": 0, "type": "PipeWire:Interface:Core", "info": {}}, *nodes]), ""
 
     def _yt_dlp(self, args: list[str]) -> tuple[int, str, str]:
         query = args[-1].removeprefix("ytsearch1:")
