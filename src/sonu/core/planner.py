@@ -242,8 +242,9 @@ Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "step
 can be done, use "steps" for it and put the rest in unsupported.
 - unsupported: the parts the user actually asked for that no tool below can do, in the user's \
 words; never things they didn't ask for. No tool can type text, click or scroll inside an app, \
-handle files, pair a new Bluetooth device or play something on Spotify or Apple Music by name. Do \
-the parts you can and list the rest here; opening an app is not doing the task in it. Usually [].
+move, rename or delete files, pair a new Bluetooth device or play something on Spotify or \
+Apple Music by name. Do the parts you can and list the rest here; opening an app is not doing \
+the task in it. Usually [].
 
 Tools:
 {tools}
@@ -265,7 +266,11 @@ what ["health"].
 - "Play <a song, artist or video>" is media.play (it plays it from YouTube); its query is the \
 user's words only, and a browser they named goes in browser. media.control only plays, pauses or \
 skips what is already playing.
-- Reminders and timers are reminders.set; screenshots are screen.capture; night light, keeping the \
+- Opening a folder ("open my downloads", "open dev_works") or the newest file in one ("open my \
+last download") is files.open with the user's words as place. "What's playing?" is system.status \
+with what ["media"].
+- Reminders and timers are reminders.set; "what reminders do I have?" is reminders.list; \
+cancelling one is reminders.cancel. Screenshots are screen.capture; night light, keeping the \
 screen awake, do-not-disturb, clearing notifications and locking are desktop.shell. "Turn off do \
 not disturb" is do_not_disturb_off; clear_notifications only when the user says clear or dismiss \
 notifications.

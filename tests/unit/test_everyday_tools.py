@@ -14,6 +14,7 @@ from sonu.desktop.apps import AppCatalog, AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.policy import Policy
 from sonu.system import SubprocessRunner, SystemControl
+from sonu.system.commands import CommandError
 from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, app_pid, make_window
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
@@ -233,6 +234,49 @@ def test_reminder_needs_exactly_one_time() -> None:
         ReminderArgs.model_validate({"text": "x", "in_minutes": 5, "at": "10:00"})
     with pytest.raises(ValueError, match="24-hour time"):
         ReminderArgs.model_validate({"text": "x", "at": "7pm"})
+
+
+# ---------------------------------------------------------------- reminders.list / cancel
+@pytest.mark.anyio
+async def test_list_and_cancel_reminders(rig: Rig) -> None:
+    report = await rig.run("what reminders do I have", ("reminders.list", {}))
+    assert report.lines() == ["✔ No reminders are set"]
+    await rig.run(
+        "r",
+        ("reminders.set", {"text": "check the oven", "in_minutes": 15}),
+        ("reminders.set", {"text": "call mum", "at": "18:30"}),
+    )
+    report = await rig.run("what reminders do I have", ("reminders.list", {}))
+    assert report.lines() == [
+        "✔ 2 reminders: 18:00 (in 15 min): check the oven · 18:30 (in 45 min): call mum"
+    ]
+    assert report.steps[0].outcome.private
+    report = await rig.run("cancel the oven reminder", ("reminders.cancel", {"about": "oven"}))
+    assert report.lines() == ["✔ Cancelled 'check the oven'"]
+    assert list(rig.system.timers.values()) == ["call mum"]
+
+
+@pytest.mark.anyio
+async def test_cancel_asks_which_when_it_cant_tell(rig: Rig) -> None:
+    await rig.run(
+        "r",
+        ("reminders.set", {"text": "stretch", "in_minutes": 20}),
+        ("reminders.set", {"text": "drink water", "in_minutes": 40}),
+    )
+    report = await rig.run("cancel my reminder", ("reminders.cancel", {}))
+    assert report.status == "needs-input"
+    assert rig.system.reminders == 2
+    report = await rig.run("cancel all my reminders", ("reminders.cancel", {"all": True}))
+    assert report.lines() == ["✔ Cancelled 2 reminders"]
+    assert rig.system.reminders == 0
+    report = await rig.run("cancel the gym reminder", ("reminders.cancel", {"about": "gym"}))
+    assert report.lines() == ["✖ No reminders are set"]
+
+
+@pytest.mark.anyio
+async def test_only_sonus_own_timers_can_be_stopped() -> None:
+    with pytest.raises(CommandError, match="isn't one of SONU's reminders"):
+        await SystemControl(FakeSystem()).cancel_reminder("dbus-broker")
 
 
 # ---------------------------------------------------------------- screen.capture

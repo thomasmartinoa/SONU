@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v7, 58 cases)
+## The cases (v8, 64 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -49,6 +49,10 @@ v7 (batch 2, windows) adds fullscreen / exit fullscreen / maximize, floating, pi
 side (two apps; two windows of one app). Cases can now start windows floating or fullscreen and expect a window's
 fullscreen/floating/pinned state or two windows next to each other (`expect_side_by_side`).
 
+v8 adds opening folders ("my downloads", "the SONU folder" — found by SONU) and the newest download, "what's
+playing?", and listing and cancelling reminders. Every case's home has `Downloads` (with `cat.png`), `Documents`,
+`Pictures/screenshot`, `dev_works/SONU` and `hypr-dotfiles`; the file manager is Thunar, like the owner's.
+
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use
 *different* apps than the cases, so the score measures generalisation rather than memorisation.
@@ -79,6 +83,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-27 | `qwen3.5:4b` | v7 (57 cases): window states and side by side | **57 / 57** | — |
 | 2026-09-27 | `qwen3.5:4b` | + `maximize-this-window` (found on the laptop: "maximize" was planned as fullscreen); rule "`maximize` is maximized (not fullscreen)" | **1 / 2** of the two | "make this window fullscreen" became *maximized*. Reworded: "the state is the user's word" |
 | 2026-09-27 | `qwen3.5:4b` | v7 (58 cases) with that wording | **58 / 58** | — |
+| 2026-09-27 | `qwen3.5:4b` | v8: six cases for folders, the newest download, "what's playing?", reminders | **5 / 6** of the six | "open my last download" → `place: "my last download"`, no `newest`. Fixed in the tool (the user's "last" means the newest file), not the prompt |
+| 2026-09-27 | `qwen3.5:4b` | v8 (64 cases) | **64 / 64** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

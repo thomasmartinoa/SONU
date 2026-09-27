@@ -477,3 +477,54 @@ windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { 
 expect_status = ["done"]
 expect_side_by_side = ["kitty", "kitty"]
 require_tools = ["windows.side_by_side"]
+
+
+# ---- capability batch 2: folders and files, what's playing, reminders (v8)
+
+[[case]]
+id = "open-downloads"
+request = "open my downloads"
+expect_status = ["done"]
+expect_windows = [{ class = "Thunar", title_contains = "Downloads" }]
+require_tools = ["files.open"]
+
+[[case]]
+id = "open-a-project-folder"
+request = "open the SONU folder"
+notes = "SONU finds ~/dev_works/SONU itself; the model only passes the user's words."
+expect_status = ["done"]
+expect_windows = [{ class = "Thunar", title_contains = "SONU" }]
+require_tools = ["files.open"]
+
+[[case]]
+id = "open-last-download"
+request = "open my last download"
+expect_status = ["done"]
+expect_windows = [{ class = "imv", title_contains = "cat.png" }]
+require_tools = ["files.open"]
+expect_unsupported = false
+
+[[case]]
+id = "whats-playing"
+request = "what's playing?"
+system = { player = "Playing" }
+expect_status = ["done"]
+require_tools = ["system.status"]
+expect_reply_contains = "Media: playing"
+forbid_tools = ["media.control", "media.play"]
+
+[[case]]
+id = "list-reminders"
+request = "what reminders do I have?"
+system = { timers = { "sonu-reminder-20260925-180000-abcd" = "check the oven" }, timer_times = { "sonu-reminder-20260925-180000-abcd" = 2026-09-25T18:00:00 } }
+expect_status = ["done"]
+require_tools = ["reminders.list"]
+expect_reply_contains = "check the oven"
+
+[[case]]
+id = "cancel-a-reminder"
+request = "cancel the oven reminder"
+system = { timers = { "sonu-reminder-20260925-180000-abcd" = "check the oven", "sonu-reminder-20260925-190000-beef" = "call mum" }, timer_times = { "sonu-reminder-20260925-180000-abcd" = 2026-09-25T18:00:00, "sonu-reminder-20260925-190000-beef" = 2026-09-25T19:00:00 } }
+expect_status = ["done"]
+expect_system = { reminders = 1 }
+require_tools = ["reminders.cancel"]

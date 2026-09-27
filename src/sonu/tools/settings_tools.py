@@ -459,8 +459,12 @@ class SystemStatus(Tool):
         return Prepared("Check " + ", ".join(item.replace("_", " ") for item in items), items)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
-        parts = [await self._read(item, ctx) for item in cast(list[StatusItem], prepared.payload)]
-        return ToolOutcome(StepStatus.DONE, " · ".join(part for part in parts if part))
+        items = cast(list[StatusItem], prepared.payload)
+        parts = [await self._read(item, ctx) for item in items]
+        # A track title is the user's own listening: kept out of the audit log.
+        return ToolOutcome(
+            StepStatus.DONE, " · ".join(part for part in parts if part), private="media" in items
+        )
 
     @staticmethod
     async def _read(item: StatusItem, ctx: ToolContext) -> str:
@@ -482,9 +486,12 @@ class SystemStatus(Tool):
                     return "Wi-Fi: off"
                 network = await ctx.system.wifi_active()
                 return f"Wi-Fi: on ({network})" if network else "Wi-Fi: on (not connected)"
-            if item == "media":
+            if item == "media":  # "what's playing?"
                 status = await ctx.system.player_status()
-                return f"Media: {status.lower() if status else 'nothing playing'}"
+                if not status:
+                    return "Media: nothing playing"
+                track = await ctx.system.now_playing()
+                return f"Media: {status.lower()}" + (f" — {track}" if track else "")
             if item == "power_mode":
                 return f"Power mode: {await ctx.system.power_mode()}"
             if item in _HEALTH_ITEMS:

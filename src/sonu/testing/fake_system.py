@@ -12,6 +12,8 @@ import json
 import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 
 from sonu.system.commands import CommandError, CommandResult, ProgramMissing
 from sonu.testing.fake_hyprland import FAKE_PID_BASE, app_pid
@@ -20,6 +22,7 @@ ALL_PROGRAMS = frozenset(
     {
         "wpctl",
         "pw-dump",
+        "xdg-mime",
         "brightnessctl",
         "bluetoothctl",
         "rfkill",
@@ -85,6 +88,7 @@ class FakeSystem:
     # Apps' sound outputs (pw-dump): [serial, pid, running]. A page the browser autoplays adds one.
     streams: list[list[int | bool]] = field(default_factory=list)
     timers: dict[str, str] = field(default_factory=dict)  # systemd unit → notification text
+    timer_times: dict[str, datetime] = field(default_factory=dict)  # systemd unit → when it fires
     area: str | None = "10,20 300x200"  # what slurp returns (None: the user cancelled)
     clipboard_type: str | None = None
     shell: dict[str, str] = field(
@@ -94,6 +98,19 @@ class FakeSystem:
     # old state after on/off until it's asked again).
     stale_once: set[str] = field(default_factory=set)
     notifications: int = 3
+    # xdg-mime: file suffix → type, type → the desktop-file id set to open it.
+    mime_types: dict[str, str] = field(
+        default_factory=lambda: {
+            ".png": "image/png",
+            ".pdf": "application/pdf",
+            ".zip": "application/zip",
+            ".sh": "application/x-shellscript",
+            ".desktop": "application/x-desktop",
+        }
+    )
+    default_apps: dict[str, str] = field(
+        default_factory=lambda: {"image/png": "imv.desktop", "application/zip": "thunar.desktop"}
+    )
     gpu_line: str = "12, 55, 4143, 8192"
     last_input: bytes | None = None
     shots: list[str] = field(default_factory=list)  # screenshot files written by grim
@@ -331,6 +348,14 @@ class FakeSystem:
             player[1] = "Playing"
         return 0, "", ""
 
+    def _xdg_mime(self, args: list[str]) -> tuple[int, str, str]:
+        if args[:2] == ["query", "filetype"]:
+            suffix = Path(args[2]).suffix.lower()
+            return 0, self.mime_types.get(suffix, "application/octet-stream") + "\n", ""
+        if args[:2] == ["query", "default"]:
+            return 0, self.default_apps.get(args[2], "") + "\n", ""
+        return 1, "", "usage\n"
+
     def _pw_dump(self, args: list[str]) -> tuple[int, str, str]:
         nodes = [
             {
@@ -362,10 +387,23 @@ class FakeSystem:
     def _systemd_run(self, args: list[str]) -> tuple[int, str, str]:
         unit = next(a.removeprefix("--unit=") for a in args if a.startswith("--unit="))
         self.timers[unit] = args[-1]
+        calendar = next(a.removeprefix("--on-calendar=") for a in args if a.startswith("--on-calendar="))
+        self.timer_times[unit] = datetime.strptime(calendar, "%Y-%m-%d %H:%M:%S")
         return 0, f"Running timer as unit: {unit}.timer\n", ""
 
     def _systemctl(self, args: list[str]) -> tuple[int, str, str]:
+        if args[1] == "list-timers":
+            timers = [
+                {"next": int(self.timer_times[unit].timestamp() * 1_000_000), "unit": f"{unit}.timer"}
+                for unit in self.timers
+            ]
+            return 0, json.dumps(timers), ""
         unit = args[2].removesuffix(".timer")
+        if args[1] == "stop":
+            self.timers.pop(unit, None)
+            return 0, "", ""
+        if args[3] == "--property=Description":
+            return 0, f"SONU reminder: {self.timers.get(unit, '')}\n", ""
         return 0, ("active" if unit in self.timers else "inactive") + "\n", ""
 
     def _notify_send(self, args: list[str]) -> tuple[int, str, str]:

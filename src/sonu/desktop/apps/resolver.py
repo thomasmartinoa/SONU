@@ -41,8 +41,8 @@ ROLES: dict[str, tuple[str, str]] = {
     "terminal": ("terminal", "TerminalEmulator"),
     "terminal emulator": ("terminal", "TerminalEmulator"),
     "console": ("terminal", "TerminalEmulator"),
-    "file manager": ("", "FileManager"),
-    "files": ("", "FileManager"),
+    "file manager": ("files", "FileManager"),
+    "files": ("files", "FileManager"),
 }
 
 
@@ -232,7 +232,11 @@ class AppResolver:
                 ]
             )
             if matches:
-                return Resolution("found", text, matches[0], reason=f"your default {default_key}")
+                # Found on real hardware: "thunar" is also the program of Thunar's Bulk Rename entry
+                # (Exec=thunar --bulk-rename). The app itself is the one named after the command,
+                # else the one started with the fewest extra arguments.
+                best = min(matches, key=lambda entry: (entry.stem != default_command, len(entry.argv)))
+                return Resolution("found", text, best, reason=f"your default {default_key}")
         in_category = tuple(
             entry for entry in self.catalog.entries if category in entry.categories and not entry.no_display
         )

@@ -37,6 +37,7 @@ PACKAGES: dict[str, str] = {
     "systemd-run": "systemd",
     "systemctl": "systemd",
     "notify-send": "libnotify",
+    "xdg-mime": "xdg-utils",
     "qs": "quickshell",
     "nvidia-smi": "nvidia-utils",
 }

@@ -11,6 +11,7 @@ from sonu.config import Settings, SonuPaths
 from sonu.config.settings import ModelsSettings, PlannerRole
 from sonu.doctor import CheckResult, CommandResult, DoctorContext, run_checks
 from sonu.doctor.checks import check_system
+from sonu.integrations.hypr_theme import DefaultApp, detect_hypr_theme
 from sonu.testing.fake_hyprland import FakeHyprland, make_window
 from sonu.testing.fake_ollama import FakeOllama
 
@@ -284,3 +285,12 @@ async def test_settings_programs_are_listed_with_packages(xdg_env: dict[str, str
     assert result.summary.startswith("found: wpctl, brightnessctl, nmcli · missing: bluetoothctl")
     assert result.hint is not None and "bluetoothctl — Bluetooth (pacman: bluez-utils)" in result.hint
     assert "yt-dlp — playing songs and videos from YouTube (pacman: yt-dlp)" in result.hint
+
+
+def test_the_rices_file_manager_comes_from_binds_lua(tmp_path: Path) -> None:
+    binds = tmp_path / ".config" / "hypr" / "modules" / "binds.lua"
+    binds.parent.mkdir(parents=True)
+    binds.write_text('local terminal = "kitty"\nlocal fileManager = "thunar"\n')
+    assert detect_hypr_theme(tmp_path).defaults["files"] == DefaultApp("thunar", "binds")
+    binds.write_text('local fileManager = "thunar; rm -rf ~"\n')  # not an app name: ignored
+    assert "files" not in detect_hypr_theme(tmp_path).defaults

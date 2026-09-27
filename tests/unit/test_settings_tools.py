@@ -272,10 +272,12 @@ async def test_status_reads_everything_it_can(rig: Rig) -> None:
     report, _ = await rig.run(("system.status", {}))
     assert report.status == "done"
     assert report.steps[0].outcome.summary == (
-        "Volume: 50% · Mic: 80% · Brightness: 40% · Bluetooth: off · Wi-Fi: on (Home: 5G) · Media: playing · "
+        "Volume: 50% · Mic: 80% · Brightness: 40% · Bluetooth: off · Wi-Fi: on (Home: 5G) · "
+        "Media: playing — Artist One Song · "
         "Power mode: unknown (powerprofilesctl isn't installed) · Battery: 76% (discharging)"
     )
     assert all(call[0] != "wpctl" or call[1] == "get-volume" for call in rig.system.calls)  # read-only
+    assert report.steps[0].outcome.private  # "what's playing" is the user's own listening
 
 
 @pytest.mark.anyio

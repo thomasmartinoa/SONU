@@ -20,9 +20,23 @@ from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from sonu.desktop.apps.resolver import normalize
 from sonu.system.commands import CommandError, ProgramMissing
-from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome, outcome_from_checks
+from sonu.system.control import Reminder
+from sonu.tools.base import (
+    ALL_CHOICE,
+    Choice,
+    Choices,
+    Effect,
+    Prepared,
+    Risk,
+    StepStatus,
+    Tool,
+    ToolOutcome,
+    outcome_from_checks,
+)
 from sonu.tools.context import ToolContext
+from sonu.tools.grounding import CONNECTIVES
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -321,4 +335,133 @@ class DesktopShell(Tool):
         return outcome_from_checks([check], "Locked the screen", "The screen didn't lock")
 
 
-EVERYDAY_TOOLS: tuple[Tool, ...] = (SetReminder(), CaptureScreen(), DesktopShell())
+# ---------------------------------------------------------------------------- reminders.list / cancel
+def _describe(reminder: Reminder, now: datetime) -> str:
+    if reminder.when is None:
+        return reminder.text
+    day = "" if reminder.when.date() == now.date() else f" {reminder.when:%a %d %b}"
+    return f"{reminder.when:%H:%M}{day} ({_in_words(reminder.when - now)}): {reminder.text}"
+
+
+class ListRemindersArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ListReminders(Tool):
+    name = "reminders.list"
+    description = "Tell the user which reminders and timers are set (read-only)."
+    risk = Risk.READ_ONLY
+    effects = frozenset({Effect.SYSTEM_READ})
+    Args = ListRemindersArgs
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        if problem := _missing(ctx, "systemctl"):
+            return problem
+        return Prepared("List your reminders", None)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        try:
+            reminders = await ctx.system.reminders()
+        except CommandError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't read the reminders: {exc}")
+        if not reminders:
+            return ToolOutcome(StepStatus.DONE, "No reminders are set")
+        now = ctx.now()
+        return ToolOutcome(
+            StepStatus.DONE,
+            f"{len(reminders)} reminder{'s' if len(reminders) > 1 else ''}: "
+            + " · ".join(_describe(reminder, now) for reminder in reminders),
+            private=True,  # the user's own reminder texts
+        )
+
+
+class CancelReminderArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    about: str | None = Field(
+        default=None,
+        max_length=120,
+        description="words from the reminder, in the user's words ('the oven one')",
+    )
+    all: bool = Field(default=False, description="true only if the user said all their reminders")
+
+
+def _matching(reminders: list[Reminder], about: str) -> list[Reminder]:
+    """The reminders whose text shares the most words with ``about`` (none if no word matches)."""
+    wanted = {word for word in normalize(about).split() if word not in CONNECTIVES}
+    wanted -= {"reminder", "reminders", "timer", "timers", "one", "about", "remind", "me"}
+    scored = [(len(wanted & set(normalize(r.text).split())), r) for r in reminders]
+    best = max((score for score, _ in scored), default=0)
+    return [r for score, r in scored if best and score == best]
+
+
+class CancelReminder(Tool):
+    name = "reminders.cancel"
+    description = "Cancel a reminder or timer the user set (by words from it), or all of them."
+    risk = Risk.LOW
+    effects = frozenset({Effect.SCHEDULE})
+    Args = CancelReminderArgs
+    grounded = ("about",)
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(CancelReminderArgs, args)
+        if problem := _missing(ctx, "systemctl"):
+            return problem
+        try:
+            reminders = await ctx.system.reminders()
+        except CommandError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't read the reminders: {exc}")
+        if not reminders:
+            return ToolOutcome(StepStatus.FAILED, "No reminders are set")
+        now = ctx.now()
+        if choice == ALL_CHOICE or a.all:
+            chosen = reminders
+        elif choice is not None:
+            chosen = [r for r in reminders if r.unit == choice]
+            if not chosen:
+                return ToolOutcome(StepStatus.FAILED, "That reminder is no longer set")
+        else:
+            chosen = _matching(reminders, a.about) if a.about else reminders
+            if not chosen:
+                return ToolOutcome(StepStatus.FAILED, f"No reminder matches '{a.about}'")
+            if len(chosen) > 1:
+                return ToolOutcome(
+                    StepStatus.NEEDS_INPUT,
+                    "several reminders match",
+                    question="Which reminder should I cancel?",
+                    choices=Choices(
+                        "Which reminder should I cancel?",
+                        (
+                            *(Choice(_describe(r, now), r.unit) for r in chosen[:6]),
+                            Choice(f"All {len(chosen)} of them", ALL_CHOICE),
+                        ),
+                    ),
+                )
+        label = _describe(chosen[0], now) if len(chosen) == 1 else f"all {len(chosen)} reminders"
+        return Prepared(f"Cancel the reminder at {label}" if len(chosen) == 1 else f"Cancel {label}", chosen)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        chosen = cast(list[Reminder], prepared.payload)
+        checks = []
+        for reminder in chosen:
+            try:
+                await ctx.system.cancel_reminder(reminder.unit)
+                active = await ctx.system.timer_active(reminder.unit)
+            except CommandError as exc:
+                return ToolOutcome(StepStatus.FAILED, f"Couldn't cancel it: {exc}")
+            checks.append(Check(f"'{reminder.text}' is cancelled", not active, {"unit": reminder.unit}))
+        what = f"'{chosen[0].text}'" if len(chosen) == 1 else f"{len(chosen)} reminders"
+        return outcome_from_checks(checks, f"Cancelled {what}", f"{what} is still set")
+
+
+EVERYDAY_TOOLS: tuple[Tool, ...] = (
+    SetReminder(),
+    ListReminders(),
+    CancelReminder(),
+    CaptureScreen(),
+    DesktopShell(),
+)
