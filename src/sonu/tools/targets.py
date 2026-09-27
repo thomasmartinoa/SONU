@@ -54,10 +54,25 @@ def _title_has(window: Window, words: str, snapshot: WorldSnapshot) -> bool:
     return window.address != snapshot.origin_address and words.casefold() in window.title.casefold()
 
 
+# "Move it to 3", "close that": the window the conversation was just about. "This" is the focused one.
+_REFERS_BACK = re.compile(r"\b(it|that|them|those|the same)\b", re.IGNORECASE)
+_THIS = re.compile(r"\bthis\b", re.IGNORECASE)
+
+
+def refers_back(request: str) -> bool:
+    return bool(_REFERS_BACK.search(request)) and not _THIS.search(request)
+
+
 def find_windows(target: WindowTarget, snapshot: WorldSnapshot, ctx: ToolContext) -> TargetMatch:
     candidates: list[Window] = list(snapshot.windows)
+    # Found on real hardware: "open kitty on 2" then "move it to 3" was planned as the *focused*
+    # window — another terminal. The windows the last request acted on come first.
+    recent = [w for w in snapshot.windows if w.address in ctx.recent_windows]
+    use_recent = bool(recent) and refers_back(ctx.request_text) and not target.title_contains
 
-    if target.focused:
+    if target.focused and use_recent and not target.app:
+        candidates = recent
+    elif target.focused:
         active = snapshot.active_window
         if active is None:
             return TargetMatch((), "no window is focused right now")
@@ -97,6 +112,8 @@ def find_windows(target: WindowTarget, snapshot: WorldSnapshot, ctx: ToolContext
 
     if not candidates:
         return TargetMatch((), f"no {target.describe()} is open")
+    if use_recent and (preferred := [w for w in candidates if w.address in ctx.recent_windows]):
+        candidates = preferred
     return TargetMatch(tuple(snapshot.by_recency(candidates)))
 
 

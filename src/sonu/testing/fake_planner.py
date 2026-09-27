@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from sonu.core.conversation import Turn
 from sonu.core.planning import Plan, PlannedStep, PlanningError
 from sonu.tools.registry import ToolRegistry
 from sonu.world.snapshot import WorldSnapshot
@@ -26,6 +27,7 @@ class ScriptedPlanner:
     def __init__(self, plans: Mapping[str, Plan] | Callable[[str, WorldSnapshot], Plan]) -> None:
         self._plans = plans
         self.seen: list[tuple[str, WorldSnapshot]] = []
+        self.histories: list[list[Turn]] = []  # the conversation each request was planned with
 
     async def plan(
         self,
@@ -34,8 +36,10 @@ class ScriptedPlanner:
         registry: ToolRegistry,
         *,
         app_labels: Mapping[str, str] | None = None,
+        history: Sequence[Turn] = (),
     ) -> Plan:
         self.seen.append((request, snapshot))
+        self.histories.append(list(history))
         if callable(self._plans):
             return self._plans(request, snapshot)
         try:

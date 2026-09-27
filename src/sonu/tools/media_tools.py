@@ -131,7 +131,7 @@ class PlayMedia(Tool):
                 StepStatus.FAILED, f"{ProgramMissing('yt-dlp')} — SONU uses it to find the video to play"
             )
         query = " ".join(a.query.split())
-        missing = ungrounded_words(query, ctx.request_text)
+        missing = ungrounded_words(query, ctx.user_words or ctx.request_text)
         if missing:
             return ToolOutcome(
                 StepStatus.FAILED,
@@ -149,7 +149,7 @@ class PlayMedia(Tool):
     @staticmethod
     def _prepare_spotify(a: PlayArgs, ctx: ToolContext) -> Prepared | ToolOutcome:
         query = " ".join(a.query.split())
-        if missing := ungrounded_words(query, ctx.request_text):
+        if missing := ungrounded_words(query, ctx.user_words or ctx.request_text):
             return ToolOutcome(
                 StepStatus.FAILED,
                 f"Won't search Spotify for '{query}': {', '.join(missing)} isn't in your request",

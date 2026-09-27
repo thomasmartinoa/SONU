@@ -15,8 +15,10 @@ from typing import Any
 from pydantic import ValidationError
 
 from sonu.audit.log import AuditError, AuditLog
+from sonu.core.conversation import Conversation, Turn, results_of
 from sonu.core.planning import Plan, Planner, PlanningError
 from sonu.core.report import StepRecord, TaskReport
+from sonu.core.responder import Responder
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.policy.engine import Policy
 from sonu.tools.base import Choices, Prepared, Risk, StepStatus, Tool, ToolOutcome
@@ -76,12 +78,17 @@ class Engine:
         ctx: ToolContext,
         policy: Policy,
         audit: AuditLog | None = None,
+        conversation: Conversation | None = None,
+        responder: Responder | None = None,
     ) -> None:
         self.planner = planner
         self.registry = registry
         self.ctx = ctx
         self.policy = policy
         self.audit = audit
+        # Without these (tests, `sonu eval`), every request stands alone and gets no spoken reply.
+        self.conversation = conversation
+        self.responder = responder
 
     def _audit(self, kind: str, data: dict[str, Any]) -> None:
         if self.audit is None:
@@ -115,7 +122,10 @@ class Engine:
                 )
                 return report
         self._audit("task.start", {"request": request, "dry_run": dry_run})
+        history = self.conversation.recent() if self.conversation is not None else []
         self.ctx.request_text = request
+        self.ctx.user_words = " ".join([*(turn.request for turn in history), request])
+        self.ctx.recent_windows = self.conversation.last_windows() if self.conversation is not None else ()
         self.ctx.task_browser = None
 
         try:
@@ -124,11 +134,13 @@ class Engine:
             self.ctx.desktop.origin_address = origin
             snapshot = replace(snapshot, origin_address=origin)
             labels = self.ctx.resolver.labels_for_classes(w.window_class for w in snapshot.windows)
-            plan = await self.planner.plan(request, snapshot, self.registry, app_labels=labels)
+            plan = await self.planner.plan(
+                request, snapshot, self.registry, app_labels=labels, history=history
+            )
         except (HyprlandError, PlanningError) as exc:
             report.error = str(exc)
             self._audit("task.end", {"status": "error", "error": str(exc)})
-            return report
+            return await self._finish(report, history)
 
         report.plan = plan
         self._audit(
@@ -161,7 +173,20 @@ class Engine:
                 if observer:
                     observer.on_step(record)
 
-        self._audit("task.end", {"status": report.status})
+        return await self._finish(report, history)
+
+    async def _finish(self, report: TaskReport, history: list[Turn]) -> TaskReport:
+        """The natural reply, and this request's place in the conversation."""
+        if self.responder is not None:
+            report.reply = await self.responder.reply(report, history)
+        if report.plan is not None:
+            self._audit("task.end", {"status": report.status, "reply": report.reply})
+        if self.conversation is not None and not report.dry_run and report.plan is not None:
+            said = report.reply or (report.plan.message if report.plan.kind != "steps" else report.headline())
+            windows = tuple(
+                str(address) for record in report.steps for address in record.outcome.data.get("windows", ())
+            )
+            self.conversation.add(report.request, said, results_of(report), windows)
         return report
 
     async def _run_step(

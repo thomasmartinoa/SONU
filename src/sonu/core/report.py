@@ -76,6 +76,7 @@ class TaskReport:
     steps: list[StepRecord] = field(default_factory=list)
     error: str | None = None
     dry_run: bool = False
+    reply: str = ""  # what SONU says back, in natural words (core/responder.py)
 
     @property
     def status(self) -> TaskStatus:
@@ -139,6 +140,7 @@ class TaskReport:
             "request": self.request,
             "status": self.status,
             "headline": self.headline(),
+            "reply": self.reply,
             "dry_run": self.dry_run,
             "error": self.error,
             "plan": None

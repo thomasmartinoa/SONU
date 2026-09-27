@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
+    from sonu.core.conversation import Turn
     from sonu.tools.registry import ToolRegistry
     from sonu.world.snapshot import WorldSnapshot
 
@@ -43,4 +44,5 @@ class Planner(Protocol):
         registry: ToolRegistry,
         *,
         app_labels: Mapping[str, str] | None = None,
+        history: Sequence[Turn] = (),
     ) -> Plan: ...

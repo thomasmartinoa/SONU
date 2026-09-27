@@ -253,6 +253,7 @@ class LaunchApp(Tool):
                 [check],
                 f"{name} was already on workspace {target.value}",
                 f"{name} is no longer where it was",
+                windows=[window.address],
             )
         if plan.mode == "move-existing":
             target = _require(plan.target, "target workspace")
@@ -263,6 +264,7 @@ class LaunchApp(Tool):
                 moved,
                 f"Moved the open {name} window to workspace {target.value}",
                 f"{name} did not end up on workspace {target.value}",
+                windows=[window.address],
             )
         try:
             await ctx.desktop.focus(window)
@@ -272,7 +274,12 @@ class LaunchApp(Tool):
             lambda s: window_focused(s, ref, name).passed or None, timeout_s=timeout
         )
         check = window_focused(snapshot, ref, name)
-        return outcome_from_checks([check], f"Switched to the open {name} window", f"Could not focus {name}")
+        return outcome_from_checks(
+            [check],
+            f"Switched to the open {name} window",
+            f"Could not focus {name}",
+            windows=[window.address],
+        )
 
     async def _launch(self, plan: _LaunchPlan, ctx: ToolContext) -> ToolOutcome:
         entry = plan.entry
@@ -320,6 +327,7 @@ class LaunchApp(Tool):
                 f"Opened {entry.name} on workspace {plan.target.value} "
                 f"(it appeared on {opened_on}; moved it)",
                 f"Opened {entry.name} on workspace {opened_on}, but could not move it to {plan.target.value}",
+                windows=[window.address],
             )
         checks = [window_exists(snapshot, ref, entry.name)]
         if plan.target:
@@ -328,7 +336,10 @@ class LaunchApp(Tool):
             f" on workspace {plan.target.value}" if plan.target else f" on workspace {window.workspace.name}"
         )
         return outcome_from_checks(
-            checks, f"Opened {entry.name}{where}", f"{entry.name} opened but not where expected"
+            checks,
+            f"Opened {entry.name}{where}",
+            f"{entry.name} opened but not where expected",
+            windows=[window.address],
         )
 
 
@@ -391,10 +402,18 @@ class MoveWindow(Tool):
                 return moved
             checks.extend(moved)
         names = ", ".join(sorted({w.window_class for w in windows}))
+        # Found on real hardware: a window already there was reported "Moved" (and the reply said so).
+        already = all(w.workspace.name == target.value for w in windows)
+        success = (
+            f"{names} was already on workspace {target.value}"
+            if already
+            else f"Moved {names} to workspace {target.value}"
+        )
         return outcome_from_checks(
             checks,
-            f"Moved {names} to workspace {target.value}",
+            success,
             f"Could not move {names} to workspace {target.value}",
+            windows=[w.address for w in windows],
         )
 
 
@@ -438,7 +457,10 @@ class FocusWindow(Tool):
         )
         check = window_focused(snapshot, ref, window.window_class)
         return outcome_from_checks(
-            [check], f"Focused {window.window_class}", f"Could not focus {window.window_class}"
+            [check],
+            f"Focused {window.window_class}",
+            f"Could not focus {window.window_class}",
+            windows=[window.address],
         )
 
 

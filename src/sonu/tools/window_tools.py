@@ -184,7 +184,12 @@ class SetWindowState(Tool):
             )
             checks.append(Check(_IS.get(state, f"{{}} is {state}").format(label), passed, evidence))
         names = ", ".join(sorted({w.window_class for w in windows}))
-        return outcome_from_checks(checks, _DONE[state].format(names), f"Couldn't make {names} {state}")
+        return outcome_from_checks(
+            checks,
+            _DONE[state].format(names),
+            f"Couldn't make {names} {state}",
+            windows=[w.address for w in windows],
+        )
 
 
 # ---------------------------------------------------------------------------- windows.side_by_side
@@ -290,7 +295,12 @@ class SideBySide(Tool):
         failure = f"{names} are on workspace {target.value}, but not side by side"
         if others:
             failure += f" ({len(others)} other window{'s' if len(others) > 1 else ''} share it)"
-        return outcome_from_checks([check], f"Put {names} side by side on workspace {target.value}", failure)
+        return outcome_from_checks(
+            [check],
+            f"Put {names} side by side on workspace {target.value}",
+            failure,
+            windows=[pair[0].address, pair[1].address],
+        )
 
 
 WINDOW_TOOLS: tuple[Tool, ...] = (SetWindowState(), SideBySide())

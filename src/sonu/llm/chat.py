@@ -43,8 +43,16 @@ class ChatModel(Protocol):
     async def complete_json(self, messages: list[ChatMessage], schema: dict[str, Any]) -> ChatResult: ...
 
 
+class TextModel(Protocol):
+    name: str
+
+    async def complete_text(
+        self, messages: list[ChatMessage], *, temperature: float, max_tokens: int
+    ) -> ChatResult: ...
+
+
 class OllamaChatModel:
-    """A chat model served by Ollama, with replies constrained to a JSON schema."""
+    """A chat model served by Ollama: JSON plans (schema-constrained) or short free text (replies)."""
 
     def __init__(self, client: OllamaClient, role: ModelRole, settings: OllamaSettings) -> None:
         self.client = client
@@ -80,6 +88,34 @@ class OllamaChatModel:
             raise ChatModelError(str(exc)) from exc
         return ChatResult(
             content=reply.content,
+            model=self.name,
+            duration_s=reply.stats.total_duration / 1e9,
+            prompt_tokens=reply.stats.prompt_eval_count,
+            output_tokens=reply.stats.eval_count,
+        )
+
+    async def complete_text(
+        self, messages: list[ChatMessage], *, temperature: float, max_tokens: int
+    ) -> ChatResult:
+        """A short free-text reply (what SONU says back); thinking stays off — it's a sentence or two."""
+        think = False if await self._thinking_supported() else None
+        try:
+            reply = await self.client.chat(
+                self.name,
+                [message.as_dict() for message in messages],
+                think=think,
+                options={
+                    "temperature": temperature,
+                    "num_ctx": self.settings.num_ctx,
+                    "num_predict": max_tokens,
+                },
+                keep_alive=self.settings.keep_alive,
+                timeout_s=self.settings.chat_timeout_s,
+            )
+        except OllamaError as exc:
+            raise ChatModelError(str(exc)) from exc
+        return ChatResult(
+            content=reply.content.strip(),
             model=self.name,
             duration_s=reply.stats.total_duration / 1e9,
             prompt_tokens=reply.stats.prompt_eval_count,
