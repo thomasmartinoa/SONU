@@ -14,7 +14,7 @@ _Last update: 2026-09-27_
 | M1 Verified window operator | ✅ done and **in daily use on the owner's laptop** |
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
-| Capability batch 2 | 🚧 in progress — window states and side by side ✅ (#12); folders, the newest download, "what's playing?", list/cancel reminders ✅ (#13); theme, wallpaper, brightness popup, clipboard ✅ (#14) — all **verified on the laptop**; Spotify, local music, power, recording next |
+| Capability batch 2 | ✅ built — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15). OBS needs its WebSocket server turned on once to try on the laptop; Apple Music by name isn't possible with the owner's app |
 | M2 Daemon + memory | ⏭ after batch 2 — faster replies (model stays loaded), journal, "remember …" |
 | M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
 
@@ -40,8 +40,8 @@ _Last update: 2026-09-27_
 
 ### Eval suite
 
-`qwen3.5:4b`: **69 / 69** on the v9 suite (2026-09-27, the laptop's GPU, ~1.1 s mean planning; theme, wallpaper and
-clipboard added). Pass/fail only. History, including the runs that failed while the prompt wording
+`qwen3.5:4b`: **77 / 77** on the v10 suite (2026-09-27, the laptop's GPU, ~1.1 s mean planning; power and OBS
+added). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
@@ -105,8 +105,13 @@ sonu "how is my laptop doing?"
      on the laptop: brightness 25% → 30% (popup), clipboard read/clear of a test string (not in the audit log),
      "dark mode" (already dark: no change), light mode → hyprmono-light → back to hyprmono, next wallpaper → back
      to the mountain;
-   - Spotify by name; local music with `mpv`;
-   - suspend / reboot / shut down (high risk, always asks); screen recording.
+   - ~~suspend / reboot / shut down; screen recording~~ — done (#15, [D40](DECISIONS.md)): `system.power` and OBS
+     (record, scenes, streaming, virtual camera, replay buffer, mute). On the laptop: dry runs and a refused
+     shutdown only (never run for real); OBS says its WebSocket server is off → **the owner turns it on once**
+     (OBS → Tools → WebSocket Server Settings → Enable), then try: `sonu record my screen`, `sonu stop recording`,
+     `sonu switch obs to scene 3`, `sonu is obs recording?`;
+   - Apple Music by name: **not possible** with apple-music-desktop (it ignores links); Spotify would need the app
+     and the user's Spotify API key; local music with `mpv` waits for music in `~/Music`.
 3. **M2 — daemon + memory**: faster replies (the model stays loaded; no process start per request), the activity
    journal (30-day retention), "remember …" preferences (e.g. "use Code - OSS from now on"), layouts. Plan in
    [`PROPOSAL.md`](PROPOSAL.md#8-roadmap).
@@ -157,7 +162,8 @@ sonu "how is my laptop doing?"
 | #11 | 2026-09-27 | The browser named in the request is used when the plan leaves it out; the model's summary isn't printed for steps |
 | #12 | 2026-09-27 | Batch 2, windows: `windows.state` (fullscreen, maximize, float/tile, pin) and `windows.side_by_side`; "on all workspaces" no longer means all windows; eval suite v7 |
 | #13 | 2026-09-27 | Batch 2: `files.open` (folders, the newest file), "what's playing?", `reminders.list` / `reminders.cancel`; the rice's file manager; eval suite v8 |
-| #14 | open | Batch 2: `desktop.theme` (by name, next, light/dark), `desktop.wallpaper`, the brightness popup, `clipboard.read` / `clipboard.clear`; theme and wallpaper in `system.status`; eval suite v9 |
+| #14 | 2026-09-27 | Batch 2: `desktop.theme` (by name, next, light/dark), `desktop.wallpaper`, the brightness popup, `clipboard.read` / `clipboard.clear`; theme and wallpaper in `system.status`; eval suite v9 |
+| #15 | open | Batch 2: `system.power` (always asks); OBS (`obs.record`, `obs.scene`, `obs.control`, `obs.mute`, status) through its WebSocket server; tasks can end "unverified" ([D39](DECISIONS.md)); eval suite v10 |
 
 ### Found on real hardware → fixed
 
@@ -189,6 +195,7 @@ sonu "how is my laptop doing?"
 | 09-27 | Chromium played the video but wasn't in the media controls → "couldn't confirm it's playing" | a new audio stream from the browser's process confirms it ([D34](DECISIONS.md)) (#10) |
 | 09-27 | The plan's message said "Playing 'faded' by The Smashing Pumpkins" (made up) | prompt: media.play's query is the user's words only — the same request now says "Playing faded on YouTube" (a broader "never add facts" rule broke "go to youtube" in the evals and was dropped) (#10) |
 | 09-27 | After #10, the summary still said "by The 1975" / "by Faded" (the step itself played Alan Walker's Faded) | the model's summary isn't printed for steps; SONU's own step lines say what happens ([D35](DECISIONS.md)) (#11) |
+| 09-27 | (dry run) "shut down" listed the open windows without the terminal SONU runs in, which closes too | every window is listed (#15) |
 | 09-27 | (dry run) "switch to light mode" was planned as "next theme" | `light` / `dark` are the theme tool's own actions; eval `light-mode` (#14) |
 | 09-27 | (eval) "switch to the tokyo night theme" was planned as "next theme" | a theme the user's words name wins over "next" (#14) |
 | 09-27 | (dry run) "open my downloads" → "Open ~/Downloads in Bulk Rename": "thunar" is also the program of Thunar's Bulk Rename entry | a default command means the entry named after it, else the one with the fewest extra arguments (#13) |

@@ -91,6 +91,8 @@ class FakeSystem:
     streams: list[list[int | bool]] = field(default_factory=list)
     timers: dict[str, str] = field(default_factory=dict)  # systemd unit → notification text
     timer_times: dict[str, datetime] = field(default_factory=dict)  # systemd unit → when it fires
+    power_requests: list[str] = field(default_factory=list)  # systemctl suspend / reboot / poweroff
+    inhibited_by: str | None = None  # a program holding a sleep/shutdown lock
     area: str | None = "10,20 300x200"  # what slurp returns (None: the user cancelled)
     clipboard_type: str | None = None  # None with clipboard_text: text is copied
     clipboard_text: str | None = None
@@ -402,6 +404,13 @@ class FakeSystem:
         return 0, f"Running timer as unit: {unit}.timer\n", ""
 
     def _systemctl(self, args: list[str]) -> tuple[int, str, str]:
+        if args[0] in ("suspend", "reboot", "poweroff"):
+            self.power_requests.append(args[0])
+            return (
+                (1, "", f'Operation inhibited by "{self.inhibited_by}"\n')
+                if self.inhibited_by
+                else (0, "", "")
+            )
         if args[1] == "list-timers":
             timers = [
                 {"next": int(self.timer_times[unit].timestamp() * 1_000_000), "unit": f"{unit}.timer"}

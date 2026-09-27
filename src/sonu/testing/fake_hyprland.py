@@ -165,6 +165,7 @@ class FakeHyprland:
         self.launched: list[list[str]] = []
         # True: fullscreen/float/pin requests answer "ok" but change nothing (as for a window that refuses).
         self.ignore_state = False
+        self.exited = False  # the session was ended (log out)
         self._next_address = 0x5500_0000_1000
         self._tasks: set[asyncio.Task[None]] = set()
         self._servers: list[asyncio.Server] = []
@@ -331,6 +332,9 @@ class FakeHyprland:
             return f"error: fake Hyprland cannot parse dispatch {argument!r}"
         if parsed.kind == "exec":
             return self._exec(parsed)
+        if parsed.kind == "exit":
+            self.exited = True
+            return "ok"
         if parsed.kind == "focus_workspace":
             self._background(self._focus_workspace(int(parsed.workspace or "1")))
             return "ok"

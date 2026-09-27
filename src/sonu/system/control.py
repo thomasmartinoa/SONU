@@ -50,6 +50,7 @@ _DESKTOP_ID = re.compile(r"^[\w.+-]+\.desktop$")
 _THEME_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")  # hypr-theme's own rule: no "/" or leading "."
 THEME_TIMEOUT_S = 60.0  # a theme switch re-renders every app's colours
 MAX_CLIPBOARD_CHARS = 2000
+PowerAction = Literal["suspend", "reboot", "poweroff"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -436,6 +437,11 @@ class SystemControl:
         if not REMINDER_UNIT.match(unit):
             raise CommandError(f"{unit!r} isn't one of SONU's reminders")
         await self._run("systemctl", "--user", "stop", f"{unit}.timer")
+
+    # ------------------------------------------------------------------ power (the rice's power menu)
+    async def power(self, action: PowerAction) -> None:
+        """``systemctl suspend / reboot / poweroff``, exactly as the rice's power menu runs them."""
+        await self._run("systemctl", action, timeout_s=15.0)
 
     async def timer_active(self, unit: str) -> bool:
         result = await self.runner.run(

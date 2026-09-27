@@ -37,7 +37,8 @@ works:
 | "Put X and Y side by side" (`windows.side_by_side`) | ✅ | both tiled on one workspace (the first window's), the tiler splits it; done only when their positions really are next to each other |
 | Save and restore a layout | 🗺 M2 | layouts need memory |
 | Screenshot of the screen, a window or an area; copy it | 🧪 this batch | `grim` (+ `slurp` for an area) into `~/Pictures/screenshot/` like the rice's keys, `wl-copy` |
-| Screen recording | ⏭ | `wf-recorder` (start/stop, file verified) |
+| Screen recording with **OBS** (`obs.record`): start (opens OBS if needed), stop (file verified), pause, resume | ✅ | OBS's own WebSocket server (local only; the password comes from OBS's settings) — turned on once in OBS: Tools → WebSocket Server Settings |
+| OBS scenes, streaming (always asks), virtual camera, replay buffer, muting a source; "is OBS recording?" | ✅ | `obs.scene`, `obs.control`, `obs.mute`, `system.status` `obs` — every change read back from OBS |
 
 ## System
 
@@ -54,7 +55,7 @@ works:
 | Volume/brightness popup when SONU changes them | ✅ | volume: the rice's OSD shows it by itself (it watches PipeWire); brightness: `qs ipc call osd brightness <percent>` like `brightness.sh` |
 | Clipboard: "what's on my clipboard?", "clear my clipboard" (`clipboard.read`, `clipboard.clear`) | ✅ | `wl-paste` / `wl-copy --clear`; shown only to you — never to the model, the audit log or anywhere else |
 | Copy something to the clipboard | ⏭ | needs a source SONU can read (a file, a screenshot — already copied) |
-| Suspend, reboot, shut down | ⏭ | `systemctl suspend/reboot/poweroff` — high risk, always asks |
+| Suspend, restart, shut down, log out (`system.power`) | ✅ | what the rice's power menu runs (`systemctl suspend/reboot/poweroff`, Hyprland `exit`); high risk: **always asks** and names the open windows; reported "requested", never "done" |
 | Join **new** Wi-Fi networks, pair **new** Bluetooth devices | ⛔ for now | needs passwords/PINs; SONU doesn't handle secrets yet |
 
 ## Browser
@@ -74,7 +75,8 @@ works:
 |---|---|---|
 | Play, pause, next, previous what's playing (Apple Music, browser, Spotify, mpv, …) | ✅ | `playerctl` |
 | Play a particular song or video (YouTube) | 🧪 this batch | see Browser |
-| Play on Spotify or Apple Music by name | ⏭ | Spotify: `spotify:search:` URIs + MPRIS; Apple Music: search page (clicking play needs M6) |
+| Play on Apple Music by name | ⛔ for now | the owner's Apple Music app (apple-music-desktop, an Electron wrapper) ignores links passed to it, so a song can't be opened or started without clicking in it (M6). "Play X" plays it on YouTube |
+| Play on Spotify by name | ⏭ if installed | the Spotify app plays `spotify:track:` links through the media controls; finding the track needs a Spotify API key (the user's own) |
 | Local music ("play my downloads folder") | ⏭ | `mpv` with the folder + MPRIS |
 | "What's playing?" | ✅ | `system.status` media: `playerctl metadata` (read-only; kept out of the audit log) |
 
@@ -111,7 +113,8 @@ works:
 - **Batch 1** (done, verified on the laptop): play on YouTube, reminders and timers, screenshots, laptop health, the
   rice's switches.
 - **Batch 2** (in progress): window states and side by side ✅ (#12); folders and the newest file, "what's playing?",
-  list and cancel reminders ✅ (#13); the brightness popup, clipboard, wallpaper and theme ✅ (#14); next: Spotify by
-  name, local music, suspend / reboot / shut down, screen recording.
+  list and cancel reminders ✅ (#13); the brightness popup, clipboard, wallpaper and theme ✅ (#14); power and OBS
+  ✅ (#15). Apple Music by name isn't possible with the owner's app (see Media); local music waits for music in
+  `~/Music`.
 
 After batch 2: M2.

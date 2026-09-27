@@ -185,7 +185,8 @@ async def test_unrecognised_window_is_unverified_not_done(harness: Harness) -> N
     plans = {"r": steps_plan(("apps.launch", {"app": "kitty"}))}
     report = await harness.engine(plans).run("r", confirm=Confirmations(False))
     assert report.steps[0].outcome.status is StepStatus.UNVERIFIED
-    assert report.status == "failed"
+    assert report.status == "unverified"  # never "done"; D39: not "failed" either — it did run
+    assert report.headline() == "Done, but not confirmed — see the steps above"
 
 
 @pytest.mark.anyio

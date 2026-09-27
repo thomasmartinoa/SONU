@@ -412,6 +412,7 @@ StatusItem = Literal[
     "uptime",
     "theme",
     "wallpaper",
+    "obs",
 ]
 _SETTINGS_ITEMS: tuple[StatusItem, ...] = (
     "volume",
@@ -454,7 +455,7 @@ class SystemStatus(Tool):
     description = (
         "Tell the user the current volume, mic, brightness, Bluetooth, Wi-Fi, media, power mode, battery, "
         "the laptop's health (CPU, memory, temperature, GPU, disk space, uptime), or the rice's theme and "
-        "wallpaper."
+        "wallpaper, or what OBS is doing."
     )
     risk = Risk.READ_ONLY
     effects = frozenset({Effect.SYSTEM_READ})
@@ -511,6 +512,10 @@ class SystemStatus(Tool):
                 current = next((t.id for t in themes if t.current), "unknown")
                 others = [t.id for t in themes if not t.current]
                 return f"Theme: {current}" + (f" (also: {', '.join(others)})" if others else "")
+            if item == "obs":  # recording, scene, streaming, virtual camera
+                from sonu.tools.obs_tools import obs_status  # obs_tools imports this module's neighbours
+
+                return await obs_status(ctx)
             if item == "wallpaper":
                 wallpaper = await ctx.system.wallpaper()
                 return f"Wallpaper: {wallpaper.name if wallpaper else 'none set'}"

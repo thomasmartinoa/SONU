@@ -129,5 +129,9 @@ class HyprlandDesktop:
     async def set_floating(self, window: Window, on: bool) -> None:
         await self.client.dispatch(self.dialect.set_floating(self.selector(window), on))
 
+    async def exit_session(self) -> None:
+        """Log out: Hyprland quits (the rice's power menu does the same)."""
+        await self.client.dispatch(self.dialect.exit_session())
+
     async def set_pinned(self, window: Window, on: bool) -> None:
         await self.client.dispatch(self.dialect.set_pinned(self.selector(window), on))

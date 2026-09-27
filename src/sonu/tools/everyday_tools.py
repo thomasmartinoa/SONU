@@ -50,13 +50,13 @@ def _missing(ctx: ToolContext, *programs: str) -> ToolOutcome | None:
     return None
 
 
-async def _settle(
-    read: Callable[[], Awaitable[str]],
-    ok: Callable[[str], bool],
+async def _settle[T](
+    read: Callable[[], Awaitable[T]],
+    ok: Callable[[T], bool],
     ctx: ToolContext,
     *,
     within_s: float | None = None,
-) -> str:
+) -> T:
     """Re-read a switch's state until it's what we asked for (e.g. hyprsunset takes a moment)."""
     loop = asyncio.get_running_loop()
     deadline = loop.time() + (ctx.settings.verify.timeout_s if within_s is None else within_s)

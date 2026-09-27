@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from sonu.core.planning import Plan, PlannedStep, PlanningError
 from sonu.llm.chat import ChatMessage, ChatModel, ChatModelError
+from sonu.tools.base import Effect
 from sonu.tools.grounding import ungrounded_words
 from sonu.tools.registry import MAX_STEPS, MAX_UNSUPPORTED, ToolRegistry
 from sonu.world.snapshot import WorldSnapshot
@@ -272,6 +273,10 @@ with what ["media"].
 - The colour theme is desktop.theme ("light mode" / "dark mode" is toggle); the wallpaper is \
 desktop.wallpaper; "which theme / wallpaper?" is system.status with what ["theme"] or ["wallpaper"]. \
 "What's on my clipboard?" is clipboard.read.
+- Suspend (sleep), restart, shut down and log out are system.power, always the last step.
+- Recording the screen is obs.record (OBS Studio); OBS scenes are obs.scene; streaming, the \
+virtual camera and the replay buffer are obs.control; muting a source in OBS is obs.mute; "is OBS \
+recording?" is system.status with what ["obs"].
 - Reminders and timers are reminders.set; "what reminders do I have?" is reminders.list; \
 cancelling one is reminders.cancel. Screenshots are screen.capture; night light, keeping the \
 screen awake, do-not-disturb, clearing notifications and locking are desktop.shell. "Turn off do \
@@ -343,6 +348,9 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
             details = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:3])
             problems.append(f"step {index + 1} ({step.tool}): {details}")
             continue
+        if tool.effects & {Effect.POWER} and index != len(plan.steps) - 1:
+            # Nothing after a suspend/shutdown would run: it must be the last step.
+            problems.append(f"step {index + 1} ({step.tool}) must be the last step")
         for name in tool.grounded:
             value = step.args.get(name)
             if not isinstance(value, str):

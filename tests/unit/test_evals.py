@@ -107,6 +107,16 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "which-theme": steps(("system.status", {"what": ["theme"]})),
     "next-wallpaper": steps(("desktop.wallpaper", {"action": "next"})),
     "read-clipboard": steps(("clipboard.read", {})),
+    "suspend-asks": steps(("system.power", {"action": "suspend"})),
+    "mute-then-shut-down": steps(
+        ("settings.volume", {"target": "speaker", "mute": True}), ("system.power", {"action": "shutdown"})
+    ),
+    "record-the-screen": steps(("obs.record", {"action": "start"})),
+    "stop-recording": steps(("obs.record", {"action": "stop"})),
+    "obs-scene": steps(("obs.scene", {"scene": "only screen"})),
+    "obs-mute-mic": steps(("obs.mute", {"source": "mic", "mute": True})),
+    "go-live-asks": steps(("obs.control", {"action": "stream_start"})),
+    "is-obs-recording": steps(("system.status", {"what": ["obs"]})),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

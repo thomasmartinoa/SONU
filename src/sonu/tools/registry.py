@@ -16,6 +16,8 @@ from sonu.tools.desktop_tools import DEFAULT_TOOLS
 from sonu.tools.everyday_tools import EVERYDAY_TOOLS
 from sonu.tools.file_tools import FILE_TOOLS
 from sonu.tools.media_tools import MEDIA_TOOLS
+from sonu.tools.obs_tools import OBS_TOOLS
+from sonu.tools.power_tools import POWER_TOOLS
 from sonu.tools.rice_tools import RICE_TOOLS
 from sonu.tools.settings_tools import SETTINGS_TOOLS
 from sonu.tools.web_tools import WEB_TOOLS
@@ -55,6 +57,8 @@ class ToolRegistry:
             *EVERYDAY_TOOLS,
             *FILE_TOOLS,
             *RICE_TOOLS,
+            *POWER_TOOLS,
+            *OBS_TOOLS,
         ),
     ) -> None:
         self._tools = {tool.name: tool for tool in tools}

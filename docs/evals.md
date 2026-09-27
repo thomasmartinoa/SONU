@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v9, 69 cases)
+## The cases (v10, 77 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -56,6 +56,10 @@ playing?", and listing and cancelling reminders. Every case's home has `Download
 v9 adds the rice's theme (by name, light mode, "which theme?"), the next wallpaper and reading the clipboard. The
 fake system has the owner's theme names (hyprmono, hyprmono-light, tokyo-night, catppuccin-mocha).
 
+v10 adds power (the step asks; SONU can't watch a suspend, so the task ends "unverified") and OBS. Every case runs a
+fake OBS WebSocket server with the owner's scenes ("Scene Main", "Scene only screen", "Scene 3"); cases can set
+OBS's state (`obs = {…}`) and expect it (`expect_obs = {…}`).
+
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use
 *different* apps than the cases, so the score measures generalisation rather than memorisation.
@@ -90,6 +94,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-27 | `qwen3.5:4b` | v8 (64 cases) | **64 / 64** | — |
 | 2026-09-27 | `qwen3.5:4b` | v9: five cases for theme, wallpaper, clipboard | **4 / 5** of the five | "switch to the tokyo night theme" → `{"action": "next"}`. Fixed in the tool (a theme the user's words name wins over next) |
 | 2026-09-27 | `qwen3.5:4b` | v9 (69 cases) | **69 / 69** | — |
+| 2026-09-27 | `qwen3.5:4b` | v10 (77 cases): power (suspend asks, mute then shut down) and OBS (record, stop, scene, mute, go live asks, status) | **77 / 77** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

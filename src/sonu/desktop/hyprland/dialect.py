@@ -118,6 +118,8 @@ class Dialect(Protocol):
 
     def set_pinned(self, window: WindowSelector, on: bool) -> str: ...
 
+    def exit_session(self) -> str: ...
+
 
 class LuaDialect:
     provider: ConfigProvider = "lua"
@@ -165,6 +167,9 @@ class LuaDialect:
         action = lua_string("enable" if on else "disable")
         return f"dispatch hl.dsp.window.pin({{ action = {action}, window = {lua_string(window.value)} }})"
 
+    def exit_session(self) -> str:
+        return "dispatch hl.dsp.exit()"  # what the rice's power menu sends to log out
+
 
 class HyprlangDialect:
     """Classic dispatchers (Hyprland < 0.55, or 0.55/0.56 with a hyprlang config).
@@ -209,6 +214,9 @@ class HyprlangDialect:
     def set_pinned(self, window: WindowSelector, on: bool) -> str:
         # Classic `pin` toggles: callers only send it when the window isn't in the wanted state.
         return f"dispatch pin {self._legacy_selector(window)}"
+
+    def exit_session(self) -> str:
+        return "dispatch exit"
 
 
 def dialect_for(provider: ConfigProvider) -> Dialect:

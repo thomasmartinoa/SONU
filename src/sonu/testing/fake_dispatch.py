@@ -12,7 +12,9 @@ from typing import Literal
 
 _LUA_STR = r'"(?:[^"\\]|\\\d{3})*"'
 
-Kind = Literal["exec", "move", "focus_window", "focus_workspace", "close", "fullscreen", "float", "pin"]
+Kind = Literal[
+    "exec", "move", "focus_window", "focus_workspace", "close", "fullscreen", "float", "pin", "exit"
+]
 
 _LUA_PATTERNS: dict[Kind, re.Pattern[str]] = {
     "exec": re.compile(
@@ -35,6 +37,7 @@ _LUA_PATTERNS: dict[Kind, re.Pattern[str]] = {
     "pin": re.compile(
         rf"^hl\.dsp\.window\.pin\(\{{ action = (?P<action>{_LUA_STR}), window = (?P<win>{_LUA_STR}) \}}\)$"
     ),
+    "exit": re.compile(r"^hl\.dsp\.exit\(\)$"),
 }
 
 _LEGACY_PATTERNS: dict[Kind, re.Pattern[str]] = {
@@ -45,6 +48,7 @@ _LEGACY_PATTERNS: dict[Kind, re.Pattern[str]] = {
     "close": re.compile(r"^closewindow (?P<win>\S+)$"),
     "float": re.compile(r"^(?P<action>setfloating|settiled) (?P<win>\S+)$"),
     "pin": re.compile(r"^(?P<action>pin) (?P<win>\S+)$"),
+    "exit": re.compile(r"^exit$"),
 }
 _LEGACY_ACTIONS = {"setfloating": "enable", "settiled": "disable", "pin": "toggle"}
 
