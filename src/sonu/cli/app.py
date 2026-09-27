@@ -13,7 +13,7 @@ from rich.markup import escape
 
 from sonu import __version__
 from sonu.audit import AuditError, AuditLog
-from sonu.cli import ask_cmd, audit_cmd, config_cmd, desktop_cmd, eval_cmd
+from sonu.cli import ask_cmd, audit_cmd, config_cmd, daemon_cmd, desktop_cmd, eval_cmd
 from sonu.cli.state import AppState, env_snapshot, get_state
 from sonu.doctor import DoctorContext, as_json, render_console, run_checks, summarize
 from sonu.logs import setup_logging
@@ -33,6 +33,7 @@ app.command("eval")(eval_cmd.eval_cmd)
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(audit_cmd.app, name="audit")
 app.add_typer(desktop_cmd.app, name="desktop")
+app.add_typer(daemon_cmd.app, name="daemon")
 
 
 def _version_callback(value: bool) -> None:
@@ -89,7 +90,7 @@ def doctor(
         raise typer.Exit(code=1)
 
 
-COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop"}
+COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop", "daemon"}
 _GLOBAL_FLAGS = {"-v", "-vv", "-vvv", "--verbose"}
 # `sonu ask` options that may come before a bare request: `sonu --dry-run open kitty`.
 _ASK_FLAGS = {"--dry-run", "--deep", "--json", "--notify"}

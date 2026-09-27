@@ -33,7 +33,7 @@ Homepage = "https://github.com/thomasmartinoa/SONU"
 Issues = "https://github.com/thomasmartinoa/SONU/issues"
 
 [project.scripts]
-sonu = "sonu.cli.app:main"
+sonu = "sonu.cli.entry:main"
 
 [dependency-groups]
 dev = [

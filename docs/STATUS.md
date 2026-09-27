@@ -15,7 +15,7 @@ _Last update: 2026-09-27_
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
-| M2 Daemon, conversation, memory | ⏭ **next** — faster replies (model stays loaded), one conversation ("switch it to Sonnet"), natural replies, "remember …" |
+| M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (was 1.6–2.5 s; 6 s after the model unloaded) — measured on the laptop (#18); next: one conversation ("switch it to Sonnet"), natural replies, "remember …" |
 | M3 Voice · M4 Developer operator · M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -95,9 +95,10 @@ The goal ([PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whol
 the whole PC by natural voice, with SONU talking back — "Hey Sonu", open Claude Code in a new folder, type a prompt it
 wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen control where there's no API.
 
-1. **M2 — daemon, conversation, memory** (next): `sonud` keeps the planner model loaded (≈1 s replies), remembers
-   the conversation (so "it" means the window SONU just opened), answers in natural short sentences, "remember …"
-   preferences, the activity journal. `sonu` becomes a thin client.
+1. **M2 — daemon, conversation, memory**: ~~`sonud` keeps the planner model loaded, `sonu` a thin client~~ — done
+   (#18, [D43](DECISIONS.md)); after merging: `sonu daemon install` (a systemd user service). Next: remember the
+   conversation (so "it" means the window SONU just opened), natural short replies, "remember …" preferences, the
+   activity journal.
 2. **M3 — voice**: push-to-talk on the NitroSense key, then "Hey Sonu"; faster-whisper (GPU) + a natural local
    voice; barge-in; high risk never approved by voice alone.
 3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
@@ -156,7 +157,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #14 | 2026-09-27 | Batch 2: `desktop.theme` (by name, next, light/dark), `desktop.wallpaper`, the brightness popup, `clipboard.read` / `clipboard.clear`; theme and wallpaper in `system.status`; eval suite v9 |
 | #15 | 2026-09-27 | Batch 2: `system.power` (always asks); OBS (`obs.record`, `obs.scene`, `obs.control`, `obs.mute`, status) through its WebSocket server; tasks can end "unverified" ([D39](DECISIONS.md)); eval suite v10 |
 | #16 | 2026-09-27 | OBS verified on the laptop and its failures explained (Hybrid MP4 pause, virtual camera without `v4l2loopback`, replay buffer off, dialogs OBS waits on); Spotify by name without a key; Apple Music explained |
-| #17 | open | Roadmap: the goal is a voice operator for the whole PC ([D42](DECISIONS.md)); M2 gains conversation, M4 becomes the developer operator, M4.5 installs, M6 screen control |
+| #17 | 2026-09-27 | Roadmap: the goal is a voice operator for the whole PC ([D42](DECISIONS.md)); M2 gains conversation, M4 becomes the developer operator, M4.5 installs, M6 screen control |
+| #18 | open | M2 part 1: `sonud` (model kept loaded and warmed, private socket, questions relayed to the client, Ctrl+C cancels), `sonu` as a thin client with a fallback, `sonu daemon install/status/uninstall` |
 
 ### Found on real hardware → fixed
 
@@ -188,6 +190,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | 09-27 | Chromium played the video but wasn't in the media controls → "couldn't confirm it's playing" | a new audio stream from the browser's process confirms it ([D34](DECISIONS.md)) (#10) |
 | 09-27 | The plan's message said "Playing 'faded' by The Smashing Pumpkins" (made up) | prompt: media.play's query is the user's words only — the same request now says "Playing faded on YouTube" (a broader "never add facts" rule broke "go to youtube" in the evals and was dropped) (#10) |
 | 09-27 | After #10, the summary still said "by The 1975" / "by Faded" (the step itself played Alan Walker's Faded) | the model's summary isn't printed for steps; SONU's own step lines say what happens ([D35](DECISIONS.md)) (#11) |
+| 09-27 | Measured: each request spent ~1.1 s starting Python and the CLI, and 6 s whenever the model had unloaded | `sonud` + a thin client: ~0.8 s (#18) |
+| 09-27 | (daemon) the first request after starting the daemon took 12 s: the model was loading and had to read SONU's instructions | the daemon warms up with a practice plan and holds requests until it's ready (#18) |
 | 09-27 | The owner's everyday `sonu` was still the pre-#15 copy: "record my screen" took a screenshot, "stop recording" **cleared the notifications** | the copy is reinstalled right after each merge (in the workflow now); with #15 both go to OBS (evals `record-the-screen`, `stop-recording`) (#16) |
 | 09-27 | "pause the recording": OBS answered ok and kept recording — the format is Hybrid MP4, which can't pause | SONU says why and how to change the format (#16) |
 | 09-27 | "turn on the obs virtual camera": `v4l2loopback` wasn't loaded, OBS ran `pkexec modprobe` (a password prompt), and every later OBS request was silently queued ("record my screen" → didn't start) | SONU doesn't start the virtual camera without the module and explains; when OBS doesn't act it names the dialog OBS waits on (#16) |
