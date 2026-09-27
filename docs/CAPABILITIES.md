@@ -104,8 +104,12 @@ works:
 
 | Ability | State | How |
 |---|---|---|
-| Faster replies (model kept loaded), "remember …" preferences, activity journal, "what was I doing yesterday?" | 🗺 **M2 (next milestone)** | a small SONU daemon + local memory |
-| Voice: "Hey Sonu", push-to-talk on the NitroSense key | 🗺 M3 | local speech-to-text / text-to-speech |
+| Faster replies (model kept loaded), one conversation ("switch **it** to Sonnet"), natural replies, "remember …" preferences, activity journal | 🗺 **M2 (next milestone)** | a small SONU daemon (`sonud`) + local memory |
+| Voice: "Hey Sonu", push-to-talk on the NitroSense key, a natural voice back, talk over it to stop it | 🗺 M3 | faster-whisper (GPU) speech-to-text, Kokoro/Piper voice, wake word; high risk never approved by voice alone |
+| Claude Code by voice: open it in a folder, type a prompt, `/model sonnet`, write the best prompt from an idea | 🗺 M4 | SONU-owned kitty windows with remote control (only those), screen text read back to confirm |
+| GitHub: list pull requests and checks, merge after approval | 🗺 M4 | `gh` (already signed in) — merging is high risk |
+| Install software by name ("install Spotify") | 🗺 M4.5 | `pacman -Ss` then AUR (`yay`); install through polkit — the password prompt appears only then |
+| Operate any app by looking at the screen | 🗺 M6 | vision model (local `qwen3.5`/`gemma4` or opt-in cloud) + input; high risk, confirmed |
 | Cloud models (free tiers), Claude Code driving SONU (MCP) | 🗺 M5 | opt-in; an egress guard shows what leaves the laptop |
 
 ## Batches

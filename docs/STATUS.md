@@ -15,8 +15,8 @@ _Last update: 2026-09-27_
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
-| M2 Daemon + memory | ⏭ after batch 2 — faster replies (model stays loaded), journal, "remember …" |
-| M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
+| M2 Daemon, conversation, memory | ⏭ **next** — faster replies (model stays loaded), one conversation ("switch it to Sonnet"), natural replies, "remember …" |
+| M3 Voice · M4 Developer operator · M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
 
@@ -91,35 +91,21 @@ sonu "how is my laptop doing?"
 
 ## Next steps (in order)
 
-1. ~~Play on YouTube, again on the laptop~~ — **works** (2026-09-27, after autoplay was allowed in Zen): Zen and
-   Chromium both "✔ Playing 'Alan Walker - Faded'". The audit log shows Zen confirmed through the media controls
-   (`firefox.instance_1_1470`, once autoplay let it play) and Chromium through a new audio stream from its own process
-   (it still never registers with MPRIS). "in firefox" played in Zen → fixed in #11 (below).
-2. **Batch 2** — the ⏭ items in [`CAPABILITIES.md`](CAPABILITIES.md), roughly in this order:
-   - ~~windows: fullscreen, floating, pin; "put X and Y side by side"~~ — done (#12, [D36](DECISIONS.md)); verified on
-     the laptop: fullscreen/exit, maximize/unmaximize, float, pin, unpin, tile, zen + kitty side by side;
-   - ~~open a folder or file ("open my downloads"), "open my last download"; "what's playing?", list and cancel
-     reminders~~ — done (#13, [D37](DECISIONS.md)); verified on the laptop: Downloads opened in Thunar, a test
-     reminder listed and cancelled, "what's playing?", and "open my last download" (a `.zip`) asks first;
-   - ~~the rice's volume/brightness popup; clipboard; wallpaper and theme~~ — done (#14, [D38](DECISIONS.md)); verified
-     on the laptop: brightness 25% → 30% (popup), clipboard read/clear of a test string (not in the audit log),
-     "dark mode" (already dark: no change), light mode → hyprmono-light → back to hyprmono, next wallpaper → back
-     to the mountain;
-   - ~~suspend / reboot / shut down; screen recording~~ — done (#15, [D40](DECISIONS.md)): `system.power` and OBS
-     (record, scenes, streaming, virtual camera, replay buffer, mute). On the laptop: dry runs and a refused
-     shutdown only (never run for real); OBS says its WebSocket server is off → **the owner turns it on once**
-     (OBS → Tools → WebSocket Server Settings → Enable), then try: `sonu record my screen`, `sonu stop recording`,
-     `sonu switch obs to scene 3`, `sonu is obs recording?`;
-   - OBS **verified on the laptop** (#16; the owner turned the WebSocket server on and let SONU test it): record
-     (OBS started by SONU) → 48 MB file saved, scenes 3 / only screen / main, mute and unmute the mic, virtual camera
-     on/off, status. Found: see the table below;
-   - Spotify by name **without a key** (#16, [D41](DECISIONS.md)): "play alan walker faded on spotify" → Faded by
-     Alan Walker, "play believer by imagine dragons on spotify" → Believer, both confirmed from the media controls;
-   - Apple Music by name: **not possible** with apple-music-desktop (it ignores links) — SONU says so;
-     local music with `mpv` waits for music in `~/Music`.
-3. **M2 — daemon + memory**: faster replies (the model stays loaded; no process start per request), the activity
-   journal (30-day retention), "remember …" preferences (e.g. "use Code - OSS from now on"), layouts. Plan in
-   [`PROPOSAL.md`](PROPOSAL.md#8-roadmap).
+The goal ([PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc), [D42](DECISIONS.md)): control
+the whole PC by natural voice, with SONU talking back — "Hey Sonu", open Claude Code in a new folder, type a prompt it
+wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen control where there's no API.
+
+1. **M2 — daemon, conversation, memory** (next): `sonud` keeps the planner model loaded (≈1 s replies), remembers
+   the conversation (so "it" means the window SONU just opened), answers in natural short sentences, "remember …"
+   preferences, the activity journal. `sonu` becomes a thin client.
+2. **M3 — voice**: push-to-talk on the NitroSense key, then "Hey Sonu"; faster-whisper (GPU) + a natural local
+   voice; barge-in; high risk never approved by voice alone.
+3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
+   read back), the prompt writer, GitHub via `gh` (merge after approval).
+4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
+5. **M5 — connect** (cloud models opt-in, MCP) and **M6 — screen control** (vision model + input, opt-in, high risk).
+
+Waiting on music in `~/Music`: local music with `mpv`.
 
 ## Open questions and known issues
 
@@ -169,7 +155,8 @@ sonu "how is my laptop doing?"
 | #13 | 2026-09-27 | Batch 2: `files.open` (folders, the newest file), "what's playing?", `reminders.list` / `reminders.cancel`; the rice's file manager; eval suite v8 |
 | #14 | 2026-09-27 | Batch 2: `desktop.theme` (by name, next, light/dark), `desktop.wallpaper`, the brightness popup, `clipboard.read` / `clipboard.clear`; theme and wallpaper in `system.status`; eval suite v9 |
 | #15 | 2026-09-27 | Batch 2: `system.power` (always asks); OBS (`obs.record`, `obs.scene`, `obs.control`, `obs.mute`, status) through its WebSocket server; tasks can end "unverified" ([D39](DECISIONS.md)); eval suite v10 |
-| #16 | open | OBS verified on the laptop and its failures explained (Hybrid MP4 pause, virtual camera without `v4l2loopback`, replay buffer off, dialogs OBS waits on); Spotify by name without a key; Apple Music explained |
+| #16 | 2026-09-27 | OBS verified on the laptop and its failures explained (Hybrid MP4 pause, virtual camera without `v4l2loopback`, replay buffer off, dialogs OBS waits on); Spotify by name without a key; Apple Music explained |
+| #17 | open | Roadmap: the goal is a voice operator for the whole PC ([D42](DECISIONS.md)); M2 gains conversation, M4 becomes the developer operator, M4.5 installs, M6 screen control |
 
 ### Found on real hardware → fixed
 

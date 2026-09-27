@@ -595,19 +595,52 @@ sonu/
 Milestones are ordered by dependency. Each has **exit criteria** so "done" is measurable.
 
 Order changed after the decisions: voice moves up to **M3** (right after the daemon it needs), and cloud providers
-+ MCP are merged into one "Connect" milestone.
++ MCP are merged into one "Connect" milestone. On 2026-09-27 the owner set the goal in §8.1 (a voice operator for the
+whole PC): M2 gains conversation, M4 becomes the developer operator, M4.5 (installs) is new, M6 is screen control.
 
 | # | Milestone | Scope | Exit criteria |
 |---|---|---|---|
 | **M0 ✅** | Foundations | Repo scaffold, Apache-2.0, CI, config/paths, logging, hash-chained audit log, Hyprland IPC client + event stream (read-only), Ollama inventory client, FakeHyprland, `sonu doctor`, ADRs, threat model | `uv run sonu doctor` reports Hyprland/Ollama/GPU status correctly on your machine; CI green |
 | **M1 ✅** | Verified window operator | Hyprland dialects (Lua + hyprlang), XDG app catalog + resolver, world model + event-driven waiter, tools (launch, move, focus, show workspace, close, describe), verifier, policy + confirmations (terminal / rofi), Ollama planner with schema-constrained plans + repair, `sonu ask` / `sonu prompt` / `sonu eval`, FakeHyprland end-to-end tests; after real use: pick-list answers, web search/open, `unsupported` parts, 26 eval cases | Wrong-workspace placement auto-corrected ✅; missing apps reported honestly ✅; every action audited ✅; `sonu eval`: `qwen3.5:4b` 26/26 ([evals](evals.md)); verified on the owner's laptop ✅ ([STATUS](STATUS.md)); still to measure: the VS Code/Chromium example in ≥ 9/10 runs |
 | **M1.5 ✅** | System settings (PC control) | Volume and mic, brightness, Bluetooth (+ paired devices), Wi-Fi (+ saved networks), media keys, power mode, and a read-only status ("what's my battery?") — the same programs as the owner's rice, every change read back ([D24](DECISIONS.md)); `sonu doctor` lists what's installed | Each setting changed and verified on the owner's laptop; turning Wi-Fi off asks first; eval cases for settings requests |
-| **M2** | Daemon + memory | `sonud` service, activity journal (30-day default retention), preferences ("remember …"), episodes, layout save/restore, routines, privacy controls | "What was I working on yesterday?" answered from the journal; `sonu layout save/restore` verified; retention/forget work |
-| **M3** | Voice | Push-to-talk, STT, TTS, then the "Hey Sonu" wake word; latency budget; VRAM scheduling; Quickshell bar widget | Spoken M1–M2 commands with measured end-to-end latency; no high-risk confirmation by voice alone |
-| **M4** | Projects & dev workflows | Project discovery, open project in VS Code / VSCodium, dev-server tool (allowlisted scripts from `package.json`/`Makefile`, port detection, `HttpOk` verification), open URL, side-by-side layouts, close-by-project | "Open my AI Shop Assistant project and start the dev server" works end-to-end with verification |
-| **M5** | Connect | Free-tier-friendly cloud providers (OpenAI-compatible: Groq, OpenRouter, Cerebras, xAI, llama.cpp, Ollama Cloud; Gemini; Anthropic/OpenAI API keys), egress guard, cost/limit tracking; **MCP server** (Claude Code), MCP client | Same eval suite runs across providers; egress audited; Claude Code drives SONU's tools with policy enforced |
-| **M6** | Perception & GUI control | Screenshots + vision model, AT-SPI reading, virtual keyboard/pointer input (high-risk tier) | Can operate a GUI app with no API, with confirmation and verification |
-| **M7** | Beyond the desktop | Skill packs on the same policy engine: files, notes & reminders, media, system health, research, coding hand-off (§12) | Each skill has typed tools, verifiers, evals and a documented risk profile |
+| **Batch 1–2 ✅** | Everyday abilities | YouTube and Spotify playback, reminders, screenshots, laptop health, the rice's switches, window states and side by side, folders and files, theme and wallpaper, clipboard, power, OBS ([CAPABILITIES](CAPABILITIES.md)) | Each verified on the owner's laptop ([STATUS](STATUS.md)) |
+| **M2** | Daemon, conversation, memory | `sonud` user service: the planner model stays loaded (replies in ~1 s instead of a new process per request), one conversation across requests ("switch **it** to Sonnet" knows which window), natural spoken-style replies (short, friendly, never claiming what wasn't verified), "remember …" preferences, the activity journal (30-day retention), layouts; `sonu` becomes a thin client | Median request < 1.5 s end to end on the laptop; follow-ups resolved from context in evals; preferences survive restarts; retention/forget work |
+| **M3** | Voice | Push-to-talk on the NitroSense key first, then the "Hey Sonu" wake word; local speech-to-text (faster-whisper on the GPU) and a natural local voice (Kokoro/Piper); barge-in (talk over it to stop it); the Quickshell bar shows listening/thinking/speaking; spoken confirmations with the rule below | "Hey Sonu … open OBS and record my screen" works hands-free with measured latency; no high-risk action approved by voice alone |
+| **M4** | Developer operator | Make folders and files; **SONU-owned terminals** (kitty with remote control on for the windows SONU opens only): open Claude Code in a folder, type a prompt into it, send slash commands (`/model sonnet`), read its screen back to confirm; the **prompt writer** (turn a spoken idea into a strong prompt, read it back, approve, then type); GitHub through `gh` (list PRs and checks, summarise, merge after approval); projects and dev servers | The voice session in §8.1 works end to end with every step verified |
+| **M4.5** | Software installs | "Install Spotify": SONU searches the official repos first (`pacman -Ss`), then the AUR (`yay`), picks and explains the package, asks, and installs through **polkit** (`pkexec pacman -S …`) — the system's own password prompt appears only then; AUR packages are high risk and their PKGBUILD is summarised first | Official and AUR installs work with the password asked at that moment; SONU never stores a password or holds root |
+| **M5** | Connect | Free-tier cloud models and API keys (opt-in, for better prompt writing and vision), egress guard, cost/limit tracking; **MCP server** (Claude Code can use SONU's tools), MCP client | Same eval suite runs across providers; egress audited; Claude Code drives SONU's tools with policy enforced |
+| **M6** | Screen control | For apps with no API: screenshot → vision model → click/type (`ydotool`/`wtype`), accessibility (AT-SPI) first where available; **only with a capable vision model** (local `qwen3.5`/`gemma4` or an opt-in cloud model), high-risk tier, every action confirmed and verified | Can operate a GUI app with no API (e.g. Apple Music: search a song and press play), with confirmation and verification |
+| **M7** | Beyond the desktop | Skill packs on the same policy engine: notes, research, more apps | Each skill has typed tools, verifiers, evals and a documented risk profile |
+
+### 8.1 The goal: a voice operator for the whole PC
+
+The owner's target session ([D42](DECISIONS.md)) — every step maps to a milestone:
+
+1. "Hey Sonu" → it wakes and answers naturally ("Hey! What are we doing?") — **M3** (wake word, voice), **M2** (conversation).
+2. "Make a folder called shop-app in dev_works and open Claude Code there" → folder created, a SONU-owned kitty
+   opens in it running `claude` — **M4**.
+3. "Tell it: build a landing page for …" or "here's my idea …, write the best prompt for it" → SONU writes the
+   prompt, reads it back, asks; on "yes" it types it into that Claude Code window and confirms it arrived — **M4**.
+4. "Switch it to Sonnet" → `/model sonnet` typed into the same window ("it" from the conversation), confirmed from
+   the screen text — **M2 + M4**.
+5. "Open GitHub and merge the pull request" → `gh` lists the PR and its checks, SONU summarises and asks; the merge
+   needs a second confirmation (see below) — **M4**.
+6. "Install Spotify" → the right package found and explained, "install it" → the system's password prompt appears,
+   the package installs, SONU checks it's installed — **M4.5**.
+7. Anything with no API ("press play on the first song in Apple Music") → screen control, only with a capable vision
+   model — **M6**.
+
+Safety rules that make this acceptable ([D42](DECISIONS.md)):
+
+- **Voice approvals**: low and medium risk can be approved by voice; **high risk** (merging, installing, deleting,
+  shutting down, going live) needs voice **plus** a physical confirmation (the SONU key, a click) — a TV or another
+  person can't approve it.
+- **Root only through polkit, per action**: SONU never runs `sudo`, never sees or stores the password; the system asks
+  at that moment and the grant ends with the action.
+- **Typing only into windows SONU opened and can name** (kitty remote control over a private socket), never
+  synthetic keystrokes into whatever is focused — until M6, where input is its own high-risk tier.
+- **What leaves the laptop** is still only the user's own words (searches, prompts they approved); screen contents go
+  to a cloud model only if the user turned that on.
 
 ---
 
