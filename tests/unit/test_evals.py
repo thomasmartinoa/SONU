@@ -87,6 +87,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     ),
     "how-is-my-laptop": steps(("system.status", {"what": ["health"]})),
     "play-with-a-title-on-screen": steps(("media.play", {"query": "faded", "browser": "chromium"})),
+    # The browser is left out on purpose: SONU uses the one the request names.
+    "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(
         ("media.play", {"query": "lofi beats", "browser": "chromium"})
     ),

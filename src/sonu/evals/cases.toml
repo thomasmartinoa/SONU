@@ -407,3 +407,12 @@ expect_status = ["done"]
 expect_windows = [{ class = "chromium", title_contains = "youtube.com/watch" }]
 expect_system = { videos_playing = 1 }
 require_tools = ["media.play"]
+
+[[case]]
+id = "play-in-the-named-browser"
+request = "play lofi on youtube in chromium"
+notes = "Found on real hardware: 'in firefox' was left out of the plan and the video played in Zen."
+expect_status = ["done"]
+expect_windows = [{ class = "chromium", title_contains = "youtube.com/watch" }]
+expect_absent = ["zen"]
+require_tools = ["media.play"]

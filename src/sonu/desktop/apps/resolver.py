@@ -199,6 +199,22 @@ class AppResolver:
             labels[window_class] = f"{entry.name}, {note}" if note else entry.name
         return labels
 
+    def browsers_named_in(self, request: str) -> list[AppEntry]:
+        """Installed web browsers the request names by name or program ("… in firefox")."""
+        words = f" {normalize(request)} "
+        found = []
+        for entry in self.catalog.entries:
+            if (
+                "WebBrowser" not in entry.categories
+                or entry.no_display
+                or entry.accepts not in ("url", "urls")
+            ):
+                continue
+            called = names(entry) | ({normalize(entry.executable)} if entry.executable else set())
+            if any(name and f" {name} " in words for name in called) and entry not in found:
+                found.append(entry)
+        return found
+
     def _resolve_role(self, text: str, query: str) -> Resolution:
         default_key, category = ROLES[query]
         default_command = self.role_defaults.get(default_key) if default_key else None

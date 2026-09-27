@@ -87,6 +87,9 @@ def test_ask_opens_kitty_and_reports_verified_result(
     assert result.exit_code == 0, result.output
     assert "✔ Opened kitty on workspace 2" in result.output
     assert "Done — every step verified" in result.output
+    # Found on real hardware: the model's own summary made up facts ("… by The 1975"); for steps,
+    # only what SONU resolved and verified is shown.
+    assert "Opening kitty on workspace 2." not in result.output
     assert [w["workspace"]["id"] for w in fake.windows_of_class("kitty")] == [2]
     assert fake_ollama.chat_requests[0]["messages"][-1]["content"] == "open kitty on workspace 2"
 

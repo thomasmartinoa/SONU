@@ -196,6 +196,10 @@ def prepare_browser(
         entry = chosen_app(choice, ctx)
     elif browser is None and ctx.task_browser is not None:
         entry = ctx.task_browser  # "open chrome on 3 and search …": the browser this request opened
+    elif browser is None and len(named := ctx.resolver.browsers_named_in(ctx.request_text)) == 1:
+        # Found on real hardware: "play faded on youtube in firefox" was planned without a browser
+        # and played in Zen. The browser the user named, in their own words, wins over the default.
+        entry = named[0]
     else:
         entry = resolve_app(browser or "browser", ctx)
     if isinstance(entry, ToolOutcome):

@@ -134,11 +134,12 @@ class TerminalObserver(Observer):
         if self.enabled and plan.kind == "steps":
             steps = len(plan.steps)
             plural = "s" if steps != 1 else ""
+            # The model's own summary isn't shown for steps: SONU describes each step itself, from
+            # what it resolved. Found on real hardware: the summary made up artists ("Playing 'faded'
+            # by The 1975") while the step played Alan Walker's Faded. It stays in the audit log.
             self.console.print(
                 f"[dim]plan by {escape(plan.model)} in {plan.duration_s:.1f}s · {steps} step{plural}[/]"
             )
-            if plan.message:
-                self.console.print(f"[bold]{escape(plan.message)}[/]")
 
     def on_step_start(self, index: int, description: str) -> None:
         if self.enabled:

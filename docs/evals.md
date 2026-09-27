@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v6, 50 cases)
+## The cases (v6, 51 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -71,6 +71,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-27 | `qwen3.5:4b` | v6 suite (49 cases) on the laptop's GPU; rules for laptop health, do-not-disturb off, play queries; a "message: never add facts the user didn't give" rule | **48 / 49** | "go to youtube" launched the browser app instead of `web.open`. Dropping the message rule fixed it (the play-query rule alone already stopped the made-up artist) |
 | 2026-09-27 | `qwen3.5:4b` | v6 without the message rule; the planner sends back queries that aren't the user's words | **49 / 49** | — (the repair round is visible as `attempts: 2` in `play-with-a-title-on-screen`). Not in the suite: "turn off the night light and do not disturb" stays "…and turn DND on", even with that exact sentence as an example |
 | 2026-09-27 | `qwen3.5:4b` | + `song-in-a-browser-without-media-controls` (playback confirmed by sound) | **50 / 50** | — |
+| 2026-09-27 | `qwen3.5:4b` | + `play-in-the-named-browser` (the named browser is used even if the plan leaves it out) | **51 / 51** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that
