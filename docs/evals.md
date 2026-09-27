@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v10, 79 cases)
+## The cases (v11, 83 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -98,6 +98,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-27 | `qwen3.5:4b` | + play on Spotify, play on Apple Music (explained, not played elsewhere); Spotify rule in the prompt | **78 / 79** | "change my wallpaper" asked which wallpaper. Rule: it's the next one (and the stale "light/dark is toggle" wording fixed) |
 | 2026-09-27 | `qwen3.5:4b` | v10 (79 cases) | **79 / 79** | — |
 | 2026-09-27 | `qwen3.5:4b` | + the rule "it / that / again refer to the recent conversation" (M2 part 2) | **78 / 79**, then **79 / 79** | the first run's "go to youtube" launched the browser app instead of `web.open`; it passed alone twice and in the next full run (variance, seen before after prompt changes) |
+| 2026-09-27 | `qwen3.5:4b` | v11 (83 cases): "remember …" (alias, name, note, list) + memory rules and a "call me" example | **3 / 4** of the new four, then **81 / 83** | "call me Martin" copied the prompt's reminder example (fixed: reminder text must be the user's words + an example); "go to youtube" → the browser app and "play faded on youtube" → browser "youtube" (both fixed in code, not the prompt) |
+| 2026-09-27 | `qwen3.5:4b` | v11 with those fixes | **83 / 83** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

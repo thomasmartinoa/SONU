@@ -248,6 +248,15 @@ async def test_apple_music_by_name_is_explained_not_played_elsewhere(rig: Rig) -
 
 
 @pytest.mark.anyio
+async def test_a_site_given_as_the_browser_is_ignored(rig: Rig) -> None:
+    # Found in an eval: "play faded on youtube" → browser "youtube" → "'youtube' is not installed".
+    report = await rig.run(
+        "play faded on youtube", ("media.play", {"query": "faded", "browser": "youtube"}), dry_run=True
+    )
+    assert report.lines() == ["· would: Play 'faded' from YouTube in Zen Browser"]
+
+
+@pytest.mark.anyio
 async def test_play_needs_yt_dlp_and_the_users_words(rig: Rig) -> None:
     report = await rig.run("play faded", ("media.play", {"query": "my private notes"}))
     assert "isn't in your request" in report.lines()[0]

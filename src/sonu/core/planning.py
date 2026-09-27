@@ -45,4 +45,5 @@ class Planner(Protocol):
         *,
         app_labels: Mapping[str, str] | None = None,
         history: Sequence[Turn] = (),
+        notes: Sequence[str] = (),
     ) -> Plan: ...

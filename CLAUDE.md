@@ -101,6 +101,6 @@ Rules there:
 ## The owner's machine
 
 Acer Nitro · Arch · Hyprland 0.56.2 (Lua config) · RTX 3070 Ti Laptop 8 GB · 32 GB RAM · Ollama (`qwen3.5:4b`) ·
-kitty · Zen + Chromium · Code-OSS/VSCodium · [hypr-dotfiles](https://github.com/thomasmartinoa/hypr-dotfiles) rice
+kitty · Zen + Chromium · Visual Studio Code (2026-09-27; Code-OSS/VSCodium removed) · OBS · Spotify · [hypr-dotfiles](https://github.com/thomasmartinoa/hypr-dotfiles) rice
 (Quickshell, rofi, wpctl, brightnessctl, nmcli, playerctl, powerprofilesctl, rfkill) · NitroSense key =
 `XF86Launch1`.

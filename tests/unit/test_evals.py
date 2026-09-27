@@ -124,6 +124,12 @@ GOLDEN: dict[str, dict[str, Any]] = {
         "unsupported": ["play faded on apple music"],
     },
     "play-on-spotify": steps(("media.play", {"query": "believer by imagine dragons", "service": "spotify"})),
+    "remember-app-alias": steps(("memory.remember", {"kind": "alias", "text": "vs code", "app": "code oss"})),
+    "remember-my-name": steps(("memory.remember", {"kind": "name", "text": "Martin"})),
+    "remember-a-note": steps(
+        ("memory.remember", {"kind": "note", "text": "the shop project is in dev_works/shop-app"})
+    ),
+    "what-do-you-remember": steps(("memory.list", {})),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

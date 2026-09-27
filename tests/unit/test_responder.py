@@ -112,6 +112,14 @@ async def test_private_results_never_reach_the_model() -> None:
 
 
 @pytest.mark.anyio
+async def test_a_dry_run_needs_no_reply() -> None:
+    model = FakeTextModel(say="Would open kitty.")
+    report = report_with(ToolOutcome(StepStatus.SKIPPED, "Open kitty"))
+    report.dry_run = True
+    assert await Responder(model).reply(report) == "" and model.seen == []
+
+
+@pytest.mark.anyio
 async def test_only_private_results_need_no_reply() -> None:
     # Found on real hardware: "what's playing?" → "It's playing, but I can't see the song name."
     model = FakeTextModel(say="I can't see it.")

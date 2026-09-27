@@ -653,3 +653,33 @@ notes = "The owner's Apple Music app ignores links: not possible yet, and not qu
 expect_status = ["cannot", "partial", "failed"]
 expect_reply_contains = "Apple Music"
 forbid_tools = ["web.search", "web.open"]
+
+
+# ---- M2: "remember …" (v11)
+
+[[case]]
+id = "remember-app-alias"
+request = "remember that when I say vs code I mean code oss"
+expect_status = ["done"]
+expect_reply_contains = "means Code - OSS"
+require_tools = ["memory.remember"]
+
+[[case]]
+id = "remember-my-name"
+request = "call me Martin"
+expect_status = ["done"]
+expect_reply_contains = "call you Martin"
+require_tools = ["memory.remember"]
+
+[[case]]
+id = "remember-a-note"
+request = "remember that the shop project is in dev_works/shop-app"
+expect_status = ["done"]
+expect_reply_contains = "shop project"
+require_tools = ["memory.remember"]
+
+[[case]]
+id = "what-do-you-remember"
+request = "what do you remember about me?"
+expect_status = ["done"]
+require_tools = ["memory.list"]

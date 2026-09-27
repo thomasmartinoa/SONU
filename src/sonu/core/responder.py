@@ -137,7 +137,9 @@ class Responder:
             return plan.message  # a question or a "can't" — the planner's words are already short
         if plan.kind == "reply":
             return await self._chat(report.request, plan.message, history)
-        if report.dry_run or report.status == "needs-input":
+        if report.dry_run:
+            return ""  # found on real hardware: a dry run's reply only repeated the "would" line
+        if report.status == "needs-input":
             return _plain(report)
         results = results_of(report)
         if results and all(PRIVATE in line for line in results):

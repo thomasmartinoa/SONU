@@ -45,7 +45,7 @@ from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.chat import OllamaChatModel
 from sonu.llm.ollama import OllamaClient, OllamaError
 from sonu.policy.engine import Policy
-from sonu.runtime import assistant_parts
+from sonu.runtime import app_aliases, assistant_parts, load_memory
 from sonu.tools.base import Choices, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
@@ -334,16 +334,20 @@ class Daemon:
         catalog = await asyncio.to_thread(AppCatalog.load, env)
         rice = detect_hypr_theme(Path(env.get("HOME") or Path.home()))
         role_defaults = {kind: app.command for kind, app in rice.defaults.items()}
-        resolver = AppResolver(catalog, role_defaults=role_defaults, aliases=self.settings.apps.aliases)
+        memory = load_memory(self.paths)  # read per request: "remember …" takes effect at once
+        resolver = AppResolver(
+            catalog, role_defaults=role_defaults, aliases=app_aliases(self.settings, memory)
+        )
         ctx = ToolContext(
             desktop,
             resolver,
             self.settings,
             default_terminal=role_defaults.get("terminal"),
             ancestors=lambda: ancestor_pids(pid),  # the terminal the request was typed in
+            memory=memory,
         )
         conversation, responder = assistant_parts(
-            self.settings, self.paths, self.ollama, self.ollama_settings
+            self.settings, self.paths, self.ollama, self.ollama_settings, memory
         )
         return Engine(
             planner=self.planner,

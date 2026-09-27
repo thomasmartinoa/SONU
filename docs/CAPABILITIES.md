@@ -106,7 +106,8 @@ works:
 |---|---|---|
 | Faster replies: the model stays loaded, `sonu` hands requests to the daemon (~0.8 s instead of 1.6–2.5 s) | ✅ M2 part 1 | `sonud` (`sonu daemon install`), a thin client |
 | Natural replies after everything ("Kitty's up on workspace 2.", "I couldn't find a recipes folder…"), small talk, one conversation ("move **it** to 4", "play it again") | ✅ M2 part 2 | a reply written from the verified results and checked in code; the last few turns go to the planner |
-| "Remember …" preferences, activity journal ("what was I doing yesterday?") | 🗺 M2 (next) | local memory |
+| "Remember …": what an app name means ("when I say editor I mean Visual Studio Code"), your name ("call me …"), notes; "what do you remember?", "forget …" | ✅ M2 part 3 | a local memory file; aliases feed the app resolver |
+| Activity journal ("what was I doing yesterday?") | 🗺 later (after voice) | local, 30-day retention |
 | Voice: "Hey Sonu", push-to-talk on the NitroSense key, a natural voice back, talk over it to stop it | 🗺 M3 | faster-whisper (GPU) speech-to-text, Kokoro/Piper voice, wake word; high risk never approved by voice alone |
 | Claude Code by voice: open it in a folder, type a prompt, `/model sonnet`, write the best prompt from an idea | 🗺 M4 | SONU-owned kitty windows with remote control (only those), screen text read back to confirm |
 | GitHub: list pull requests and checks, merge after approval | 🗺 M4 | `gh` (already signed in) — merging is high risk |
