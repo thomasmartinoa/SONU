@@ -571,7 +571,7 @@ expect_reply_contains = "the meeting is at 4"
 require_tools = ["clipboard.read"]
 
 
-# ---- capability batch 2: power and screen recording (v10)
+# ---- capability batch 2: power and OBS (v10)
 
 [[case]]
 id = "suspend-asks"
@@ -592,6 +592,47 @@ expect_confirmed = ["system.power"]
 [[case]]
 id = "record-the-screen"
 request = "record my screen"
+notes = "OBS records (the owner's choice); SONU confirms it with OBS."
 expect_status = ["done"]
-expect_system = { recordings = 1 }
-require_tools = ["screen.record"]
+expect_obs = { recording = true }
+require_tools = ["obs.record"]
+
+[[case]]
+id = "stop-recording"
+request = "stop the recording"
+obs = { recording = true }
+expect_status = ["done"]
+expect_obs = { recording = false }
+require_tools = ["obs.record"]
+
+[[case]]
+id = "obs-scene"
+request = "switch obs to the only screen scene"
+expect_status = ["done"]
+expect_obs = { scene = "Scene only screen" }
+require_tools = ["obs.scene"]
+
+[[case]]
+id = "obs-mute-mic"
+request = "mute my mic in obs"
+notes = "OBS's own source, not the system mic (settings.volume)."
+expect_status = ["done"]
+expect_obs = { inputs = { "Desktop Audio" = false, "Mic/Aux" = true } }
+require_tools = ["obs.mute"]
+forbid_tools = ["settings.volume"]
+
+[[case]]
+id = "go-live-asks"
+request = "start streaming on obs"
+notes = "Going live is high risk: always asks (evals approve)."
+expect_status = ["done"]
+expect_obs = { streaming = true }
+expect_confirmed = ["obs.control"]
+
+[[case]]
+id = "is-obs-recording"
+request = "is obs recording?"
+obs = { recording = true }
+expect_status = ["done"]
+expect_reply_contains = "OBS: recording"
+forbid_tools = ["obs.record"]

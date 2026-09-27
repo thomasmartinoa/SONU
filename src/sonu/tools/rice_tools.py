@@ -49,7 +49,7 @@ def _missing(ctx: ToolContext, program: str, what: str) -> ToolOutcome | None:
     )
 
 
-def _pick(words: str, names: list[str], fillers: set[str]) -> list[str]:
+def pick_names(words: str, names: list[str], fillers: set[str]) -> list[str]:
     """Names the user's words point at: an exact name first, then names containing every word, then
     close spellings ("tokyo" → tokyo-night, "catpuccin" → catppuccin-mocha)."""
     wanted = [word for word in normalize(words).split() if word not in fillers]
@@ -138,8 +138,8 @@ class DesktopTheme(Tool):
             )
         else:
             # The user may say the id ("tokyo-night") or the name ("Tokyo Night").
-            picked = set(_pick(a.name, ids, _THEME_FILLERS)) or {
-                t.id for t in themes if t.name in _pick(a.name, [t.name for t in themes], _THEME_FILLERS)
+            picked = set(pick_names(a.name, ids, _THEME_FILLERS)) or {
+                t.id for t in themes if t.name in pick_names(a.name, [t.name for t in themes], _THEME_FILLERS)
             }
             matches = [t for t in themes if t.id in picked]
         if not matches:
@@ -225,7 +225,7 @@ class Wallpaper(Tool):
         if choice is not None:
             matches = [by_name[choice]] if choice in by_name else []
         else:
-            stems = _pick(a.name, [p.stem for p in pictures], _PICTURE_FILLERS)
+            stems = pick_names(a.name, [p.stem for p in pictures], _PICTURE_FILLERS)
             matches = [p for p in pictures if p.stem in stems]
         if not matches:
             return ToolOutcome(

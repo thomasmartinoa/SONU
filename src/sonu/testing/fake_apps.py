@@ -48,6 +48,10 @@ SAMPLE_APPS: dict[str, str] = {
         "[Desktop Entry]\nName=imv\nExec=imv %F\nType=Application\nCategories=Graphics;Viewer;\n"
         "MimeType=image/png;image/jpeg;\n"
     ),
+    "com.obsproject.Studio.desktop": (
+        "[Desktop Entry]\nName=OBS Studio\nExec=obs\nType=Application\nCategories=AudioVideo;Recorder;\n"
+        "StartupWMClass=com.obsproject.Studio\n"
+    ),
     "thunar-bulk-rename.desktop": (
         "[Desktop Entry]\nName=Bulk Rename\nExec=thunar --bulk-rename %F\nType=Application\n"
         "Categories=System;Utility;Core;GTK;FileTools;\n"

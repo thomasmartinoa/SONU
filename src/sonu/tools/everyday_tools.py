@@ -225,111 +225,6 @@ def _png_header(path: Path) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------- screen.record
-class RecordArgs(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    action: Literal["start", "stop"]
-    what: Literal["screen", "window", "area"] = Field(
-        default="screen",
-        description="for start: screen, window (the focused one) or area (the user drags one)",
-    )
-    audio: bool = Field(default=False, description="true only if the user asked to record the sound too")
-
-
-def _recordings_dir(ctx: ToolContext) -> Path:
-    from sonu.tools.file_tools import user_dirs  # the XDG Videos folder, like screenshots use Pictures
-
-    return user_dirs(ctx.system.home)["XDG_VIDEOS_DIR"]
-
-
-def _newest_recording(folder: Path) -> Path | None:
-    recordings = sorted(folder.glob("recording-*.mp4"), key=lambda p: p.stat().st_mtime)
-    return recordings[-1] if recordings else None
-
-
-class RecordScreen(Tool):
-    name = "screen.record"
-    description = "Start or stop recording the screen, the focused window or an area (a video in ~/Videos)."
-    risk = Risk.LOW
-    effects = frozenset({Effect.SCREEN_CAPTURE})
-    Args = RecordArgs
-
-    async def prepare(
-        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
-    ) -> Prepared | ToolOutcome:
-        a = cast(RecordArgs, args)
-        if problem := _missing(
-            ctx, "systemd-run", "systemctl", "wf-recorder", *(("slurp",) if a.what == "area" else ())
-        ):
-            return problem
-        if a.action == "stop":
-            return Prepared("Stop the screen recording", (a, None, None))
-        geometry: str | None = None
-        label = "the screen"
-        if a.what == "window":
-            window = snapshot.active_window
-            if window is None:
-                return ToolOutcome(StepStatus.FAILED, "No window is focused")
-            geometry = f"{window.at[0]},{window.at[1]} {window.size[0]}x{window.size[1]}"
-            label = f"the {window.window_class} window"
-        elif a.what == "area":
-            label = "an area you select"
-        path = _recordings_dir(ctx) / f"recording-{ctx.now():%Y-%m-%d_%H-%M-%S}.mp4"
-        sound = " with sound" if a.audio else ""
-        return Prepared(f"Start recording {label}{sound}", (a, geometry, path))
-
-    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
-        a, geometry, path = cast(tuple[RecordArgs, str | None, Path | None], prepared.payload)
-        home = ctx.system.home
-        try:
-            running = await ctx.system.recording()
-            if a.action == "stop":
-                if not running:
-                    return ToolOutcome(StepStatus.FAILED, "Nothing is being recorded")
-                await ctx.system.stop_recording()
-                stopped = not await _settle(ctx.system.recording, lambda active: not active, ctx)
-                video = await asyncio.to_thread(_newest_recording, _recordings_dir(ctx))
-                size = video.stat().st_size if video else 0
-                checks = [
-                    Check("the recording stopped", stopped, {}),
-                    Check(
-                        "the video was saved",
-                        size > 0,
-                        {"file": _home_relative(video, home) if video else None},
-                    ),
-                ]
-                where = _home_relative(video, home) if video else "?"
-                return outcome_from_checks(
-                    checks, f"Saved the recording to {where}", "The recording didn't save"
-                )
-            if running:
-                return ToolOutcome(
-                    StepStatus.FAILED, "A recording is already running — say 'stop recording' first"
-                )
-            if path is None:  # prepare always sets it for "start"
-                return ToolOutcome(StepStatus.FAILED, "internal error: no file to record to")
-            if a.what == "area":
-                geometry = await ctx.system.select_area()
-                if geometry is None:
-                    return ToolOutcome(StepStatus.DENIED, "No area was selected — nothing recorded")
-            await asyncio.to_thread(path.parent.mkdir, parents=True, exist_ok=True)
-            await ctx.system.start_recording(path, geometry, a.audio)
-            started = await _settle(ctx.system.recording, lambda active: active, ctx)
-            exists = await asyncio.to_thread(path.exists)
-        except CommandError as exc:
-            return ToolOutcome(StepStatus.FAILED, str(exc))
-        checks = [
-            Check("the recording is running", started, {}),
-            Check("the video file was created", exists, {"file": _home_relative(path, home)}),
-        ]
-        return outcome_from_checks(
-            checks,
-            f"Recording to {_home_relative(path, home)} — say 'stop recording' to finish",
-            "The recording didn't start",
-        )
-
-
 # ---------------------------------------------------------------------------- desktop.shell
 ShellAction = Literal[
     "night_light_on",
@@ -568,6 +463,5 @@ EVERYDAY_TOOLS: tuple[Tool, ...] = (
     ListReminders(),
     CancelReminder(),
     CaptureScreen(),
-    RecordScreen(),
     DesktopShell(),
 )

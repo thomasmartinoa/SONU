@@ -10,6 +10,7 @@ from sonu.config.settings import Settings
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.integrations.obs import ObsLink
 from sonu.system.control import SystemControl
 from sonu.world.origin import ancestor_pids
 
@@ -45,6 +46,8 @@ class ToolContext:
     system: SystemControl = field(default_factory=SystemControl)
     # The clock (reminders, screenshot names); tests pass a fixed one.
     now: Callable[[], datetime] = datetime.now
+    # OBS Studio's WebSocket server (tests and evals point it at a fake OBS).
+    obs: ObsLink = field(default_factory=ObsLink)
 
     def learned(self, entry: AppEntry) -> set[str]:
         return self.learned_classes.get(entry.desktop_id, set())

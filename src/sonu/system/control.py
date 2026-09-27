@@ -50,7 +50,6 @@ _DESKTOP_ID = re.compile(r"^[\w.+-]+\.desktop$")
 _THEME_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")  # hypr-theme's own rule: no "/" or leading "."
 THEME_TIMEOUT_S = 60.0  # a theme switch re-renders every app's colours
 MAX_CLIPBOARD_CHARS = 2000
-RECORDING_UNIT = "sonu-screen-recording"
 PowerAction = Literal["suspend", "reboot", "poweroff"]
 
 
@@ -443,36 +442,6 @@ class SystemControl:
     async def power(self, action: PowerAction) -> None:
         """``systemctl suspend / reboot / poweroff``, exactly as the rice's power menu runs them."""
         await self._run("systemctl", action, timeout_s=15.0)
-
-    # ------------------------------------------------------------------ screen recording (wf-recorder)
-    async def start_recording(self, path: Path, geometry: str | None, audio: bool) -> None:
-        """wf-recorder as a transient user service: it keeps recording after SONU exits, and
-        stopping the service sends SIGINT, which makes wf-recorder finish the file properly."""
-        if geometry is not None and not _GEOMETRY.match(geometry):
-            raise CommandError(f"Not an area: {geometry!r}")
-        argv = ["wf-recorder", "--file", str(path), *(["--geometry", geometry] if geometry else [])]
-        await self._run(
-            "systemd-run",
-            "--user",
-            f"--unit={RECORDING_UNIT}",
-            "--description=SONU screen recording",
-            "--property=KillSignal=SIGINT",
-            "--",
-            *argv,
-            *(["--audio"] if audio else []),
-        )
-
-    async def stop_recording(self) -> None:
-        await self._run("systemctl", "--user", "stop", f"{RECORDING_UNIT}.service", timeout_s=15.0)
-
-    async def recording(self) -> bool:
-        return await self.unit_active(f"{RECORDING_UNIT}.service")
-
-    async def unit_active(self, unit: str) -> bool:
-        result = await self.runner.run(
-            ("systemctl", "--user", "show", unit, "--property=ActiveState", "--value")
-        )
-        return result.ok and result.stdout.strip() in ("active", "activating")
 
     async def timer_active(self, unit: str) -> bool:
         result = await self.runner.run(

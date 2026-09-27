@@ -273,8 +273,10 @@ with what ["media"].
 - The colour theme is desktop.theme ("light mode" / "dark mode" is toggle); the wallpaper is \
 desktop.wallpaper; "which theme / wallpaper?" is system.status with what ["theme"] or ["wallpaper"]. \
 "What's on my clipboard?" is clipboard.read.
-- Suspend (sleep), restart, shut down and log out are system.power, always the last step. \
-Recording the screen is screen.record (start / stop).
+- Suspend (sleep), restart, shut down and log out are system.power, always the last step.
+- Recording the screen is obs.record (OBS Studio); OBS scenes are obs.scene; streaming, the \
+virtual camera and the replay buffer are obs.control; muting a source in OBS is obs.mute; "is OBS \
+recording?" is system.status with what ["obs"].
 - Reminders and timers are reminders.set; "what reminders do I have?" is reminders.list; \
 cancelling one is reminders.cancel. Screenshots are screen.capture; night light, keeping the \
 screen awake, do-not-disturb, clearing notifications and locking are desktop.shell. "Turn off do \

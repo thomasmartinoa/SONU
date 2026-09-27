@@ -312,49 +312,6 @@ async def test_screenshot_without_wl_copy_still_saves(rig: Rig) -> None:
     assert (rig.home / "Pictures" / "Screenshots").is_dir()
 
 
-# ---------------------------------------------------------------- screen.record
-@pytest.mark.anyio
-async def test_record_the_screen_and_stop(rig: Rig) -> None:
-    report = await rig.run("record my screen", ("screen.record", {"action": "start"}))
-    assert report.lines() == [
-        "✔ Recording to ~/Videos/recording-2026-09-25_17-45-00.mp4 — say 'stop recording' to finish"
-    ]
-    (command,) = rig.system.services.values()
-    assert command == [
-        "wf-recorder",
-        "--file",
-        str(rig.home / "Videos" / "recording-2026-09-25_17-45-00.mp4"),
-    ]
-    report = await rig.run("record my screen", ("screen.record", {"action": "start"}))
-    assert report.lines() == ["✖ A recording is already running — say 'stop recording' first"]
-    report = await rig.run("stop recording", ("screen.record", {"action": "stop"}))
-    assert report.lines() == ["✔ Saved the recording to ~/Videos/recording-2026-09-25_17-45-00.mp4"]
-    assert rig.system.services == {}
-    report = await rig.run("stop recording", ("screen.record", {"action": "stop"}))
-    assert report.lines() == ["✖ Nothing is being recorded"]
-
-
-@pytest.mark.anyio
-async def test_record_an_area_with_sound(rig: Rig) -> None:
-    await rig.run(
-        "record an area with sound", ("screen.record", {"action": "start", "what": "area", "audio": True})
-    )
-    (command,) = rig.system.services.values()
-    assert command[3:] == ["--geometry", "10,20 300x200", "--audio"]
-    rig.system.services.clear()
-    rig.system.area = None  # the user pressed Escape in slurp
-    report = await rig.run("record an area", ("screen.record", {"action": "start", "what": "area"}))
-    assert report.lines() == ["⊘ No area was selected — nothing recorded"]
-    assert rig.system.services == {}
-
-
-@pytest.mark.anyio
-async def test_recording_needs_wf_recorder(rig: Rig) -> None:
-    rig.system.installed.discard("wf-recorder")
-    report = await rig.run("record my screen", ("screen.record", {"action": "start"}))
-    assert "wf-recorder isn't installed (install: sudo pacman -S wf-recorder)" in report.lines()[0]
-
-
 # ---------------------------------------------------------------- desktop.shell
 @pytest.mark.anyio
 async def test_rice_switches(rig: Rig) -> None:

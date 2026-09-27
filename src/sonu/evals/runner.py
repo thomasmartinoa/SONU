@@ -7,6 +7,7 @@ final desktop state against the case's expectations.
 
 from __future__ import annotations
 
+import contextlib
 import shutil
 import tempfile
 import time
@@ -25,11 +26,13 @@ from sonu.core.report import TaskReport
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.integrations.obs import ObsLink, ObsSettings
 from sonu.llm.chat import ChatModel
 from sonu.policy.engine import Policy
 from sonu.system.control import SystemControl
 from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
+from sonu.testing.fake_obs import FakeObs, FakeObsState
 from sonu.testing.fake_system import FakeSystem
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
@@ -43,6 +46,7 @@ EVAL_APPS: dict[str, FakeApp] = {
     "kitty": FakeApp("kitty", "zsh"),
     "thunar": FakeApp("Thunar", "Thunar"),
     "imv": FakeApp("imv", "imv"),
+    "obs": FakeApp("com.obsproject.Studio", "OBS 32.2.2 - Profile: Untitled"),
     "whatsapp-desktop": FakeApp("WhatsApp Desktop", "WhatsApp"),
     "blueman-manager": FakeApp("blueman-manager", "Bluetooth Devices"),
 }
@@ -58,7 +62,6 @@ _SYSTEM_PROPERTIES = {
     "bt_connected",
     "videos_playing",
     "reminders",
-    "recordings",
     "night_light",
     "keep_awake",
     "do_not_disturb",
@@ -108,9 +111,10 @@ class EvalCase(_Model):
     battery: int | None = None  # a battery at this percent (discharging)
     expect_confirmed: list[str] = Field(default_factory=list)  # tools that must have asked first
     expect_reply_contains: str | None = None  # text the report must contain
-    expect_side_by_side: list[str] = Field(
-        default_factory=list
-    )  # two window classes, tiled next to each other
+    # Two window classes, tiled next to each other.
+    expect_side_by_side: list[str] = Field(default_factory=list)
+    obs: dict[str, Any] = Field(default_factory=dict)  # OBS's state at the start (FakeObsState fields)
+    expect_obs: dict[str, Any] = Field(default_factory=dict)  # OBS's state at the end
 
     @field_validator("system", "expect_system")
     @classmethod
@@ -255,7 +259,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
     runtime_dir = Path(tempfile.mkdtemp(prefix="sonu-eval-", dir="/tmp"))  # short: socket path limit
     started = time.monotonic()
     try:
-        async with FakeHyprland(runtime_dir, signature="eval") as fake:
+        async with contextlib.AsyncExitStack() as stack, FakeHyprland(runtime_dir, signature="eval") as fake:
             fake.apps.update({name: FakeApp(**vars(app)) for name, app in EVAL_APPS.items()})
             focused_address: str | None = None
             for index, window in enumerate(case.windows):
@@ -304,6 +308,10 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 (power_supply / "BAT1" / "capacity").write_text(f"{case.battery}\n")
                 (power_supply / "BAT1" / "status").write_text("Discharging\n")
             settings = Settings(apps=AppsSettings(launch_timeout_s=3.0), verify=VerifySettings(timeout_s=2.0))
+            (workdir / "Videos").mkdir(exist_ok=True)
+            obs = await stack.enter_async_context(
+                FakeObs(FakeObsState(recordings_dir=workdir / "Videos", **case.obs))
+            )
             ctx = ToolContext(
                 desktop,
                 AppResolver(catalog, role_defaults=ROLE_DEFAULTS),
@@ -312,6 +320,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 which=lambda name: f"/usr/bin/{name}",
                 ancestors=frozenset,
                 system=SystemControl(system, power_supply=power_supply, sys=workdir / "sys", home=workdir),
+                obs=ObsLink(settings=ObsSettings(enabled=True, port=obs.port, password=obs.password)),
             )
             engine = Engine(
                 planner=LLMPlanner(model),
@@ -327,6 +336,11 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
 
             report = await engine.run(case.request, confirm=approve)
             failures = check_expectations(case, report, fake, system, [c.tool for c in confirmations])
+            failures += [
+                f"OBS {name} should be {wanted!r}, is {getattr(obs.state, name)!r}"
+                for name, wanted in case.expect_obs.items()
+                if getattr(obs.state, name) != wanted
+            ]
             return CaseResult(
                 case_id=case.id,
                 passed=not failures,
