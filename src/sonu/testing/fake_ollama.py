@@ -20,6 +20,7 @@ class FakeOllama:
         # /api/chat: gets the request body, returns the assistant's content (e.g. plan JSON).
         self.chat_responder: Callable[[dict[str, Any]], str] | None = None
         self.chat_requests: list[dict[str, Any]] = []
+        self.keep_alive: dict[str, str] = {}  # /api/generate load/unload requests: model → keep_alive
 
     def add_model(self, name: str, *, size_gib: float, capabilities: list[str]) -> None:
         self.models[name] = {"size": int(size_gib * GIB), "capabilities": capabilities}
@@ -49,6 +50,12 @@ class FakeOllama:
             )
         if request.method == "GET" and path == "/api/ps":
             return httpx.Response(200, json={"models": self.loaded})
+        if request.method == "POST" and path == "/api/generate":
+            body = json.loads(request.content)
+            if body.get("model") not in self.models:
+                return httpx.Response(404, json={"error": f"model '{body.get('model')}' not found"})
+            self.keep_alive[body["model"]] = str(body.get("keep_alive"))
+            return httpx.Response(200, json={"model": body["model"], "response": "", "done": True})
         if request.method == "POST" and path == "/api/chat":
             body = json.loads(request.content)
             self.chat_requests.append(body)

@@ -137,6 +137,20 @@ class OllamaClient:
         except ValidationError as exc:
             raise OllamaError(f"/api/ps: unexpected reply: {exc.errors()[0]['msg']}") from exc
 
+    async def load(self, model: str, *, keep_alive: str, timeout_s: float = 120.0) -> None:
+        """Load a model into memory (and keep it for ``keep_alive``), or unload it with "0".
+
+        Ollama does this on ``/api/generate`` with no prompt.
+        """
+        try:
+            response = await self._client.post(
+                "/api/generate", json={"model": model, "keep_alive": keep_alive}, timeout=timeout_s
+            )
+        except httpx.HTTPError as exc:
+            raise OllamaError(f"cannot reach Ollama at {self.host}: {exc.__class__.__name__}: {exc}") from exc
+        if response.is_error:
+            raise OllamaError(f"/api/generate: HTTP {response.status_code} — {response.text[:200]}")
+
     async def chat(
         self,
         model: str,
