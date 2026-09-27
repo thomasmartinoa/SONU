@@ -369,3 +369,41 @@ request = "how is my laptop doing? cpu, memory and temperature"
 expect_status = ["done"]
 require_tools = ["system.status"]
 expect_reply_contains = "CPU temperature: 61"
+
+# ---- found on the owner's laptop trying batch 1 (v6)
+
+[[case]]
+id = "dnd-off-keeps-notifications"
+request = "turn off night light and turn off do not disturb"
+notes = "Found on real hardware: 'turn off do not disturb' cleared the notifications instead."
+system = { shell = { nightlight = "on", caffeine = "off", dnd = "true", lock = "unlocked" } }
+expect_status = ["done"]
+expect_system = { night_light = "off", do_not_disturb = false, notifications = 3 }
+
+[[case]]
+id = "how-is-my-laptop"
+request = "how is my laptop doing?"
+notes = "Found on real hardware: answered with volume, brightness and Wi-Fi instead of the laptop's health."
+expect_status = ["done"]
+require_tools = ["system.status"]
+expect_reply_contains = "CPU temperature: 61"
+
+[[case]]
+id = "play-with-a-title-on-screen"
+request = "play faded on youtube in chromium"
+notes = "Found on real hardware: the query was copied from Zen's window title and refused."
+windows = [{ class = "zen", title = "Alan Walker - Faded - YouTube — Zen Browser", workspace = 1, focused = true }]
+expect_status = ["done"]
+expect_windows = [{ class = "chromium", title_contains = "youtube.com/watch" }]
+expect_system = { videos_playing = 1 }
+require_tools = ["media.play"]
+
+[[case]]
+id = "song-in-a-browser-without-media-controls"
+request = "play lofi beats in chromium"
+notes = "Found on real hardware: Chromium plays but isn't in the media controls; SONU must hear it (PipeWire)."
+system = { browser_mpris = false, browser_autoplay = true }
+expect_status = ["done"]
+expect_windows = [{ class = "chromium", title_contains = "youtube.com/watch" }]
+expect_system = { videos_playing = 1 }
+require_tools = ["media.play"]

@@ -660,6 +660,7 @@ SETTINGS_PROGRAMS: tuple[tuple[str, str], ...] = (
     ("playerctl", "media play/pause/next"),
     ("powerprofilesctl", "power mode"),
     ("yt-dlp", "playing songs and videos from YouTube"),
+    ("pw-dump", "hearing that a video plays when the browser isn't in the media controls"),
     ("slurp", "screenshots of an area"),
     ("wl-copy", "copying screenshots"),
     ("systemd-run", "reminders and timers"),

@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import json
 import shlex
+import zlib
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,14 @@ from sonu.desktop.hyprland.instance import EVENT_SOCKET_NAME, REQUEST_SOCKET_NAM
 from sonu.testing.fake_dispatch import FakeCommand, parse_dispatch
 
 _READ_CHUNK = 1023
+# Above Linux's largest pid_max (2^22), so a fake app's process is never a real one — in particular
+# never an ancestor of the test process (see sonu.world.origin).
+FAKE_PID_BASE = 5_000_000
+
+
+def app_pid(window_class: str) -> int:
+    """The fake process behind all of an app's windows (one process per app, like a browser)."""
+    return FAKE_PID_BASE + zlib.crc32(window_class.encode()) % 1_000_000
 
 
 def make_window(
@@ -142,8 +151,9 @@ class FakeHyprland:
         self.windows: list[dict[str, Any]] = []
         self.monitors: list[dict[str, Any]] = [make_monitor()]
         self.active_address: str | None = None
-        # Called with every http(s) link a fake browser is started with (e.g. FakeSystem.page_opened).
-        self.on_url: Callable[[str], None] | None = None
+        # Called with every http(s) link a fake browser is started with, and the browser's window
+        # class (e.g. FakeSystem.page_opened).
+        self.on_url: Callable[[str, str], None] | None = None
         self.requests: list[str] = []
         self.dispatch_handler: Callable[[str], str] | None = None
         # Launch simulation: argv[0] basename -> behaviour. Unknown commands open nothing.
@@ -340,7 +350,7 @@ class FakeHyprland:
         rule_workspace = int(parsed.workspace) if parsed.workspace else None
         url = next((arg for arg in argv[1:] if arg.startswith(("https://", "http://"))), None)
         if url and self.on_url is not None:
-            self.on_url(url)
+            self.on_url(url, app.window_class)
         running = sorted(self.windows_of_class(app.window_class), key=lambda w: w["focusHistoryID"])
         if url and running:
             self._background(self._load_page(app, running[0], url))
@@ -373,7 +383,9 @@ class FakeHyprland:
         address = f"0x{self._next_address:x}"
         self._next_address += 0x100
         title = title if title is not None else app.title
-        window = make_window(address, app.window_class, title, workspace_id=workspace)
+        window = make_window(
+            address, app.window_class, title, workspace_id=workspace, pid=app_pid(app.window_class)
+        )
         self.windows.append(window)
         await self.emit("openwindow", f"{address.removeprefix('0x')},{workspace},{app.window_class},{title}")
         if workspace == self.active_workspace:

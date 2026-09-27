@@ -15,7 +15,7 @@ from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.policy import Policy
 from sonu.system import SubprocessRunner, SystemControl
 from sonu.testing.fake_apps import write_desktop_files
-from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
+from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, app_pid, make_window
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
 from sonu.testing.fake_system import FakeSystem
 from sonu.tools.base import StepStatus
@@ -109,11 +109,70 @@ async def test_video_is_found_opened_pressed_play_and_checked(rig: Rig) -> None:
 
 @pytest.mark.anyio
 async def test_browser_without_media_controls_is_unverified(rig: Rig) -> None:
+    # Found on real hardware: Zen opened the video paused (autoplay blocked) and wasn't in the media
+    # controls, so SONU could neither press play nor hear it.
     rig.system.browser_mpris = False
     report = await rig.run("play faded", ("media.play", {"query": "faded"}))
     outcome = report.steps[0].outcome
     assert outcome.status is StepStatus.UNVERIFIED
-    assert "couldn't confirm it's playing" in outcome.summary
+    assert (
+        "couldn't confirm it's playing (no sound from Zen Browser, and Zen Browser isn't in"
+        in outcome.summary
+    )
+    assert "allowing autoplay for youtube.com in its site settings" in outcome.summary
+
+
+@pytest.mark.anyio
+async def test_sound_from_the_browser_confirms_it_plays(rig: Rig) -> None:
+    # Found on real hardware: Chromium played the video but never appeared in the media controls.
+    rig.system.browser_mpris = False
+    rig.system.browser_autoplay = True
+    rig.system.videos["faded"] = ("60ItHLz5WEA", "Alan Walker - Faded")
+    report = await rig.run("play faded", ("media.play", {"query": "faded"}))
+    assert report.lines() == ["✔ Playing 'Alan Walker - Faded' on YouTube in Zen Browser"]
+    checks = {check.description: check for check in report.steps[0].outcome.checks}
+    assert checks["Zen Browser started playing sound"].evidence["pid"] == app_pid("zen")
+    assert rig.system.videos_playing == 1
+
+
+@pytest.mark.anyio
+async def test_sound_that_was_already_playing_doesnt_count(rig: Rig) -> None:
+    rig.system.browser_mpris = False
+    rig.system.streams.append([7, app_pid("zen"), True])  # music in another tab, before SONU's page
+    report = await rig.run("play faded", ("media.play", {"query": "faded"}))
+    assert report.steps[0].outcome.status is StepStatus.UNVERIFIED
+
+
+@pytest.mark.anyio
+async def test_sound_from_a_browser_helper_process_counts(rig: Rig) -> None:
+    # Browsers play sound from a child process (Chromium's audio service), not the window's.
+    rig.system.browser_mpris = False
+    child = 4242
+    (rig.ctx.system.proc / str(child)).mkdir()
+    (rig.ctx.system.proc / str(child) / "stat").write_text(f"{child} (chromium) S {app_pid('zen')} 1 1\n")
+    (rig.ctx.system.proc / str(app_pid("zen"))).mkdir()
+    (rig.ctx.system.proc / str(app_pid("zen")) / "stat").write_text(f"{app_pid('zen')} (zen-bin) S 1 1 1\n")
+
+    def autoplays_in_a_helper(url: str, window_class: str) -> None:
+        rig.system.page_opened(url, window_class)
+        rig.system.streams.append([8, child, True])
+
+    rig.fake.on_url = autoplays_in_a_helper
+    report = await rig.run("play faded", ("media.play", {"query": "faded"}))
+    assert report.steps[0].outcome.status is StepStatus.DONE
+
+
+@pytest.mark.anyio
+async def test_sound_from_another_app_doesnt_count(rig: Rig) -> None:
+    rig.system.browser_mpris = False
+
+    def other_app_starts(url: str, window_class: str) -> None:
+        rig.system.page_opened(url, window_class)
+        rig.system.streams.append([9, app_pid("spotify"), True])
+
+    rig.fake.on_url = other_app_starts
+    report = await rig.run("play faded", ("media.play", {"query": "faded"}))
+    assert report.steps[0].outcome.status is StepStatus.UNVERIFIED
 
 
 @pytest.mark.anyio
@@ -224,6 +283,17 @@ async def test_do_not_disturb_reaches_the_asked_state_whatever_it_was(rig: Rig) 
     assert report.lines() == ["✔ Do-not-disturb is on"] and rig.system.do_not_disturb
     report = await rig.run("r", ("desktop.shell", {"action": "do_not_disturb_off"}))
     assert report.lines() == ["✔ Do-not-disturb is off"] and not rig.system.do_not_disturb
+
+
+@pytest.mark.anyio
+async def test_night_light_off_is_asked_again_when_the_rice_shows_the_old_state(rig: Rig) -> None:
+    # Found on real hardware: "turn off the night light" stopped hyprsunset, but the rice's status
+    # said "on" for up to 10 s and SONU reported "night light is on".
+    rig.system.shell["nightlight"] = "on"
+    rig.system.stale_once.add("nightlight")
+    report = await rig.run("r", ("desktop.shell", {"action": "night_light_off"}))
+    assert report.lines() == ["✔ Night light is off"]
+    assert rig.system.night_light == "off"
 
 
 @pytest.mark.anyio

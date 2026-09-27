@@ -590,6 +590,7 @@ class ConnectWifi(Tool):
     risk = Risk.LOW  # raised to medium when it would drop the current network
     effects = frozenset({Effect.SETTINGS_CHANGE})
     Args = WifiNetworkArgs
+    grounded = ("network",)
 
     async def prepare(
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
@@ -699,6 +700,7 @@ class BluetoothDeviceTool(Tool):
     risk = Risk.LOW
     effects = frozenset({Effect.SETTINGS_CHANGE})
     Args = BluetoothDeviceArgs
+    grounded = ("device",)
 
     async def prepare(
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None

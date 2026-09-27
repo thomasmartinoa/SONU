@@ -21,6 +21,8 @@ from sonu.system import (
     parse_volume,
     pick_backlight,
 )
+from sonu.system.commands import CommandError, program_env
+from sonu.system.control import AudioStream, parse_audio_streams
 from sonu.testing.fake_hyprland import FakeHyprland
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
 from sonu.testing.fake_system import FakeSystem
@@ -66,6 +68,34 @@ async def test_real_runner_uses_argv_c_locale_and_explains_missing_programs() ->
         ProgramMissing, match=r"wpctl isn't installed \(install: sudo pacman -S wireplumber\)"
     ):
         await SubprocessRunner(which=lambda name: None).run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"])
+
+
+def test_parse_audio_streams() -> None:
+    dump = """[
+      {"id": 0, "type": "PipeWire:Interface:Core", "info": {"props": {}}},
+      {"id": 91, "type": "PipeWire:Interface:Node", "info": {"state": "idle", "props": {
+        "media.class": "Stream/Output/Audio", "object.serial": 545, "application.process.id": 249505}}},
+      {"id": 92, "type": "PipeWire:Interface:Node", "info": {"state": "running", "props": {
+        "media.class": "Stream/Output/Audio", "object.serial": 612, "application.process.id": "330600"}}},
+      {"id": 93, "type": "PipeWire:Interface:Node", "info": {"state": "running", "props": {
+        "media.class": "Audio/Sink", "object.serial": 60}}},
+      {"id": 94, "type": "PipeWire:Interface:Link", "info": null}
+    ]"""
+    assert parse_audio_streams(dump) == [AudioStream(545, 249505, False), AudioStream(612, 330600, True)]
+    with pytest.raises(CommandError, match="Unexpected pw-dump output"):
+        parse_audio_streams("not json")
+
+
+def test_programs_run_without_sonus_virtualenv() -> None:
+    # Found on real hardware: `uv run sonu "how is my laptop doing?"` → "Power mode: unknown
+    # (powerprofilesctl failed: ModuleNotFoundError: No module named 'gi')".
+    environ = {"PATH": "/home/u/SONU/.venv/bin:/usr/local/bin:/usr/bin", "VIRTUAL_ENV": "/home/u/SONU/.venv"}
+    env = program_env(environ, prefix="/home/u/SONU/.venv", base_prefix="/usr")
+    assert env["PATH"] == "/usr/local/bin:/usr/bin"
+    assert "VIRTUAL_ENV" not in env
+    assert (env["LC_ALL"], env["LANG"]) == ("C", "C")
+    # Not in a virtualenv (the system's Python): PATH is left alone.
+    assert program_env(environ, prefix="/usr", base_prefix="/usr")["PATH"] == environ["PATH"]
 
 
 # ---------------------------------------------------------------- the tools, end to end

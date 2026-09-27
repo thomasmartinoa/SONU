@@ -113,6 +113,9 @@ class Tool(ABC):
     risk: ClassVar[Risk]
     effects: ClassVar[frozenset[Effect]]
     Args: ClassVar[type[BaseModel]]
+    # Text arguments that must be the user's own words (see grounding.py). The tool checks them
+    # itself; the planner also checks them, so the model can correct itself instead of failing.
+    grounded: ClassVar[tuple[str, ...]] = ()
 
     @abstractmethod
     async def prepare(
