@@ -41,11 +41,15 @@ EVAL_APPS: dict[str, FakeApp] = {
     "chromium": FakeApp("chromium", "New Tab - Chromium"),
     "zen-browser": FakeApp("zen", "New Tab - Zen Browser"),
     "kitty": FakeApp("kitty", "zsh"),
-    "thunar": FakeApp("Thunar", "Home - Thunar"),
+    "thunar": FakeApp("Thunar", "Thunar"),
+    "imv": FakeApp("imv", "imv"),
     "whatsapp-desktop": FakeApp("WhatsApp Desktop", "WhatsApp"),
     "blueman-manager": FakeApp("blueman-manager", "Bluetooth Devices"),
 }
-ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty"}
+ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty", "files": "thunar"}
+# The home folders every case starts with (like the owner's), and the newest download.
+HOME_FOLDERS = ("Downloads", "Documents", "Pictures/screenshot", "dev_works/SONU", "hypr-dotfiles")
+NEWEST_DOWNLOAD = "Downloads/cat.png"
 
 
 # FakeSystem properties an eval may check besides its fields.
@@ -283,6 +287,9 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 "XDG_CURRENT_DESKTOP": "Hyprland",
             }
             catalog = AppCatalog.load(env, which=lambda name: f"/usr/bin/{name}")
+            for folder in HOME_FOLDERS:
+                (workdir / folder).mkdir(parents=True, exist_ok=True)
+            (workdir / NEWEST_DOWNLOAD).write_bytes(b"png")
             desktop = await HyprlandDesktop.connect(fake.instance)
             system = FakeSystem(**case.system)
             fake.on_url = system.page_opened

@@ -400,10 +400,14 @@ class FakeHyprland:
         if url and self.on_url is not None:
             self.on_url(url, app.window_class)
         running = sorted(self.windows_of_class(app.window_class), key=lambda w: w["focusHistoryID"])
+        # A folder or file on the command line: the window shows its name, like Thunar or an image viewer.
+        path = next((arg for arg in argv[1:] if arg.startswith("/")), None)
         if url and running:
             self._background(self._load_page(app, running[0], url))
         else:
             title = f"{url} - {app.title}" if url and app.shows_pages else None
+            if title is None and path and app.shows_pages:
+                title = f"{Path(path).name} - {app.title}"
             self._background(self._open(app, rule_workspace, title))
         return "ok"
 

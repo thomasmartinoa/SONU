@@ -96,6 +96,12 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "two-terminals-side-by-side": steps(
         ("windows.side_by_side", {"first": {"app": "terminal"}, "second": {"app": "terminal"}})
     ),
+    "open-downloads": steps(("files.open", {"place": "downloads"})),
+    "open-a-project-folder": steps(("files.open", {"place": "SONU"})),
+    "open-last-download": steps(("files.open", {"place": "downloads", "newest": True})),
+    "whats-playing": steps(("system.status", {"what": ["media"]})),
+    "list-reminders": steps(("reminders.list", {})),
+    "cancel-a-reminder": steps(("reminders.cancel", {"about": "oven"})),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

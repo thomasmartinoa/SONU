@@ -44,6 +44,10 @@ SAMPLE_APPS: dict[str, str] = {
         "[Desktop Entry]\nName=Code - OSS - URL Handler\nExec=/usr/bin/code-oss --open-url %U\n"
         "Type=Application\nNoDisplay=true\nCategories=Utility;TextEditor;Development;IDE;\n"
     ),
+    "imv.desktop": (
+        "[Desktop Entry]\nName=imv\nExec=imv %F\nType=Application\nCategories=Graphics;Viewer;\n"
+        "MimeType=image/png;image/jpeg;\n"
+    ),
     "thunar-bulk-rename.desktop": (
         "[Desktop Entry]\nName=Bulk Rename\nExec=thunar --bulk-rename %F\nType=Application\n"
         "Categories=System;Utility;Core;GTK;FileTools;\n"

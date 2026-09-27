@@ -707,15 +707,15 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
     parts = []
     if info.theme_dir_present:
         parts.append("hypr-theme rice")
-    for kind in ("browser", "terminal", "agent"):
+    for kind in ("browser", "terminal", "files", "agent"):
         app = info.defaults.get(kind)
         if app:
-            note = " (rice default)" if app.source == "rice-fallback" else ""
-            parts.append(f"{kind}: {app.command}{note}")
+            note = {"rice-fallback": " (rice default)", "binds": " (binds.lua)"}.get(app.source, "")
+            parts.append(f"{'file manager' if kind == 'files' else kind}: {app.command}{note}")
     if info.quickshell_config:
         parts.append("Quickshell shell")
     hint = (
-        "SONU will use these apps for 'open my browser/terminal'."
+        "SONU will use these apps for 'open my browser/terminal' and for folders."
         if info.defaults
         else "No default apps found; SONU will ask which browser/terminal you mean."
     )

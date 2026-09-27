@@ -41,6 +41,11 @@ SEARCH_TIMEOUT_S = 30.0  # yt-dlp contacts YouTube
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _GEOMETRY = re.compile(r"^-?\d+,-?\d+ \d+x\d+$")
 _SHELL_WORD = re.compile(r"^[a-z][a-z-]{0,30}$")
+# Only SONU's own timers (reminders.set names them) are ever listed or stopped.
+REMINDER_UNIT = re.compile(r"^sonu-reminder-\d{8}-\d{6}-[0-9a-f]{4}$")
+_REMINDER_PREFIX = "SONU reminder: "
+_MIME = re.compile(r"^[\w.+-]+/[\w.+-]+$")
+_DESKTOP_ID = re.compile(r"^[\w.+-]+\.desktop$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +91,13 @@ class AudioStream:
     serial: int  # PipeWire's object.serial: never reused while PipeWire runs
     pid: int | None  # the process that plays it (application.process.id)
     running: bool  # sound is flowing now (not paused, corked or idle)
+
+
+@dataclass(frozen=True, slots=True)
+class Reminder:
+    unit: str  # e.g. "sonu-reminder-20260927-124411-a068" (the .timer and .service share it)
+    when: datetime | None  # local time it fires; None if systemd has no next time
+    text: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -314,6 +326,14 @@ class SystemControl:
         result = await self.runner.run(("playerctl", "metadata", "--format", "{{artist}} {{title}}"))
         return result.stdout.strip() if result.ok else ""
 
+    async def now_playing(self) -> str:
+        """'Title — Artist' of what the media controls show (read-only); '' if nothing."""
+        result = await self.runner.run(("playerctl", "metadata", "--format", "{{title}}\t{{artist}}"))
+        if not result.ok:
+            return ""
+        title, _, artist = result.stdout.strip().partition("\t")
+        return f"{title} — {artist}" if title and artist else title or artist
+
     async def player(self, action: PlayerAction) -> None:
         await self._run("playerctl", _PLAYERCTL[action])
 
@@ -363,7 +383,7 @@ class SystemControl:
             "systemd-run",
             "--user",
             f"--unit={unit}",
-            f"--description=SONU reminder: {text[:60]}",
+            f"--description={_REMINDER_PREFIX}{text[:60]}",
             f"--on-calendar={when:%Y-%m-%d %H:%M:%S}",
             "--timer-property=AccuracySec=1s",
             "--",
@@ -375,11 +395,56 @@ class SystemControl:
             text,
         )
 
+    async def reminders(self) -> list[Reminder]:
+        """SONU's pending reminders, soonest first (``systemctl --user list-timers``, read-only)."""
+        listing = await self._run(
+            "systemctl", "--user", "list-timers", "--all", "--output=json", "sonu-reminder-*"
+        )
+        try:
+            timers = json.loads(listing.stdout or "[]")
+        except json.JSONDecodeError as exc:
+            raise CommandError(f"Unexpected systemctl output: {exc}") from None
+        found = []
+        for timer in timers if isinstance(timers, list) else []:
+            unit = str(timer.get("unit", "")).removesuffix(".timer") if isinstance(timer, dict) else ""
+            if not REMINDER_UNIT.match(unit):
+                continue
+            micros = timer.get("next")
+            when = (
+                datetime.fromtimestamp(micros / 1_000_000) if isinstance(micros, int) and micros > 0 else None
+            )
+            description = await self._run(
+                "systemctl", "--user", "show", f"{unit}.timer", "--property=Description", "--value"
+            )
+            text = description.stdout.strip().removeprefix(_REMINDER_PREFIX)
+            found.append(Reminder(unit, when, text))
+        return sorted(found, key=lambda r: (r.when is None, r.when or datetime.max))
+
+    async def cancel_reminder(self, unit: str) -> None:
+        if not REMINDER_UNIT.match(unit):
+            raise CommandError(f"{unit!r} isn't one of SONU's reminders")
+        await self._run("systemctl", "--user", "stop", f"{unit}.timer")
+
     async def timer_active(self, unit: str) -> bool:
         result = await self.runner.run(
             ("systemctl", "--user", "show", f"{unit}.timer", "--property=ActiveState", "--value")
         )
         return result.ok and result.stdout.strip() == "active"
+
+    # ------------------------------------------------------------------ files (xdg-mime, read-only)
+    async def mime_type(self, path: Path) -> str | None:
+        """The file's type as the desktop sees it, e.g. "application/pdf"."""
+        result = await self._run("xdg-mime", "query", "filetype", str(path))
+        mime = result.stdout.strip().split(";")[0]
+        return mime if _MIME.match(mime) else None
+
+    async def default_app(self, mime: str) -> str | None:
+        """The desktop-file id set to open ``mime`` files, e.g. "org.pwmt.zathura.desktop"."""
+        if not _MIME.match(mime):
+            return None
+        result = await self._run("xdg-mime", "query", "default", mime)
+        app = result.stdout.strip()
+        return app if _DESKTOP_ID.match(app) else None
 
     # ------------------------------------------------------------------ screenshots (grim, slurp, wl-copy)
     def screenshot_dir(self) -> Path:

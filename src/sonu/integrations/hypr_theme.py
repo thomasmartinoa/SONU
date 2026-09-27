@@ -6,7 +6,8 @@ can offer a menu entry and a bar widget.
 
 The rice stores defaults in ``~/.config/hypr-theme/defaults/{terminal,browser,agent}``; when a
 file is missing, the rice itself falls back to kitty and zen-browser (``binds.lua`` and
-``hypr-default``), and SONU mirrors that so both agree.
+``hypr-default``), and SONU mirrors that so both agree. The file manager (SUPER+E) is set in
+``~/.config/hypr/modules/binds.lua`` as ``local fileManager = "thunar"``.
 """
 
 from __future__ import annotations
@@ -21,7 +22,8 @@ DEFAULT_KINDS = ("browser", "terminal", "agent")
 # The rice's own fallbacks (hyprland/.config/hypr/modules/binds.lua, theme/.local/bin/hypr-default).
 RICE_FALLBACKS = {"terminal": "kitty", "browser": "zen-browser"}
 
-DefaultSource = Literal["file", "rice-fallback"]
+DefaultSource = Literal["file", "rice-fallback", "binds"]
+_FILE_MANAGER = re.compile(r'^\s*local\s+fileManager\s*=\s*"([^"]+)"', re.MULTILINE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +52,15 @@ def _read_default(path: Path) -> str | None:
     return first_line if _APP_NAME.match(first_line) else None
 
 
+def _binds_file_manager(home: Path) -> str | None:
+    try:
+        text = (home / ".config" / "hypr" / "modules" / "binds.lua").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    match = _FILE_MANAGER.search(text)
+    return match.group(1) if match and _APP_NAME.match(match.group(1)) else None
+
+
 def detect_hypr_theme(home: Path) -> HyprThemeInfo:
     theme_dir = home / ".config" / "hypr-theme"
     theme_dir_present = theme_dir.is_dir()
@@ -60,6 +71,8 @@ def detect_hypr_theme(home: Path) -> HyprThemeInfo:
             defaults[kind] = DefaultApp(value, "file")
         elif theme_dir_present and kind in RICE_FALLBACKS:
             defaults[kind] = DefaultApp(RICE_FALLBACKS[kind], "rice-fallback")
+    if (file_manager := _binds_file_manager(home)) is not None:
+        defaults["files"] = DefaultApp(file_manager, "binds")
     return HyprThemeInfo(
         theme_dir_present=theme_dir_present,
         defaults=defaults,

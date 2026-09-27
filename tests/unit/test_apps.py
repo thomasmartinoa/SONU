@@ -13,6 +13,7 @@ from sonu.desktop.apps import (
     parse_exec,
     window_matches,
 )
+from sonu.testing.fake_apps import write_desktop_files
 
 # Desktop files modelled on the author's machine.
 USER_APPS = {
@@ -356,3 +357,21 @@ def test_shortened_name_uses_the_users_alias(catalog: AppCatalog) -> None:
     resolver = AppResolver(catalog, aliases={"vs code": "codium.desktop"})
     resolution = resolver.resolve_for_request("code", "open VS Code")
     assert resolution.entry is not None and resolution.entry.desktop_id == "codium.desktop"
+
+
+def test_a_default_command_means_the_app_not_its_helper_entry(tmp_path: Path) -> None:
+    # Found on real hardware: the rice's file manager "thunar" resolved to Bulk Rename
+    # (Exec=thunar --bulk-rename %F), because that entry came first in the catalog.
+    write_desktop_files(tmp_path / "share" / "applications")
+    loaded = AppCatalog.load(
+        {
+            "HOME": str(tmp_path),
+            "XDG_DATA_HOME": str(tmp_path / "share"),
+            "XDG_DATA_DIRS": str(tmp_path / "x"),
+        },
+        which=lambda name: name,
+    )
+    for entries in (loaded.entries, tuple(reversed(loaded.entries))):
+        resolver = AppResolver(AppCatalog(entries), role_defaults={"files": "thunar"})
+        resolution = resolver.resolve("file manager")
+        assert resolution.entry is not None and resolution.entry.desktop_id == "thunar.desktop"
