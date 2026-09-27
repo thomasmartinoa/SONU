@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v8, 64 cases)
+## The cases (v9, 69 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -53,6 +53,9 @@ v8 adds opening folders ("my downloads", "the SONU folder" — found by SONU) an
 playing?", and listing and cancelling reminders. Every case's home has `Downloads` (with `cat.png`), `Documents`,
 `Pictures/screenshot`, `dev_works/SONU` and `hypr-dotfiles`; the file manager is Thunar, like the owner's.
 
+v9 adds the rice's theme (by name, light mode, "which theme?"), the next wallpaper and reading the clipboard. The
+fake system has the owner's theme names (hyprmono, hyprmono-light, tokyo-night, catppuccin-mocha).
+
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use
 *different* apps than the cases, so the score measures generalisation rather than memorisation.
@@ -85,6 +88,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-27 | `qwen3.5:4b` | v7 (58 cases) with that wording | **58 / 58** | — |
 | 2026-09-27 | `qwen3.5:4b` | v8: six cases for folders, the newest download, "what's playing?", reminders | **5 / 6** of the six | "open my last download" → `place: "my last download"`, no `newest`. Fixed in the tool (the user's "last" means the newest file), not the prompt |
 | 2026-09-27 | `qwen3.5:4b` | v8 (64 cases) | **64 / 64** | — |
+| 2026-09-27 | `qwen3.5:4b` | v9: five cases for theme, wallpaper, clipboard | **4 / 5** of the five | "switch to the tokyo night theme" → `{"action": "next"}`. Fixed in the tool (a theme the user's words name wins over next) |
+| 2026-09-27 | `qwen3.5:4b` | v9 (69 cases) | **69 / 69** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

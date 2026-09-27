@@ -220,6 +220,8 @@ async def test_brightness_never_goes_black_and_leaves_nvidia_alone(rig: Rig) -> 
     assert rig.system.backlights["nvidia_0"] == (50, 100)
     report, _ = await rig.run(("settings.brightness", {"change": 25}))
     assert rig.system.brightness == 30
+    # The rice's popup shows each new level, as its brightness keys do (volume's shows by itself).
+    assert rig.system.osd == ["5", "30"]
 
 
 @pytest.mark.anyio

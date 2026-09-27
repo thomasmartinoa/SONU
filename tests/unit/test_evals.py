@@ -102,6 +102,11 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "whats-playing": steps(("system.status", {"what": ["media"]})),
     "list-reminders": steps(("reminders.list", {})),
     "cancel-a-reminder": steps(("reminders.cancel", {"about": "oven"})),
+    "theme-by-name": steps(("desktop.theme", {"action": "set", "name": "tokyo night"})),
+    "light-mode": steps(("desktop.theme", {"action": "light"})),
+    "which-theme": steps(("system.status", {"what": ["theme"]})),
+    "next-wallpaper": steps(("desktop.wallpaper", {"action": "next"})),
+    "read-clipboard": steps(("clipboard.read", {})),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

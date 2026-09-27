@@ -528,3 +528,44 @@ system = { timers = { "sonu-reminder-20260925-180000-abcd" = "check the oven", "
 expect_status = ["done"]
 expect_system = { reminders = 1 }
 require_tools = ["reminders.cancel"]
+
+
+# ---- capability batch 2: theme, wallpaper, clipboard (v9)
+
+[[case]]
+id = "theme-by-name"
+request = "switch to the tokyo night theme"
+expect_status = ["done"]
+expect_system = { theme = "tokyo-night" }
+require_tools = ["desktop.theme"]
+
+[[case]]
+id = "light-mode"
+request = "switch to light mode"
+notes = "Found in a dry run: planned as 'next theme'."
+expect_status = ["done"]
+expect_system = { theme = "hyprmono-light" }
+require_tools = ["desktop.theme"]
+
+[[case]]
+id = "which-theme"
+request = "which theme am I using?"
+expect_status = ["done"]
+expect_reply_contains = "Theme: hyprmono"
+forbid_tools = ["desktop.theme"]
+
+[[case]]
+id = "next-wallpaper"
+request = "change my wallpaper"
+system = { backgrounds = ["/themes/hyprmono/1-mountain.png", "/themes/hyprmono/2-creation-of-adam.png"], wallpaper = "/themes/hyprmono/1-mountain.png" }
+expect_status = ["done"]
+expect_system = { wallpaper = "/themes/hyprmono/2-creation-of-adam.png" }
+require_tools = ["desktop.wallpaper"]
+
+[[case]]
+id = "read-clipboard"
+request = "what's on my clipboard?"
+system = { clipboard_text = "the meeting is at 4" }
+expect_status = ["done"]
+expect_reply_contains = "the meeting is at 4"
+require_tools = ["clipboard.read"]

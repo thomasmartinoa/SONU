@@ -23,6 +23,8 @@ ALL_PROGRAMS = frozenset(
         "wpctl",
         "pw-dump",
         "xdg-mime",
+        "hypr-theme",
+        "hypr-wall",
         "brightnessctl",
         "bluetoothctl",
         "rfkill",
@@ -90,7 +92,15 @@ class FakeSystem:
     timers: dict[str, str] = field(default_factory=dict)  # systemd unit → notification text
     timer_times: dict[str, datetime] = field(default_factory=dict)  # systemd unit → when it fires
     area: str | None = "10,20 300x200"  # what slurp returns (None: the user cancelled)
-    clipboard_type: str | None = None
+    clipboard_type: str | None = None  # None with clipboard_text: text is copied
+    clipboard_text: str | None = None
+    theme_names: list[str] = field(
+        default_factory=lambda: ["catppuccin-mocha", "hyprmono", "hyprmono-light", "tokyo-night"]
+    )
+    theme: str = "hyprmono"
+    backgrounds: list[str] = field(default_factory=list)  # the theme's wallpapers (full paths)
+    wallpaper: str | None = None
+    osd: list[str] = field(default_factory=list)  # popups the rice's OSD showed ("brightness" value)
     shell: dict[str, str] = field(
         default_factory=lambda: {"nightlight": "off", "caffeine": "off", "dnd": "false", "lock": "unlocked"}
     )
@@ -420,12 +430,60 @@ class FakeSystem:
         return (0, self.area + "\n", "") if self.area else (1, "", "selection cancelled\n")
 
     def _wl_copy(self, args: list[str]) -> tuple[int, str, str]:
+        if args == ["--clear"]:
+            self.clipboard_type, self.clipboard_text = None, None
+            return 0, "", ""
         if self.last_input and self.last_input.startswith(PNG[:8]):
             self.clipboard_type = "image/png"
         return 0, "", ""
 
     def _wl_paste(self, args: list[str]) -> tuple[int, str, str]:
-        return 0, (self.clipboard_type or "text/plain") + "\n", ""
+        if self.clipboard_type is None and self.clipboard_text is None:
+            return 1, "", "Nothing is copied\n"
+        if args == ["--list-types"]:
+            types = (
+                [self.clipboard_type] if self.clipboard_type else ["text/plain;charset=utf-8", "text/plain"]
+            )
+            return 0, "".join(f"{t}\n" for t in types), ""
+        return 0, self.clipboard_text or "", ""
+
+    def _hypr_theme(self, args: list[str]) -> tuple[int, str, str]:
+        if args == ["json"]:
+            themes = [
+                {
+                    "id": n,
+                    "name": n.replace("-", " ").title(),
+                    "mode": "light" if "light" in n else "dark",
+                    "current": n == self.theme,
+                }
+                for n in self.theme_names
+            ]
+            return 0, json.dumps(themes), ""
+        if args == ["current"]:
+            return 0, self.theme + "\n", ""
+        if args[0] == "set":
+            if args[1] not in self.theme_names:
+                return 1, "", f"hypr-theme: no such theme: {args[1]}\n"
+            self.theme = args[1]
+        elif args[0] == "next":
+            index = self.theme_names.index(self.theme)
+            self.theme = self.theme_names[(index + 1) % len(self.theme_names)]
+        elif args[0] == "toggle":  # hypr-theme prefers the sibling that differs by -light
+            sibling = (
+                self.theme.removesuffix("-light") if self.theme.endswith("-light") else f"{self.theme}-light"
+            )
+            self.theme = sibling if sibling in self.theme_names else self.theme_names[0]
+        return 0, "", ""
+
+    def _hypr_wall(self, args: list[str]) -> tuple[int, str, str]:
+        if args == ["current"]:
+            return 0, (self.wallpaper or "") + "\n", ""
+        if args[0] == "set":
+            self.wallpaper = args[1]
+        elif args[0] == "next" and self.backgrounds:
+            index = self.backgrounds.index(self.wallpaper) if self.wallpaper in self.backgrounds else -1
+            self.wallpaper = self.backgrounds[(index + 1) % len(self.backgrounds)]
+        return 0, "", ""
 
     def _qs(self, args: list[str]) -> tuple[int, str, str]:
         target, function = args[2], args[3]
@@ -445,6 +503,9 @@ class FakeSystem:
                 self.notifications = 0
                 return 0, "", ""
             return 0, f"{self.notifications}\n", ""
+        if target == "osd":
+            self.osd.append(args[4] if len(args) > 4 else function)
+            return 0, "", ""
         if target == "lock":
             if function == "lock":
                 self.shell["lock"] = "locked"

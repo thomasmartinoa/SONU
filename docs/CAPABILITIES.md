@@ -49,9 +49,11 @@ works:
 | Night light, keep awake, do-not-disturb, clear notifications, lock the screen | 🧪 this batch | the rice's Quickshell switches (`qs ipc call nightlight/caffeine/notifications/lock`) |
 | Reminders and timers: "remind me in 20 minutes to stretch", "at 18:30" | 🧪 this batch | `systemd-run --user` timers that show a notification; checked with `systemctl --user` |
 | List and cancel reminders (`reminders.list`, `reminders.cancel`) | ✅ | `systemctl --user list-timers 'sonu-reminder-*'`; only SONU's own timers are stopped; several matches → you pick |
-| Wallpaper and theme: "change my wallpaper to …" | ⏭ | rice switches (`qs ipc call wallpaper set`, `hypr-theme`) |
-| Volume/brightness popup when SONU changes them | ⏭ | `qs ipc call osd volume/brightness` |
-| Clipboard: "copy this", "what's on my clipboard?" | ⏭ | `wl-copy` / `wl-paste` (private: never sent anywhere) |
+| Theme: "switch to tokyo night", "light mode", "next theme", "which theme?" (`desktop.theme`) | ✅ | the rice's `hypr-theme set/next/toggle`, read back from `hypr-theme json`; SONU picks the theme from the real list; "dark mode" when already dark changes nothing |
+| Wallpaper: "change my wallpaper", "set my wallpaper to the mountain" (`desktop.wallpaper`) | ✅ | the rice's `hypr-wall next/set` (a picture SONU found in the theme's backgrounds or `~/Pictures`), read back from `hypr-wall current` |
+| Volume/brightness popup when SONU changes them | ✅ | volume: the rice's OSD shows it by itself (it watches PipeWire); brightness: `qs ipc call osd brightness <percent>` like `brightness.sh` |
+| Clipboard: "what's on my clipboard?", "clear my clipboard" (`clipboard.read`, `clipboard.clear`) | ✅ | `wl-paste` / `wl-copy --clear`; shown only to you — never to the model, the audit log or anywhere else |
+| Copy something to the clipboard | ⏭ | needs a source SONU can read (a file, a screenshot — already copied) |
 | Suspend, reboot, shut down | ⏭ | `systemctl suspend/reboot/poweroff` — high risk, always asks |
 | Join **new** Wi-Fi networks, pair **new** Bluetooth devices | ⛔ for now | needs passwords/PINs; SONU doesn't handle secrets yet |
 
@@ -109,7 +111,7 @@ works:
 - **Batch 1** (done, verified on the laptop): play on YouTube, reminders and timers, screenshots, laptop health, the
   rice's switches.
 - **Batch 2** (in progress): window states and side by side ✅ (#12); folders and the newest file, "what's playing?",
-  list and cancel reminders ✅ (#13); next: the OSD popup, clipboard, wallpaper and theme, Spotify by name, local
-  music, suspend / reboot / shut down, screen recording.
+  list and cancel reminders ✅ (#13); the brightness popup, clipboard, wallpaper and theme ✅ (#14); next: Spotify by
+  name, local music, suspend / reboot / shut down, screen recording.
 
 After batch 2: M2.

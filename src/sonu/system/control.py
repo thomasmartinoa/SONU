@@ -41,11 +41,15 @@ SEARCH_TIMEOUT_S = 30.0  # yt-dlp contacts YouTube
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _GEOMETRY = re.compile(r"^-?\d+,-?\d+ \d+x\d+$")
 _SHELL_WORD = re.compile(r"^[a-z][a-z-]{0,30}$")
+IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 # Only SONU's own timers (reminders.set names them) are ever listed or stopped.
 REMINDER_UNIT = re.compile(r"^sonu-reminder-\d{8}-\d{6}-[0-9a-f]{4}$")
 _REMINDER_PREFIX = "SONU reminder: "
 _MIME = re.compile(r"^[\w.+-]+/[\w.+-]+$")
 _DESKTOP_ID = re.compile(r"^[\w.+-]+\.desktop$")
+_THEME_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")  # hypr-theme's own rule: no "/" or leading "."
+THEME_TIMEOUT_S = 60.0  # a theme switch re-renders every app's colours
+MAX_CLIPBOARD_CHARS = 2000
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +95,14 @@ class AudioStream:
     serial: int  # PipeWire's object.serial: never reused while PipeWire runs
     pid: int | None  # the process that plays it (application.process.id)
     running: bool  # sound is flowing now (not paused, corked or idle)
+
+
+@dataclass(frozen=True, slots=True)
+class Theme:
+    id: str  # what hypr-theme takes, e.g. "tokyo-night"
+    name: str  # what people call it, e.g. "Tokyo Night"
+    mode: str  # "dark" or "light"
+    current: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -476,6 +488,74 @@ class SystemControl:
     async def clipboard_types(self) -> list[str]:
         result = await self.runner.run(("wl-paste", "--list-types"))
         return result.stdout.split() if result.ok else []
+
+    # ------------------------------------------------------------ clipboard (private: never sent anywhere)
+    async def clipboard_text(self) -> str | None:
+        """The copied text (at most MAX_CLIPBOARD_CHARS), or None if what's copied isn't text."""
+        types = await self.clipboard_types()
+        if not any(t.startswith("text/") or t in ("UTF8_STRING", "STRING", "TEXT") for t in types):
+            return None
+        result = await self._run("wl-paste", "--no-newline", "--type", "text/plain")
+        return result.stdout[:MAX_CLIPBOARD_CHARS]
+
+    async def clear_clipboard(self) -> None:
+        await self._run("wl-copy", "--clear")
+
+    # ------------------------------------------------------------------ the rice's theme and wallpaper
+    async def themes(self) -> list[Theme]:
+        """The rice's themes (``hypr-theme json``, what its own picker reads)."""
+        try:
+            items = json.loads((await self._run("hypr-theme", "json")).stdout or "[]")
+        except json.JSONDecodeError as exc:
+            raise CommandError(f"Unexpected hypr-theme output: {exc}") from None
+        return [
+            Theme(
+                str(item["id"]),
+                str(item.get("name") or item["id"]),
+                str(item.get("mode", "")),
+                bool(item.get("current")),
+            )
+            for item in items
+            if isinstance(items, list)
+            if isinstance(item, dict) and _THEME_NAME.match(str(item.get("id", "")))
+        ]
+
+    async def current_theme(self) -> str:
+        return (await self._run("hypr-theme", "current")).stdout.strip()
+
+    async def switch_theme(self, how: Literal["set", "next", "toggle"], name: str | None = None) -> None:
+        """``hypr-theme set <id>`` / ``next`` / ``toggle`` (toggle prefers the -light/-dark sibling)."""
+        if how == "set":
+            if name is None or not _THEME_NAME.match(name):
+                raise CommandError(f"Not a theme name: {name!r}")
+            await self._run("hypr-theme", "set", name, timeout_s=THEME_TIMEOUT_S)
+        else:
+            await self._run("hypr-theme", how, timeout_s=THEME_TIMEOUT_S)
+
+    def theme_backgrounds(self) -> list[Path]:
+        """The current theme's wallpapers (what ``hypr-wall next`` cycles through)."""
+        folder = self.home / ".config" / "hypr-theme" / "current" / "theme" / "backgrounds"
+        try:
+            return sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES and p.is_file())
+        except OSError:
+            return []
+
+    async def wallpaper(self) -> Path | None:
+        current = (await self._run("hypr-wall", "current")).stdout.strip()
+        return Path(current) if current else None
+
+    async def change_wallpaper(self, image: Path | None = None) -> None:
+        """``hypr-wall set <image>`` (an existing picture SONU found), or ``next`` in the theme."""
+        if image is None:
+            await self._run("hypr-wall", "next", timeout_s=THEME_TIMEOUT_S)
+        elif image.suffix.lower() in IMAGE_SUFFIXES and await asyncio.to_thread(image.is_file):
+            await self._run("hypr-wall", "set", str(image), timeout_s=THEME_TIMEOUT_S)
+        else:
+            raise CommandError(f"Not a picture: {image}")
+
+    async def show_brightness_osd(self, percent: int) -> None:
+        """The rice's on-screen popup, as its brightness keys show it (brightness.sh)."""
+        await self._run("qs", "ipc", "call", "osd", "brightness", str(max(0, min(100, percent))))
 
     # ------------------------------------------------------------------ the rice's switches (Quickshell IPC)
     async def shell_call(self, target: str, function: str) -> str:
