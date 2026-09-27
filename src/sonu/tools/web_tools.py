@@ -323,7 +323,7 @@ class WebSearch(Tool):
         query, site_key = _without_site_operator(a.query, a.site, ctx.request_text)
         if not query:
             return ToolOutcome(StepStatus.FAILED, "There's nothing to search for")
-        missing = ungrounded_words(query, ctx.request_text)
+        missing = ungrounded_words(query, ctx.user_words or ctx.request_text)
         if missing:
             return ToolOutcome(
                 StepStatus.FAILED,

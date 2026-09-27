@@ -98,6 +98,17 @@ class AuditSettings(_Section):
     enabled: bool = True
 
 
+class AssistantSettings(_Section):
+    # The name SONU answers to and uses for itself in replies.
+    name: str = Field(default="Sonu", min_length=1, max_length=30)
+    # Your name, if you want SONU to use it now and then (e.g. "Martin").
+    user_name: str | None = Field(default=None, max_length=40)
+    # A short natural reply after every request (what SONU will say out loud in M3).
+    replies: bool = True
+    # The conversation ("switch it to …") ends after this many idle minutes.
+    conversation_minutes: float = Field(default=10.0, ge=0, le=240)
+
+
 class Settings(_Section):
     ollama: OllamaSettings = OllamaSettings()
     models: ModelsSettings = ModelsSettings()
@@ -108,6 +119,7 @@ class Settings(_Section):
     web: WebSettings = WebSettings()
     verify: VerifySettings = VerifySettings()
     audit: AuditSettings = AuditSettings()
+    assistant: AssistantSettings = AssistantSettings()
 
 
 class ConfigError(Exception):
@@ -203,4 +215,10 @@ DEFAULT_CONFIG_TEMPLATE = """\
 [audit]
 # Append-only, hash-chained log of everything SONU does.
 # enabled = true
+
+[assistant]
+# name = "Sonu"
+# Your name, used now and then — not set by default. Example: user_name = "Martin"
+# replies = true              # a short natural reply after every request
+# conversation_minutes = 10   # "it" / "that" refer back this long
 """

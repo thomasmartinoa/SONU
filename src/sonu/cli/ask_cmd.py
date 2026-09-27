@@ -161,13 +161,16 @@ def print_final(console: Console, report: TaskReport, *, streamed: bool) -> None
         console.print(f"[red]✖ {escape(report.error)}[/]")
         return
     if not streamed or report.plan is None or report.plan.kind != "steps" or not report.steps:
-        for line in report.lines():
-            console.print(escape(line))
+        if not (report.reply and report.plan is not None and report.plan.kind == "reply"):
+            for line in report.lines():
+                console.print(escape(line))
     else:
         for line in report.not_done:
             console.print(f"[red]{escape(line)}[/]")
         for question in report.questions:
             console.print(f"[cyan]? {escape(question)}[/]")
+    if report.reply:
+        console.print(f"[bold cyan]» {escape(report.reply)}[/]")
     colour = {
         "done": "green",
         "planned": "blue",

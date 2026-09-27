@@ -583,7 +583,7 @@ _GENERIC = {
 
 
 def _ungrounded(text: str, ctx: ToolContext, what: str) -> ToolOutcome | None:
-    missing = ungrounded_words(text, ctx.request_text)
+    missing = ungrounded_words(text, ctx.user_words or ctx.request_text)
     if missing:
         return ToolOutcome(
             StepStatus.FAILED, f"Won't use {what} '{text}': {', '.join(missing)} isn't in your request"

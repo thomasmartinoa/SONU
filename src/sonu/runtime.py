@@ -11,9 +11,11 @@ import httpx
 
 from sonu.audit.log import AuditLog
 from sonu.config.paths import SonuPaths
-from sonu.config.settings import Settings
+from sonu.config.settings import OllamaSettings, Settings
+from sonu.core.conversation import Conversation
 from sonu.core.engine import Engine
 from sonu.core.planner import LLMPlanner
+from sonu.core.responder import Responder
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
@@ -25,6 +27,20 @@ from sonu.llm.ollama import OllamaClient
 from sonu.policy.engine import Policy
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
+
+
+def assistant_parts(
+    settings: Settings, paths: SonuPaths, client: OllamaClient, ollama: OllamaSettings | None = None
+) -> tuple[Conversation, Responder | None]:
+    """The conversation so far (shared by the CLI and the daemon) and the reply writer."""
+    assistant = settings.assistant
+    conversation = Conversation.load(
+        paths.state_dir / "conversation.json", idle_s=assistant.conversation_minutes * 60
+    )
+    if not assistant.replies:
+        return conversation, None
+    model = OllamaChatModel(client, settings.models.planner, ollama or settings.ollama)
+    return conversation, Responder(model, name=assistant.name, user_name=assistant.user_name)
 
 
 class SetupError(Exception):
@@ -70,11 +86,14 @@ async def build_runtime(
     )
     planner = LLMPlanner(OllamaChatModel(client, role, settings.ollama))
     audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
+    conversation, responder = assistant_parts(settings, paths, client)
     engine = Engine(
         planner=planner,
         registry=ToolRegistry(),
         ctx=ctx,
         policy=Policy(settings.policy.autonomy),
         audit=audit,
+        conversation=conversation,
+        responder=responder,
     )
     return Runtime(engine=engine, ollama=client, planner_model=role.model)

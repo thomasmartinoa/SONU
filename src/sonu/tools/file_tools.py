@@ -245,7 +245,10 @@ class OpenFiles(Tool):
         if choice is not None:
             folders = [folder for folder in folders if str(folder) == choice]
         if not folders:
-            return ToolOutcome(StepStatus.FAILED, f"There's no folder called '{a.place}' in your home")
+            name = " ".join(w for w in normalize(_NEWEST.sub(" ", a.place)).split() if w not in _FILLERS)
+            return ToolOutcome(
+                StepStatus.FAILED, f"There's no folder called '{name or a.place}' in your home"
+            )
         if len(folders) > 1:
             shown = folders[:MAX_CHOICES]
             return ToolOutcome(

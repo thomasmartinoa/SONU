@@ -94,9 +94,15 @@ async def rig(
     ollama = FakeOllama()
     ollama.add_model("qwen3.5:4b", size_gib=3.2, capabilities=["completion", "tools"])
     plans = {"open kitty on 2": LAUNCH_KITTY, "close zen": CLOSE_ZEN}
-    ollama.chat_responder = lambda body: json.dumps(
-        plans.get(body["messages"][-1]["content"], {"kind": "reply", "message": "Hi!", "steps": []})
-    )
+
+    def respond(body: dict[str, Any]) -> str:
+        if "format" not in body:  # the natural reply (free text), not a plan
+            return "Hey! Not much — what can I do for you?" if "hello" in str(body) else "Done, kitty's on 2."
+        return json.dumps(
+            plans.get(body["messages"][-1]["content"], {"kind": "reply", "message": "Hi!", "steps": []})
+        )
+
+    ollama.chat_responder = respond
     env = {**xdg_env, **fake_hypr.env, "XDG_DATA_DIRS": str(short_tmp / "none")}
     runtime = short_tmp / "run"  # the client finds the daemon under $XDG_RUNTIME_DIR/sonu/
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(runtime))
@@ -124,7 +130,11 @@ async def test_a_request_through_the_daemon(rig: Rig) -> None:
     assert code == 0
     lines = out.splitlines()
     assert lines[0].startswith("plan by qwen3.5:4b in ") and lines[0].endswith("· 1 step")
-    assert lines[1:] == ["✔ Opened kitty on workspace 2", "Done — every step verified"]
+    assert lines[1:] == [
+        "✔ Opened kitty on workspace 2",
+        "» Done, kitty's on 2.",
+        "Done — every step verified",
+    ]
     assert [w["workspace"]["id"] for w in rig.fake.windows_of_class("kitty")] == [2]
     # The model was loaded at start and kept (no cold start), and a practice plan warmed it up.
     assert rig.ollama.keep_alive["qwen3.5:4b"] == KEEP_LOADED
@@ -152,7 +162,7 @@ async def test_nobody_to_ask_means_risky_steps_are_refused(rig: Rig) -> None:
 @pytest.mark.anyio
 async def test_replies_and_json(rig: Rig) -> None:
     code, out = await rig.run("hello")
-    assert (code, out) == (0, "Hi!\n")
+    assert (code, out) == (0, "» Hey! Not much — what can I do for you?\n")  # a natural reply, not the plan's
     code, out = await rig.run("--json", "open", "kitty", "on", "2")
     assert code == 0 and json.loads(out)["status"] == "done"
 

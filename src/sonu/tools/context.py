@@ -37,6 +37,11 @@ class ToolContext:
     learned_classes: dict[str, set[str]] = field(default_factory=dict)
     # The user's request for the task being run (trusted text), set by the engine.
     request_text: str = ""
+    # The user's own words: this request and the recent ones before it ("play it again"). What a
+    # search or a network/device name may use (see grounding.py). Set by the engine.
+    user_words: str = ""
+    # The windows the previous request acted on (addresses): what "it" / "that" means. Set by the engine.
+    recent_windows: tuple[str, ...] = ()
     # SONU's parent processes, to find the terminal it was started from (tests pass `frozenset`).
     ancestors: Callable[[], frozenset[int]] = ancestor_pids
     # The browser an earlier step of this task opened ("open chrome … and search …"): web steps

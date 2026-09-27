@@ -45,6 +45,7 @@ from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.chat import OllamaChatModel
 from sonu.llm.ollama import OllamaClient, OllamaError
 from sonu.policy.engine import Policy
+from sonu.runtime import assistant_parts
 from sonu.tools.base import Choices, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
@@ -54,6 +55,7 @@ from sonu.world.snapshot import WorldSnapshot
 
 logger = logging.getLogger(__name__)
 
+SAY = "» "  # how SONU's own words are marked, after the result lines
 KEEP_LOADED = "-1m"  # Ollama: a negative duration keeps the model loaded for as long as the daemon runs
 
 
@@ -123,6 +125,10 @@ def final_message(report: TaskReport) -> dict[str, Any]:
         }
     streamed = report.plan is not None and report.plan.kind == "steps" and bool(report.steps)
     before = [*report.not_done, *(f"? {q}" for q in report.questions)] if streamed else report.lines()
+    if report.reply:
+        if report.plan is not None and report.plan.kind == "reply":
+            before = []  # the natural reply replaces the planner's short one
+        before = [*before, f"{SAY}{report.reply}"]
     headline = report.headline() if report.plan is not None and report.plan.kind == "steps" else ""
     return {
         "type": "final",
@@ -147,9 +153,9 @@ class Daemon:
         self.ollama = OllamaClient(
             settings.ollama.host, timeout_s=settings.ollama.timeout_s, transport=ollama_transport
         )
-        ollama_settings = settings.ollama.model_copy(update={"keep_alive": KEEP_LOADED})
+        self.ollama_settings = settings.ollama.model_copy(update={"keep_alive": KEEP_LOADED})
         self.model = settings.models.planner.model
-        self.planner = LLMPlanner(OllamaChatModel(self.ollama, settings.models.planner, ollama_settings))
+        self.planner = LLMPlanner(OllamaChatModel(self.ollama, settings.models.planner, self.ollama_settings))
         self.audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
         self.registry = ToolRegistry()
         self.policy = Policy(settings.policy.autonomy)
@@ -336,8 +342,17 @@ class Daemon:
             default_terminal=role_defaults.get("terminal"),
             ancestors=lambda: ancestor_pids(pid),  # the terminal the request was typed in
         )
+        conversation, responder = assistant_parts(
+            self.settings, self.paths, self.ollama, self.ollama_settings
+        )
         return Engine(
-            planner=self.planner, registry=self.registry, ctx=ctx, policy=self.policy, audit=self.audit
+            planner=self.planner,
+            registry=self.registry,
+            ctx=ctx,
+            policy=self.policy,
+            audit=self.audit,
+            conversation=conversation,
+            responder=responder,
         )
 
 
