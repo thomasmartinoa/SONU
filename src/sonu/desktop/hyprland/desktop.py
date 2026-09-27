@@ -8,7 +8,13 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import TypeVar
 
-from sonu.desktop.hyprland.dialect import Dialect, WindowSelector, WorkspaceTarget, dialect_for
+from sonu.desktop.hyprland.dialect import (
+    Dialect,
+    FullscreenMode,
+    WindowSelector,
+    WorkspaceTarget,
+    dialect_for,
+)
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.events import stream_events
 from sonu.desktop.hyprland.instance import HyprlandInstance
@@ -116,3 +122,12 @@ class HyprlandDesktop:
     async def close(self, window: Window) -> None:
         """Politely ask the window to close (never SIGKILL)."""
         await self.client.dispatch(self.dialect.close_window(self.selector(window)))
+
+    async def set_fullscreen(self, window: Window, mode: FullscreenMode, on: bool) -> None:
+        await self.client.dispatch(self.dialect.set_fullscreen(self.selector(window), mode, on))
+
+    async def set_floating(self, window: Window, on: bool) -> None:
+        await self.client.dispatch(self.dialect.set_floating(self.selector(window), on))
+
+    async def set_pinned(self, window: Window, on: bool) -> None:
+        await self.client.dispatch(self.dialect.set_pinned(self.selector(window), on))

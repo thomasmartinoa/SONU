@@ -14,6 +14,7 @@ _Last update: 2026-09-27_
 | M1 Verified window operator | ✅ done and **in daily use on the owner's laptop** |
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
+| Capability batch 2 | 🚧 in progress — window states (fullscreen, maximize, float/tile, pin) and side by side ✅ **verified on the laptop** (#12); folders/files, media, reminders, clipboard, … next |
 | M2 Daemon + memory | ⏭ after batch 2 — faster replies (model stays loaded), journal, "remember …" |
 | M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
 
@@ -39,8 +40,8 @@ _Last update: 2026-09-27_
 
 ### Eval suite
 
-`qwen3.5:4b`: **51 / 51** on the v6 suite (2026-09-27, the laptop's GPU, ~1.1 s mean planning; 48 / 49 first: a
-prompt rule broke "go to youtube" and was dropped). Pass/fail only. History, including the runs that failed while the prompt wording
+`qwen3.5:4b`: **58 / 58** on the v7 suite (2026-09-27, the laptop's GPU, ~1.1 s mean planning; window states and
+side by side added). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
@@ -95,8 +96,8 @@ sonu "how is my laptop doing?"
    (`firefox.instance_1_1470`, once autoplay let it play) and Chromium through a new audio stream from its own process
    (it still never registers with MPRIS). "in firefox" played in Zen → fixed in #11 (below).
 2. **Batch 2** — the ⏭ items in [`CAPABILITIES.md`](CAPABILITIES.md), roughly in this order:
-   - windows: fullscreen, floating, pin; "put X and Y side by side" (check the Lua dispatcher names in Hyprland
-     0.56's source first);
+   - ~~windows: fullscreen, floating, pin; "put X and Y side by side"~~ — done (#12, [D36](DECISIONS.md)); verified on
+     the laptop: fullscreen/exit, maximize/unmaximize, float, pin, unpin, tile, zen + kitty side by side;
    - open a folder or file ("open my downloads"), "open my last download";
    - "what's playing?", list and cancel reminders, the rice's volume/brightness popup after SONU changes them;
    - clipboard (read-only answer, never sent anywhere), wallpaper and theme through the rice;
@@ -149,7 +150,8 @@ sonu "how is my laptop doing?"
 | [#8](https://github.com/thomasmartinoa/SONU/pull/8) | 2026-09-25 | Honest "play <song>"; connect to saved Wi-Fi networks and paired Bluetooth devices; M1.5 verified on the laptop |
 | [#9](https://github.com/thomasmartinoa/SONU/pull/9) | 2026-09-27 | `CAPABILITIES.md`; batch 1: play on YouTube, reminders, screenshots, rice switches, laptop health; eval suite v5; notes for Claude Code on the laptop |
 | #10 | 2026-09-27 | Batch 1 tried on the laptop: planner re-asks when a query isn't the user's words; night light off re-asked when the rice lags; helpers run without SONU's virtualenv; planner rules for laptop health, do-not-disturb off, play queries; playback confirmed by sound when the browser isn't in the media controls; eval suite v6 |
-| #11 | open | The browser named in the request is used when the plan leaves it out; the model's summary isn't printed for steps |
+| #11 | 2026-09-27 | The browser named in the request is used when the plan leaves it out; the model's summary isn't printed for steps |
+| #12 | open | Batch 2, windows: `windows.state` (fullscreen, maximize, float/tile, pin) and `windows.side_by_side`; "on all workspaces" no longer means all windows; eval suite v7 |
 
 ### Found on real hardware → fixed
 
@@ -181,4 +183,6 @@ sonu "how is my laptop doing?"
 | 09-27 | Chromium played the video but wasn't in the media controls → "couldn't confirm it's playing" | a new audio stream from the browser's process confirms it ([D34](DECISIONS.md)) (#10) |
 | 09-27 | The plan's message said "Playing 'faded' by The Smashing Pumpkins" (made up) | prompt: media.play's query is the user's words only — the same request now says "Playing faded on YouTube" (a broader "never add facts" rule broke "go to youtube" in the evals and was dropped) (#10) |
 | 09-27 | After #10, the summary still said "by The 1975" / "by Faded" (the step itself played Alan Walker's Faded) | the model's summary isn't printed for steps; SONU's own step lines say what happens ([D35](DECISIONS.md)) (#11) |
+| 09-27 | (dry run) "pin kitty on all workspaces" would have pinned both kitty windows ("all" was read as all windows) | "all/every workspaces, desktops, screens" isn't "all windows"; SONU asks which one (#12) |
+| 09-27 | "maximize this window" was planned as fullscreen | prompt: the state is the user's word; eval `maximize-this-window` (#12) |
 | 09-27 | "play faded on youtube in firefox" played in Zen and reported done (the plan left the browser out) | a browser the request names (exactly one) wins over the default ([D35](DECISIONS.md)); eval `play-in-the-named-browser` (#11) |

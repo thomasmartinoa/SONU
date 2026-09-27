@@ -53,6 +53,7 @@ class Effect(StrEnum):
     SYSTEM_READ = "system.read"
     SCHEDULE = "schedule"  # something happens later (a reminder)
     SCREEN_CAPTURE = "screen.capture"
+    WINDOW_STATE = "window.state"  # fullscreen, floating, pinned, tiled next to another window
 
 
 class StepStatus(StrEnum):

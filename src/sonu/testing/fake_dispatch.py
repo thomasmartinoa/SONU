@@ -12,7 +12,7 @@ from typing import Literal
 
 _LUA_STR = r'"(?:[^"\\]|\\\d{3})*"'
 
-Kind = Literal["exec", "move", "focus_window", "focus_workspace", "close"]
+Kind = Literal["exec", "move", "focus_window", "focus_workspace", "close", "fullscreen", "float", "pin"]
 
 _LUA_PATTERNS: dict[Kind, re.Pattern[str]] = {
     "exec": re.compile(
@@ -25,6 +25,16 @@ _LUA_PATTERNS: dict[Kind, re.Pattern[str]] = {
     "focus_window": re.compile(rf"^hl\.dsp\.focus\(\{{ window = (?P<win>{_LUA_STR}) \}}\)$"),
     "focus_workspace": re.compile(rf"^hl\.dsp\.focus\(\{{ workspace = (?P<ws>{_LUA_STR}) \}}\)$"),
     "close": re.compile(rf"^hl\.dsp\.window\.close\(\{{ window = (?P<win>{_LUA_STR}) \}}\)$"),
+    "fullscreen": re.compile(
+        rf"^hl\.dsp\.window\.fullscreen\(\{{ mode = (?P<mode>{_LUA_STR}), "
+        rf"action = (?P<action>{_LUA_STR}), window = (?P<win>{_LUA_STR}) \}}\)$"
+    ),
+    "float": re.compile(
+        rf"^hl\.dsp\.window\.float\(\{{ action = (?P<action>{_LUA_STR}), window = (?P<win>{_LUA_STR}) \}}\)$"
+    ),
+    "pin": re.compile(
+        rf"^hl\.dsp\.window\.pin\(\{{ action = (?P<action>{_LUA_STR}), window = (?P<win>{_LUA_STR}) \}}\)$"
+    ),
 }
 
 _LEGACY_PATTERNS: dict[Kind, re.Pattern[str]] = {
@@ -33,7 +43,10 @@ _LEGACY_PATTERNS: dict[Kind, re.Pattern[str]] = {
     "focus_window": re.compile(r"^focuswindow (?P<win>\S+)$"),
     "focus_workspace": re.compile(r"^workspace (?P<ws>\S+)$"),
     "close": re.compile(r"^closewindow (?P<win>\S+)$"),
+    "float": re.compile(r"^(?P<action>setfloating|settiled) (?P<win>\S+)$"),
+    "pin": re.compile(r"^(?P<action>pin) (?P<win>\S+)$"),
 }
+_LEGACY_ACTIONS = {"setfloating": "enable", "settiled": "disable", "pin": "toggle"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +55,8 @@ class FakeCommand:
     command: str | None = None  # shell command for exec
     workspace: str | None = None
     window: str | None = None  # selector, e.g. "stableid:abc" or "address:0x1"
+    mode: str | None = None  # fullscreen: "fullscreen" or "maximized"
+    action: str | None = None  # set/unset (fullscreen), enable/disable/toggle (float, pin)
 
 
 def decode_lua_string(literal: str) -> str:
@@ -75,10 +90,15 @@ def parse_dispatch(argument: str, provider: Literal["lua", "hyprlang"]) -> FakeC
         if kind == "exec" and provider == "lua":
             rule = _group(match, "rule", provider)
             workspace = rule.removesuffix(" silent") if rule else None
+        action = _group(match, "action", provider)
+        if provider == "hyprlang" and action is not None:
+            action = _LEGACY_ACTIONS[action]
         return FakeCommand(
             kind=kind,
             command=_group(match, "cmd", provider),
             workspace=workspace,
             window=_group(match, "win", provider),
+            mode=_group(match, "mode", provider),
+            action=action,
         )
     return None

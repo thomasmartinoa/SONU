@@ -64,7 +64,7 @@ def _pick(
     return narrow_by_request(windows, ctx.request_text, target, ignore=snapshot.origin_address)
 
 
-def _failed_dispatch(action: str, exc: HyprlandError) -> ToolOutcome:
+def failed_dispatch(action: str, exc: HyprlandError) -> ToolOutcome:
     return ToolOutcome(StepStatus.FAILED, f"Hyprland refused to {action}: {exc}")
 
 
@@ -107,7 +107,7 @@ def chosen_app(desktop_id: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
     return entry
 
 
-def _target_windows(
+def target_windows(
     target: WindowTarget,
     all_: bool,
     ctx: ToolContext,
@@ -267,7 +267,7 @@ class LaunchApp(Tool):
         try:
             await ctx.desktop.focus(window)
         except HyprlandError as exc:
-            return _failed_dispatch(f"focus {name}", exc)
+            return failed_dispatch(f"focus {name}", exc)
         _, snapshot = await ctx.desktop.wait_for(
             lambda s: window_focused(s, ref, name).passed or None, timeout_s=timeout
         )
@@ -280,7 +280,7 @@ class LaunchApp(Tool):
         try:
             await ctx.desktop.launch(plan.argv, plan.target)
         except HyprlandError as exc:
-            return _failed_dispatch(f"start {entry.name}", exc)
+            return failed_dispatch(f"start {entry.name}", exc)
 
         learned = ctx.learned(entry)
 
@@ -340,7 +340,7 @@ async def _move_and_verify(
     try:
         await ctx.desktop.move(window, target)
     except HyprlandError as exc:
-        return _failed_dispatch(f"move {label}", exc)
+        return failed_dispatch(f"move {label}", exc)
     _, snapshot = await ctx.desktop.wait_for(
         lambda s: window_on_workspace(s, ref, target.value, label).passed or None,
         timeout_s=ctx.settings.verify.timeout_s,
@@ -374,7 +374,7 @@ class MoveWindow(Tool):
         if isinstance(target, ToolOutcome):
             return target
         target = _require(target, "workspace")
-        windows = _target_windows(
+        windows = target_windows(
             a.window, a.all, ctx, snapshot, verb="move", choice=choice, already_at=target.value
         )
         if isinstance(windows, ToolOutcome):
@@ -431,7 +431,7 @@ class FocusWindow(Tool):
         try:
             await ctx.desktop.focus(window)
         except HyprlandError as exc:
-            return _failed_dispatch(f"focus {window.window_class}", exc)
+            return failed_dispatch(f"focus {window.window_class}", exc)
         _, snapshot = await ctx.desktop.wait_for(
             lambda s: window_focused(s, ref, window.window_class).passed or None,
             timeout_s=ctx.settings.verify.timeout_s,
@@ -470,7 +470,7 @@ class ShowWorkspace(Tool):
         try:
             await ctx.desktop.show_workspace(target)
         except HyprlandError as exc:
-            return _failed_dispatch(f"show workspace {target.value}", exc)
+            return failed_dispatch(f"show workspace {target.value}", exc)
         _, snapshot = await ctx.desktop.wait_for(
             lambda s: workspace_active(s, target.value).passed or None,
             timeout_s=ctx.settings.verify.timeout_s,
@@ -500,7 +500,7 @@ class CloseWindow(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(CloseArgs, args)
-        windows = _target_windows(a.window, a.all, ctx, snapshot, verb="close", choice=choice)
+        windows = target_windows(a.window, a.all, ctx, snapshot, verb="close", choice=choice)
         if isinstance(windows, ToolOutcome):
             return windows
         return Prepared("Close " + ", ".join(window_label(w) for w in windows), windows)
@@ -512,7 +512,7 @@ class CloseWindow(Tool):
             try:
                 await ctx.desktop.close(window)
             except HyprlandError as exc:
-                return _failed_dispatch(f"close {window.window_class}", exc)
+                return failed_dispatch(f"close {window.window_class}", exc)
         _, snapshot = await ctx.desktop.wait_for(
             lambda s: all(window_gone(s, ref, label).passed for ref, label in refs) or None,
             timeout_s=ctx.settings.verify.timeout_s,

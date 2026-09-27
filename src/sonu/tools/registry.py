@@ -17,6 +17,7 @@ from sonu.tools.everyday_tools import EVERYDAY_TOOLS
 from sonu.tools.media_tools import MEDIA_TOOLS
 from sonu.tools.settings_tools import SETTINGS_TOOLS
 from sonu.tools.web_tools import WEB_TOOLS
+from sonu.tools.window_tools import WINDOW_TOOLS
 
 MAX_STEPS = 8
 MAX_UNSUPPORTED = 4
@@ -43,7 +44,14 @@ def _inline_refs(schema: dict[str, Any]) -> dict[str, Any]:
 class ToolRegistry:
     def __init__(
         self,
-        tools: Iterable[Tool] = (*DEFAULT_TOOLS, *WEB_TOOLS, *MEDIA_TOOLS, *SETTINGS_TOOLS, *EVERYDAY_TOOLS),
+        tools: Iterable[Tool] = (
+            *DEFAULT_TOOLS,
+            *WINDOW_TOOLS,
+            *WEB_TOOLS,
+            *MEDIA_TOOLS,
+            *SETTINGS_TOOLS,
+            *EVERYDAY_TOOLS,
+        ),
     ) -> None:
         self._tools = {tool.name: tool for tool in tools}
 

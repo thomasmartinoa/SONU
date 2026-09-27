@@ -33,6 +33,10 @@ def app_pid(window_class: str) -> int:
     return FAKE_PID_BASE + zlib.crc32(window_class.encode()) % 1_000_000
 
 
+def _toggled(current: bool, action: str | None) -> bool:
+    return True if action == "enable" else False if action == "disable" else not current
+
+
 def make_window(
     address: str,
     window_class: str,
@@ -159,6 +163,8 @@ class FakeHyprland:
         # Launch simulation: argv[0] basename -> behaviour. Unknown commands open nothing.
         self.apps: dict[str, FakeApp] = {}
         self.launched: list[list[str]] = []
+        # True: fullscreen/float/pin requests answer "ok" but change nothing (as for a window that refuses).
+        self.ignore_state = False
         self._next_address = 0x5500_0000_1000
         self._tasks: set[asyncio.Task[None]] = set()
         self._servers: list[asyncio.Server] = []
@@ -337,7 +343,49 @@ class FakeHyprland:
             self._background(self._focus_window(window))
         elif parsed.kind == "close":
             self._background(self._close(window))
+        elif parsed.kind in ("fullscreen", "float", "pin") and not self.ignore_state:
+            self._background(self._set_state(window, parsed))
         return "ok"
+
+    async def _set_state(self, window: dict[str, Any], parsed: FakeCommand) -> None:
+        """Fullscreen, float and pin, with Hyprland 0.56.2's rules (ConfigActions.cpp)."""
+        await asyncio.sleep(0.01)
+        address = window["address"].removeprefix("0x")
+        if parsed.kind == "fullscreen":
+            mode = 1 if parsed.mode == "maximized" else 2
+            if parsed.action == "set":
+                window["fullscreen"] = mode
+            elif window["fullscreen"] == mode:  # unset only leaves the mode it's in
+                window["fullscreen"] = 0
+            await self.emit("fullscreen", "1" if window["fullscreen"] else "0")
+        elif parsed.kind == "float":
+            window["floating"] = _toggled(window["floating"], parsed.action)
+            if window["floating"]:
+                window["at"], window["size"] = [640, 360], [1280, 720]
+            await self.emit("changefloatingmode", f"{address},{int(window['floating'])}")
+        else:
+            # Only a floating window that isn't fullscreen can be pinned; it shows on the active workspace.
+            if not window["floating"] or window["fullscreen"]:
+                return
+            window["pinned"] = _toggled(window["pinned"], parsed.action)
+            if window["pinned"]:
+                window["workspace"] = {"id": self.active_workspace, "name": str(self.active_workspace)}
+            await self.emit("pin", f"{address},{int(window['pinned'])}")
+        self.retile()
+
+    def retile(self) -> None:
+        """A simple tiler: each workspace's tiled windows share the monitor in equal columns."""
+        width, height = self.monitors[0]["width"], self.monitors[0]["height"]
+        by_workspace: dict[str, list[dict[str, Any]]] = {}
+        for window in self.windows:
+            if window["fullscreen"]:
+                window["at"], window["size"] = [0, 0], [width, height]
+            elif not window["floating"]:
+                by_workspace.setdefault(window["workspace"]["name"], []).append(window)
+        for tiled in by_workspace.values():
+            column = width // len(tiled)
+            for index, window in enumerate(tiled):
+                window["at"], window["size"] = [index * column, 0], [column, height]
 
     def _exec(self, parsed: FakeCommand) -> str:
         argv = shlex.split(parsed.command or "")
@@ -387,6 +435,7 @@ class FakeHyprland:
             address, app.window_class, title, workspace_id=workspace, pid=app_pid(app.window_class)
         )
         self.windows.append(window)
+        self.retile()
         await self.emit("openwindow", f"{address.removeprefix('0x')},{workspace},{app.window_class},{title}")
         if workspace == self.active_workspace:
             self.active_address = address
@@ -394,6 +443,7 @@ class FakeHyprland:
 
     async def _move(self, window: dict[str, Any], workspace: int) -> None:
         window["workspace"] = {"id": workspace, "name": str(workspace)}
+        self.retile()
         if self.active_address == window["address"] and workspace != self.active_workspace:
             self.active_address = None
         await self.emit("movewindowv2", f"{window['address'].removeprefix('0x')},{workspace},{workspace}")
@@ -418,6 +468,7 @@ class FakeHyprland:
             self.windows.remove(window)
         if self.active_address == window["address"]:
             self.active_address = None
+        self.retile()
         await self.emit("closewindow", window["address"].removeprefix("0x"))
 
     def _version_reply(self, as_json: bool) -> str:

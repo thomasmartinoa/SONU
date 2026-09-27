@@ -416,3 +416,64 @@ expect_status = ["done"]
 expect_windows = [{ class = "chromium", title_contains = "youtube.com/watch" }]
 expect_absent = ["zen"]
 require_tools = ["media.play"]
+
+
+# ---- capability batch 2: window states and side by side (v7)
+
+[[case]]
+id = "fullscreen-this-window"
+request = "make this window fullscreen"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", fullscreen = 2 }]
+require_tools = ["windows.state"]
+
+[[case]]
+id = "exit-fullscreen"
+request = "exit fullscreen"
+windows = [{ class = "zen", title = "YouTube — Zen Browser", workspace = 1, focused = true, fullscreen = 2 }]
+expect_status = ["done"]
+expect_windows = [{ class = "zen", fullscreen = 0 }]
+require_tools = ["windows.state"]
+
+[[case]]
+id = "maximize-this-window"
+request = "maximize this window"
+notes = "Found on real hardware: planned as fullscreen."
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", fullscreen = 1 }]
+require_tools = ["windows.state"]
+
+[[case]]
+id = "float-a-window"
+request = "make kitty float"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { class = "zen", title = "Zen Browser", workspace = 1 }]
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", floating = true }, { class = "zen", floating = false }]
+require_tools = ["windows.state"]
+
+[[case]]
+id = "pin-on-every-workspace"
+request = "keep the browser on all workspaces"
+notes = "Pinning needs a floating window: SONU floats it first."
+windows = [{ class = "zen", title = "Zen Browser", workspace = 2 }, { class = "kitty", title = "zsh", workspace = 1, focused = true }]
+expect_status = ["done"]
+expect_windows = [{ class = "zen", pinned = true }]
+require_tools = ["windows.state"]
+
+[[case]]
+id = "side-by-side"
+request = "put zen and kitty side by side"
+windows = [{ class = "zen", title = "Zen Browser", workspace = 2 }, { class = "kitty", title = "zsh", workspace = 1, focused = true }]
+expect_status = ["done"]
+expect_side_by_side = ["zen", "kitty"]
+require_tools = ["windows.side_by_side"]
+
+[[case]]
+id = "two-terminals-side-by-side"
+request = "put my two terminals next to each other"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { class = "kitty", title = "btop", workspace = 3 }]
+expect_status = ["done"]
+expect_side_by_side = ["kitty", "kitty"]
+require_tools = ["windows.side_by_side"]

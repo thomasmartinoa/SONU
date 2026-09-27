@@ -137,11 +137,16 @@ _NOT_DISTINCTIVE = {
     "one",
 }
 _ALL = re.compile(r"\b(all|every|both)\b", re.IGNORECASE)
+# "all" that isn't about windows. Found on real hardware: "pin kitty on all workspaces" would
+# have pinned every kitty window instead of asking which one.
+_ALL_PLACES = re.compile(
+    r"\b(?:all|every)(?: (?:the|my))? (?:workspaces?|desktops?|screens?|monitors?)\b", re.IGNORECASE
+)
 
 
 def wants_all(request: str) -> bool:
     """The user's own words ask for every matching window ("close all the kitty windows")."""
-    return bool(_ALL.search(request))
+    return bool(_ALL.search(_ALL_PLACES.sub(" ", request)))
 
 
 def narrow_by_request(

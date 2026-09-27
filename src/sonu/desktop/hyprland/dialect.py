@@ -25,7 +25,7 @@ import re
 import shlex
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from sonu.desktop.hyprland.errors import HyprlandRequestError
 from sonu.desktop.hyprland.models import ConfigProvider, Window, normalize_address
@@ -33,6 +33,8 @@ from sonu.desktop.hyprland.models import ConfigProvider, Window, normalize_addre
 _WORKSPACE_NAME = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 _STABLE_ID = re.compile(r"^[0-9a-fA-F]{1,16}$")
 MAX_WORKSPACE_ID = 99
+
+FullscreenMode = Literal["fullscreen", "maximized"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +112,12 @@ class Dialect(Protocol):
 
     def close_window(self, window: WindowSelector) -> str: ...
 
+    def set_fullscreen(self, window: WindowSelector, mode: FullscreenMode, on: bool) -> str: ...
+
+    def set_floating(self, window: WindowSelector, on: bool) -> str: ...
+
+    def set_pinned(self, window: WindowSelector, on: bool) -> str: ...
+
 
 class LuaDialect:
     provider: ConfigProvider = "lua"
@@ -139,6 +147,23 @@ class LuaDialect:
 
     def close_window(self, window: WindowSelector) -> str:
         return f"dispatch hl.dsp.window.close({{ window = {lua_string(window.value)} }})"
+
+    # 0.56.2 (LuaBindingsDispatchers.cpp): fullscreen takes mode fullscreen/maximized and action
+    # set/unset/toggle; float and pin take action enable/disable/toggle — an unknown action word
+    # silently means *toggle*, so only these exact words are ever sent.
+    def set_fullscreen(self, window: WindowSelector, mode: FullscreenMode, on: bool) -> str:
+        return (
+            f"dispatch hl.dsp.window.fullscreen({{ mode = {lua_string(mode)}, "
+            f"action = {lua_string('set' if on else 'unset')}, window = {lua_string(window.value)} }})"
+        )
+
+    def set_floating(self, window: WindowSelector, on: bool) -> str:
+        action = lua_string("enable" if on else "disable")
+        return f"dispatch hl.dsp.window.float({{ action = {action}, window = {lua_string(window.value)} }})"
+
+    def set_pinned(self, window: WindowSelector, on: bool) -> str:
+        action = lua_string("enable" if on else "disable")
+        return f"dispatch hl.dsp.window.pin({{ action = {action}, window = {lua_string(window.value)} }})"
 
 
 class HyprlangDialect:
@@ -173,6 +198,17 @@ class HyprlangDialect:
 
     def close_window(self, window: WindowSelector) -> str:
         return f"dispatch closewindow {self._legacy_selector(window)}"
+
+    def set_fullscreen(self, window: WindowSelector, mode: FullscreenMode, on: bool) -> str:
+        # The classic fullscreen dispatchers only act on the focused window: never guess.
+        raise HyprlandRequestError("fullscreen for a chosen window needs Hyprland's Lua config (0.55+)")
+
+    def set_floating(self, window: WindowSelector, on: bool) -> str:
+        return f"dispatch {'setfloating' if on else 'settiled'} {self._legacy_selector(window)}"
+
+    def set_pinned(self, window: WindowSelector, on: bool) -> str:
+        # Classic `pin` toggles: callers only send it when the window isn't in the wanted state.
+        return f"dispatch pin {self._legacy_selector(window)}"
 
 
 def dialect_for(provider: ConfigProvider) -> Dialect:

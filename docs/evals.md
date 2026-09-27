@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v6, 51 cases)
+## The cases (v7, 58 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -45,6 +45,10 @@ faded on youtube in chromium" while Zen shows "Alan Walker - Faded" must still s
 in Chromium. A 50th case plays in a browser that isn't in the media controls but autoplays: SONU must confirm it
 from the browser's new audio stream.
 
+v7 (batch 2, windows) adds fullscreen / exit fullscreen / maximize, floating, pinning to every workspace, and side by
+side (two apps; two windows of one app). Cases can now start windows floating or fullscreen and expect a window's
+fullscreen/floating/pinned state or two windows next to each other (`expect_side_by_side`).
+
 A golden-plan test (`tests/unit/test_evals.py`) proves every case is achievable with SONU's real tools, so a failing
 case is a model (or prompt) problem, not an impossible test. The planner's few-shot examples deliberately use
 *different* apps than the cases, so the score measures generalisation rather than memorisation.
@@ -72,6 +76,9 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-27 | `qwen3.5:4b` | v6 without the message rule; the planner sends back queries that aren't the user's words | **49 / 49** | — (the repair round is visible as `attempts: 2` in `play-with-a-title-on-screen`). Not in the suite: "turn off the night light and do not disturb" stays "…and turn DND on", even with that exact sentence as an example |
 | 2026-09-27 | `qwen3.5:4b` | + `song-in-a-browser-without-media-controls` (playback confirmed by sound) | **50 / 50** | — |
 | 2026-09-27 | `qwen3.5:4b` | + `play-in-the-named-browser` (the named browser is used even if the plan leaves it out) | **51 / 51** | — |
+| 2026-09-27 | `qwen3.5:4b` | v7 (57 cases): window states and side by side | **57 / 57** | — |
+| 2026-09-27 | `qwen3.5:4b` | + `maximize-this-window` (found on the laptop: "maximize" was planned as fullscreen); rule "`maximize` is maximized (not fullscreen)" | **1 / 2** of the two | "make this window fullscreen" became *maximized*. Reworded: "the state is the user's word" |
+| 2026-09-27 | `qwen3.5:4b` | v7 (58 cases) with that wording | **58 / 58** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

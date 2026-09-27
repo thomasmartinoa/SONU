@@ -70,6 +70,8 @@ class CaseWindow(_Model):
     title: str = ""
     workspace: int = 1
     focused: bool = False
+    floating: bool = False
+    fullscreen: int = 0  # 1 maximized, 2 fullscreen
 
 
 class ExpectWindow(_Model):
@@ -77,6 +79,9 @@ class ExpectWindow(_Model):
     workspace: int | None = None
     title_contains: str | None = None
     count: int | None = None
+    fullscreen: int | None = None  # 0 none, 1 maximized, 2 fullscreen
+    floating: bool | None = None
+    pinned: bool | None = None
 
 
 class EvalCase(_Model):
@@ -98,6 +103,9 @@ class EvalCase(_Model):
     battery: int | None = None  # a battery at this percent (discharging)
     expect_confirmed: list[str] = Field(default_factory=list)  # tools that must have asked first
     expect_reply_contains: str | None = None  # text the report must contain
+    expect_side_by_side: list[str] = Field(
+        default_factory=list
+    )  # two window classes, tiled next to each other
 
     @field_validator("system", "expect_system")
     @classmethod
@@ -158,6 +166,26 @@ def _system_failures(case: EvalCase, system: FakeSystem) -> list[str]:
     return failures
 
 
+def _side_by_side(fake: FakeHyprland, classes: list[str]) -> bool:
+    """Two different windows of these classes, tiled on one workspace, next to each other."""
+    picked: list[dict[str, Any]] = []
+    for window_class in classes[:2]:
+        window = next((w for w in fake.windows_of_class(window_class) if w not in picked), None)
+        if window is None:
+            return False
+        picked.append(window)
+    if len(picked) != 2:
+        return False
+    left, right = sorted(picked, key=lambda w: w["at"][0])
+    return (
+        left["workspace"]["name"] == right["workspace"]["name"]
+        and not any(w["floating"] or w["fullscreen"] for w in picked)
+        and left["at"][0] + left["size"][0] <= right["at"][0]
+        and left["at"][1] < right["at"][1] + right["size"][1]
+        and right["at"][1] < left["at"][1] + left["size"][1]
+    )
+
+
 def check_expectations(
     case: EvalCase,
     report: TaskReport,
@@ -185,6 +213,14 @@ def check_expectations(
             and (
                 expected.title_contains is None or expected.title_contains.casefold() in w["title"].casefold()
             )
+            and all(
+                wanted is None or w[key] == wanted
+                for key, wanted in (
+                    ("fullscreen", expected.fullscreen),
+                    ("floating", expected.floating),
+                    ("pinned", expected.pinned),
+                )
+            )
         ]
         wanted = expected.count
         if (wanted is None and not matches) or (wanted is not None and len(matches) != wanted):
@@ -192,6 +228,8 @@ def check_expectations(
             failures.append(
                 f"expected {wanted or 'a'} {expected.window_class} window{where}, found {len(matches)}"
             )
+    if case.expect_side_by_side and not _side_by_side(fake, case.expect_side_by_side):
+        failures.append(f"{' and '.join(case.expect_side_by_side)} should be side by side")
     for window_class in case.expect_absent:
         if fake.windows_of_class(window_class):
             failures.append(f"{window_class} should not be open")
@@ -218,7 +256,14 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
             for index, window in enumerate(case.windows):
                 address = f"0x{0x7000 + index:x}"
                 fake.windows.append(
-                    make_window(address, window.window_class, window.title, workspace_id=window.workspace)
+                    make_window(
+                        address,
+                        window.window_class,
+                        window.title,
+                        workspace_id=window.workspace,
+                        floating=window.floating,
+                    )
+                    | {"fullscreen": window.fullscreen}
                 )
                 if window.focused:
                     focused_address = address
@@ -227,6 +272,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                         "name": str(window.workspace),
                     }
             fake.active_address = focused_address
+            fake.retile()  # the windows a case starts with sit where a tiler would put them
 
             apps_home = workdir / "share"
             write_desktop_files(apps_home / "applications")
