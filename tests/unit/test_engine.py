@@ -451,7 +451,14 @@ async def test_planner_gets_app_labels(harness: Harness) -> None:
 
     class Capture(ScriptedPlanner):
         async def plan(
-            self, request: str, snapshot: Any, registry: Any, *, app_labels: Any = None, history: Any = ()
+            self,
+            request: str,
+            snapshot: Any,
+            registry: Any,
+            *,
+            app_labels: Any = None,
+            history: Any = (),
+            notes: Any = (),
         ) -> Plan:
             captured["labels"] = app_labels
             return Plan("reply", "ok")

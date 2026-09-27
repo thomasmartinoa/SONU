@@ -114,6 +114,16 @@ def compact(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.casefold())
 
 
+def site_named(words: str) -> str | None:
+    """The key of the one known website these words are exactly ("youtube" → "youtube"), if any."""
+    wanted = normalize(words)
+    return next((key for key, site in SITES.items() if wanted in (*site.words, normalize(site.name))), None)
+
+
+def sites_named_in(request: str) -> list[str]:
+    return [key for key, site in SITES.items() if _named_in(site, request)]
+
+
 def _named_in(site: Site, request: str) -> bool:
     text = f" {normalize(request)} "
     return any(f" {word} " in text for word in (*site.words, normalize(site.name)))

@@ -37,6 +37,7 @@ class ScriptedPlanner:
         *,
         app_labels: Mapping[str, str] | None = None,
         history: Sequence[Turn] = (),
+        notes: Sequence[str] = (),
     ) -> Plan:
         self.seen.append((request, snapshot))
         self.histories.append(list(history))

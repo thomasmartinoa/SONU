@@ -135,7 +135,12 @@ class Engine:
             snapshot = replace(snapshot, origin_address=origin)
             labels = self.ctx.resolver.labels_for_classes(w.window_class for w in snapshot.windows)
             plan = await self.planner.plan(
-                request, snapshot, self.registry, app_labels=labels, history=history
+                request,
+                snapshot,
+                self.registry,
+                app_labels=labels,
+                history=history,
+                notes=self.ctx.memory.notes(),
             )
         except (HyprlandError, PlanningError) as exc:
             report.error = str(exc)

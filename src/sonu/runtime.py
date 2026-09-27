@@ -14,6 +14,7 @@ from sonu.config.paths import SonuPaths
 from sonu.config.settings import OllamaSettings, Settings
 from sonu.core.conversation import Conversation
 from sonu.core.engine import Engine
+from sonu.core.memory import Memory
 from sonu.core.planner import LLMPlanner
 from sonu.core.responder import Responder
 from sonu.desktop.apps.catalog import AppCatalog
@@ -29,8 +30,22 @@ from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 
 
+def load_memory(paths: SonuPaths) -> Memory:
+    """What the user asked SONU to remember (shared by the CLI and the daemon)."""
+    return Memory.load(paths.data_dir / "memory.json")
+
+
+def app_aliases(settings: Settings, memory: Memory) -> dict[str, str]:
+    """The config's aliases, and what the user said with "remember …" (newer, so it wins)."""
+    return {**settings.apps.aliases, **memory.aliases()}
+
+
 def assistant_parts(
-    settings: Settings, paths: SonuPaths, client: OllamaClient, ollama: OllamaSettings | None = None
+    settings: Settings,
+    paths: SonuPaths,
+    client: OllamaClient,
+    ollama: OllamaSettings | None = None,
+    memory: Memory | None = None,
 ) -> tuple[Conversation, Responder | None]:
     """The conversation so far (shared by the CLI and the daemon) and the reply writer."""
     assistant = settings.assistant
@@ -40,7 +55,8 @@ def assistant_parts(
     if not assistant.replies:
         return conversation, None
     model = OllamaChatModel(client, settings.models.planner, ollama or settings.ollama)
-    return conversation, Responder(model, name=assistant.name, user_name=assistant.user_name)
+    user_name = (memory.name() if memory is not None else None) or assistant.user_name
+    return conversation, Responder(model, name=assistant.name, user_name=user_name)
 
 
 class SetupError(Exception):
@@ -75,8 +91,11 @@ async def build_runtime(
     catalog = await asyncio.to_thread(AppCatalog.load, env)
     rice = detect_hypr_theme(Path(env.get("HOME") or Path.home()))
     role_defaults = {kind: app.command for kind, app in rice.defaults.items()}
-    resolver = AppResolver(catalog, role_defaults=role_defaults, aliases=settings.apps.aliases)
-    ctx = ToolContext(desktop, resolver, settings, default_terminal=role_defaults.get("terminal"))
+    memory = load_memory(paths)
+    resolver = AppResolver(catalog, role_defaults=role_defaults, aliases=app_aliases(settings, memory))
+    ctx = ToolContext(
+        desktop, resolver, settings, default_terminal=role_defaults.get("terminal"), memory=memory
+    )
 
     role = settings.models.planner_deep if deep else settings.models.planner
     if model:
@@ -86,7 +105,7 @@ async def build_runtime(
     )
     planner = LLMPlanner(OllamaChatModel(client, role, settings.ollama))
     audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
-    conversation, responder = assistant_parts(settings, paths, client)
+    conversation, responder = assistant_parts(settings, paths, client, memory=memory)
     engine = Engine(
         planner=planner,
         registry=ToolRegistry(),

@@ -157,6 +157,29 @@ def test_site_operator_and_small_spelling_fixes_are_not_sent_back() -> None:
     assert _problems(plan, REGISTRY, "search dotfiles in github and connect to paulkt 5g") == []
 
 
+def test_a_named_website_is_not_just_the_browser_app() -> None:
+    # Found in an eval: "go to youtube" was planned as {"apps.launch": {"app": "browser"}}.
+    launch = _PlanModel.model_validate(
+        {"kind": "steps", "steps": [{"tool": "apps.launch", "args": {"app": "browser"}}]}
+    )
+    assert _problems(launch, REGISTRY, "go to youtube") == [
+        "step 1 (apps.launch): 'youtube' is a website — use web.open with site 'youtube' "
+        "instead of opening the browser"
+    ]
+    assert _problems(launch, REGISTRY, "open my browser") == []
+
+
+def test_a_reminder_in_other_words_than_the_users_is_sent_back() -> None:
+    # Found in an eval: "call me Martin" was planned as the prompt's reminder example.
+    copied = _PlanModel.model_validate(
+        {"kind": "steps", "steps": [{"tool": "reminders.set", "args": {"text": "stretch", "in_minutes": 20}}]}
+    )
+    assert _problems(copied, REGISTRY, "call me Martin") == [
+        "step 1 (reminders.set): text must use only the user's own words; 'stretch' are not in the request "
+        "(keep the other arguments)"
+    ]
+
+
 @pytest.mark.anyio
 async def test_last_attempt_is_handed_to_the_engine() -> None:
     unknown = {"kind": "steps", "message": "", "steps": [{"tool": "system.shell", "args": {"cmd": "ls"}}]}

@@ -15,7 +15,7 @@ _Last update: 2026-09-27_
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
-| M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); next: "remember …" preferences, the journal |
+| M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
 | M3 Voice · M4 Developer operator · M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -98,7 +98,9 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 1. **M2 — daemon, conversation, memory**: ~~`sonud`~~ (#18, installed on the laptop); ~~natural replies and one
    conversation~~ (#19, [D44](DECISIONS.md)) — verified on the laptop through the daemon: "hi sonu", "open kitty on
    workspace 2" → "Kitty is up on workspace two.", "move it to workspace 4" (the window SONU opened), "play faded on
-   spotify", "pause it", "play it again", small talk. Next: "remember …" preferences and the activity journal.
+   spotify", "pause it", "play it again", small talk. ~~"Remember …"~~ (#20, [D45](DECISIONS.md)) — on the laptop:
+   "remember that when I say editor I mean visual studio code" → "open my editor" opens Visual Studio Code; notes
+   listed back. Next: **M3 voice**; the activity journal after it.
 2. **M3 — voice**: push-to-talk on the NitroSense key, then "Hey Sonu"; faster-whisper (GPU) + a natural local
    voice; barge-in; high risk never approved by voice alone.
 3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
@@ -159,7 +161,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #16 | 2026-09-27 | OBS verified on the laptop and its failures explained (Hybrid MP4 pause, virtual camera without `v4l2loopback`, replay buffer off, dialogs OBS waits on); Spotify by name without a key; Apple Music explained |
 | #17 | 2026-09-27 | Roadmap: the goal is a voice operator for the whole PC ([D42](DECISIONS.md)); M2 gains conversation, M4 becomes the developer operator, M4.5 installs, M6 screen control |
 | #18 | 2026-09-27 | M2 part 1: `sonud` (model kept loaded and warmed, private socket, questions relayed to the client, Ctrl+C cancels), `sonu` as a thin client with a fallback, `sonu daemon install/status/uninstall` |
-| #19 | open | M2 part 2: natural replies after every request (checked in code), small talk, one conversation ("it", "again"); `[assistant]` settings |
+| #19 | 2026-09-27 | M2 part 2: natural replies after every request (checked in code), small talk, one conversation ("it", "again"); `[assistant]` settings |
+| #20 | open | M2 part 3: "remember …" (app aliases, name, notes), "forget …", "what do you remember?"; reminder text must be the user's words; a site given as the browser is ignored; "go to <site>" isn't the browser app |
 
 ### Found on real hardware → fixed
 
@@ -191,6 +194,9 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | 09-27 | Chromium played the video but wasn't in the media controls → "couldn't confirm it's playing" | a new audio stream from the browser's process confirms it ([D34](DECISIONS.md)) (#10) |
 | 09-27 | The plan's message said "Playing 'faded' by The Smashing Pumpkins" (made up) | prompt: media.play's query is the user's words only — the same request now says "Playing faded on YouTube" (a broader "never add facts" rule broke "go to youtube" in the evals and was dropped) (#10) |
 | 09-27 | After #10, the summary still said "by The 1975" / "by Faded" (the step itself played Alan Walker's Faded) | the model's summary isn't printed for steps; SONU's own step lines say what happens ([D35](DECISIONS.md)) (#11) |
+| 09-27 | (eval) "call me Martin" was planned as the prompt's reminder example (set a reminder "stretch" and dim the screen) | reminder text must be the user's words (the planner sends it back); a "call me" example (#20) |
+| 09-27 | (eval) "play faded on youtube" → browser "youtube" → "not installed"; "go to youtube" → the browser app | a site given as the browser is ignored; a plan that opens "the browser" for a named website is sent back (#20) |
+| 09-27 | A dry run's reply repeated the "would" line | no reply for dry runs (#20) |
 | 09-27 | "open kitty on 2" then "move it to 3" → the model picked the *focused* window (another terminal, already on 3) and SONU said "Moved" | "it/that" means the windows the last request acted on; a window already there is reported "was already on workspace 3" (#19) |
 | 09-27 | Replies padded and invented: "…and confirmed. Everything looks good.", "running smoothly", "I can … run commands" | filler trimmed in code; number words checked like digits; small talk knows SONU's real abilities (#19) |
 | 09-27 | "what's playing?" → "It's playing, but I can't see the song name" (the result is private) | no reply when every result is private — the line on screen is the answer (#19) |

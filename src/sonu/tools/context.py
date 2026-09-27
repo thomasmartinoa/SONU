@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from sonu.config.settings import Settings
+from sonu.core.memory import Memory
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
@@ -42,6 +43,8 @@ class ToolContext:
     user_words: str = ""
     # The windows the previous request acted on (addresses): what "it" / "that" means. Set by the engine.
     recent_windows: tuple[str, ...] = ()
+    # What the user asked SONU to remember (in memory only unless the runtime gives it a file).
+    memory: Memory = field(default_factory=Memory)
     # SONU's parent processes, to find the terminal it was started from (tests pass `frozenset`).
     ancestors: Callable[[], frozenset[int]] = ancestor_pids
     # The browser an earlier step of this task opened ("open chrome … and search …"): web steps

@@ -115,6 +115,9 @@ class SetReminder(Tool):
     risk = Risk.LOW
     effects = frozenset({Effect.SCHEDULE})
     Args = ReminderArgs
+    # Found in an eval: "call me Martin" was planned as the prompt's reminder example ("stretch"): the
+    # planner now sends a reminder whose words aren't the user's back to the model.
+    grounded = ("text",)
 
     async def prepare(
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None

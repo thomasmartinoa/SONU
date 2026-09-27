@@ -34,7 +34,7 @@ from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcom
 from sonu.tools.context import ToolContext
 from sonu.tools.desktop_tools import resolve_app
 from sonu.tools.grounding import CONNECTIVES, ungrounded_words
-from sonu.tools.web_tools import Target, WebPlan, compact, open_in_browser, prepare_browser
+from sonu.tools.web_tools import Target, WebPlan, compact, open_in_browser, prepare_browser, site_named
 from sonu.verify.checks import Check
 from sonu.world.origin import ancestor_pids
 from sonu.world.snapshot import WorldSnapshot
@@ -138,7 +138,9 @@ class PlayMedia(Tool):
                 f"Won't look up '{query}': {', '.join(missing)} isn't in your request "
                 "(SONU only sends your own words to websites)",
             )
-        browser = prepare_browser(Target("", "", ""), a.browser, ctx, choice)
+        # Found in an eval: "play faded on youtube" came with browser "youtube" — a site, not a browser.
+        named = None if a.browser and site_named(a.browser) else a.browser
+        browser = prepare_browser(Target("", "", ""), named, ctx, choice)
         if isinstance(browser, ToolOutcome):
             return browser
         argv = browser.argv[:-1]  # prepare_browser appended the (still empty) URL
