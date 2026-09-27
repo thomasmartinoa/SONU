@@ -15,19 +15,25 @@ The lookup happens in ``execute``, so a dry run sends nothing to YouTube.
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import cast
+from difflib import SequenceMatcher
+from typing import Literal, cast
+from urllib.parse import quote
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from sonu.desktop.apps.classes import window_matches
 from sonu.desktop.apps.entry import AppEntry
+from sonu.desktop.apps.resolver import normalize
+from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.system.commands import CommandError, ProgramMissing
 from sonu.system.control import AudioStream, Video
 from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
-from sonu.tools.grounding import ungrounded_words
+from sonu.tools.desktop_tools import resolve_app
+from sonu.tools.grounding import CONNECTIVES, ungrounded_words
 from sonu.tools.web_tools import Target, WebPlan, compact, open_in_browser, prepare_browser
 from sonu.verify.checks import Check
 from sonu.world.origin import ancestor_pids
@@ -64,6 +70,35 @@ class PlayArgs(BaseModel):
     browser: str | None = Field(
         default=None, max_length=80, description="only if the user named a browser, e.g. 'chrome'"
     )
+    service: Literal["youtube", "spotify"] = Field(
+        default="youtube", description="spotify only if the user said Spotify"
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _SpotifyPlan:
+    entry: AppEntry
+    argv: tuple[str, ...]  # how to start Spotify if it isn't running
+    query: str
+
+
+_SPOTIFY = re.compile(r"\bspotify\b", re.IGNORECASE)
+_APPLE_MUSIC = re.compile(r"\bapple\s*music\b|\bitunes\b", re.IGNORECASE)
+APPLE_MUSIC_NO = (
+    "Can't play a song on Apple Music by name yet — the Apple Music app can't be given a song to play. "
+    "Say 'play … on spotify', or just 'play …' for YouTube"
+)
+SPOTIFY_PLAY_S = 12.0  # Spotify searches online, then starts the top result
+
+
+def _shares_words(query: str, *texts: str) -> bool:
+    """The song Spotify started has a word of the user's request in its title or artist."""
+    wanted = [w for w in normalize(query).split() if w not in CONNECTIVES and len(w) >= 3]
+    have = set(normalize(" ".join(texts)).split())
+    return not wanted or any(
+        w in have or any(SequenceMatcher(None, w, h).ratio() >= 0.8 for h in have if len(h) >= 3)
+        for w in wanted
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +120,12 @@ class PlayMedia(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(PlayArgs, args)
+        if _APPLE_MUSIC.search(ctx.request_text) and not _SPOTIFY.search(ctx.request_text):
+            # Found in an eval: "play faded on apple music" was planned with browser "apple music".
+            return ToolOutcome(StepStatus.FAILED, APPLE_MUSIC_NO)
+        if a.service == "spotify" or _SPOTIFY.search(ctx.request_text):
+            # Found on the owner's laptop: the user's "on spotify" wins even if the plan left it out.
+            return self._prepare_spotify(a, ctx)
         if not ctx.system.available("yt-dlp"):
             return ToolOutcome(
                 StepStatus.FAILED, f"{ProgramMissing('yt-dlp')} — SONU uses it to find the video to play"
@@ -105,7 +146,85 @@ class PlayMedia(Tool):
             f"Play '{query}' from YouTube in {browser.entry.name}", _PlayPlan(browser.entry, argv, query)
         )
 
+    @staticmethod
+    def _prepare_spotify(a: PlayArgs, ctx: ToolContext) -> Prepared | ToolOutcome:
+        query = " ".join(a.query.split())
+        if missing := ungrounded_words(query, ctx.request_text):
+            return ToolOutcome(
+                StepStatus.FAILED,
+                f"Won't search Spotify for '{query}': {', '.join(missing)} isn't in your request",
+            )
+        if not ctx.system.available("playerctl"):
+            return ToolOutcome(
+                StepStatus.FAILED, f"{ProgramMissing('playerctl')} — SONU starts Spotify through it"
+            )
+        entry = resolve_app("spotify", ctx)
+        if isinstance(entry, ToolOutcome):
+            return ToolOutcome(
+                StepStatus.FAILED, "Spotify isn't installed (install: sudo pacman -S spotify-launcher)"
+            )
+        argv = ctx.launch_argv(entry)
+        if argv is None:
+            return ToolOutcome(StepStatus.FAILED, f"{entry.name} can't be started")
+        return Prepared(f"Play '{query}' on Spotify", _SpotifyPlan(entry, argv, query))
+
+    @staticmethod
+    async def _play_on_spotify(plan: _SpotifyPlan, ctx: ToolContext) -> ToolOutcome:
+        """Spotify plays the top result of a search link (MPRIS OpenUri); SONU checks what started."""
+        uri = "spotify:search:" + quote(plan.query, safe="")
+        try:
+            before = (
+                await ctx.system.player_song("spotify") if "spotify" in await ctx.system.players() else None
+            )
+            if before is None:  # not running: start it, wait for it in the media controls
+                try:
+                    await ctx.desktop.launch(plan.argv)
+                except HyprlandError as exc:
+                    return ToolOutcome(StepStatus.FAILED, f"Hyprland refused to start Spotify: {exc}")
+                appeared = await _settle(
+                    ctx.system.players, lambda names: "spotify" in names, ctx.settings.apps.launch_timeout_s
+                )
+                if "spotify" not in appeared:
+                    return ToolOutcome(
+                        StepStatus.FAILED, "Started Spotify, but it didn't show up in the media controls"
+                    )
+            await ctx.system.open_in_player("spotify", uri)
+
+            async def now() -> tuple[str | None, tuple[str, str, str]]:
+                return await _status(ctx, "spotify"), await ctx.system.player_song("spotify")
+
+            status, (title, artist, track) = await _settle(
+                now,
+                lambda s: (
+                    s[0] == "Playing"
+                    and (before is None or s[1][2] != before[2] or _shares_words(plan.query, *s[1][:2]))
+                ),
+                SPOTIFY_PLAY_S,
+            )
+        except CommandError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Spotify didn't play it: {exc}")
+        song = f"'{title}' by {artist}" if artist else f"'{title}'"
+        playing = Check("Spotify is playing", status == "Playing", {"status": status})
+        if status != "Playing":
+            return ToolOutcome(
+                StepStatus.FAILED, f"Spotify didn't start playing (it says: {status})", (playing,)
+            )
+        matches = Check(
+            "it's what was asked for",
+            _shares_words(plan.query, title, artist),
+            {"title": title, "track": track},
+        )
+        if not matches.passed:
+            return ToolOutcome(
+                StepStatus.UNVERIFIED,
+                f"Spotify is playing {song} — not sure that's '{plan.query}'",
+                (playing, matches),
+            )
+        return ToolOutcome(StepStatus.DONE, f"Playing {song} on Spotify", (playing, matches))
+
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        if isinstance(prepared.payload, _SpotifyPlan):
+            return await self._play_on_spotify(prepared.payload, ctx)
         plan = cast(_PlayPlan, prepared.payload)
         try:
             video = await ctx.system.find_video(plan.query)

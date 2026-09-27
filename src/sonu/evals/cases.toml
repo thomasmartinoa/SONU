@@ -636,3 +636,20 @@ obs = { recording = true }
 expect_status = ["done"]
 expect_reply_contains = "OBS: recording"
 forbid_tools = ["obs.record"]
+
+[[case]]
+id = "play-on-spotify"
+request = "play believer by imagine dragons on spotify"
+notes = "Found on the owner's laptop: a spotify:search: link through the media controls plays the top result."
+system = { other_players = { spotify = ["Old Song", "Paused"] } }
+expect_status = ["done"]
+expect_system = { videos_playing = 1 }
+require_tools = ["media.play"]
+
+[[case]]
+id = "play-on-apple-music"
+request = "play faded on apple music"
+notes = "The owner's Apple Music app ignores links: not possible yet, and not quietly played somewhere else."
+expect_status = ["cannot", "partial", "failed"]
+expect_reply_contains = "Apple Music"
+forbid_tools = ["web.search", "web.open"]

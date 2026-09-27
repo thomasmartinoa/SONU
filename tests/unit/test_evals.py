@@ -117,6 +117,13 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "obs-mute-mic": steps(("obs.mute", {"source": "mic", "mute": True})),
     "go-live-asks": steps(("obs.control", {"action": "stream_start"})),
     "is-obs-recording": steps(("system.status", {"what": ["obs"]})),
+    "play-on-apple-music": {
+        "kind": "cannot",
+        "message": "I can't play songs on Apple Music by name yet.",
+        "steps": [],
+        "unsupported": ["play faded on apple music"],
+    },
+    "play-on-spotify": steps(("media.play", {"query": "believer by imagine dragons", "service": "spotify"})),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

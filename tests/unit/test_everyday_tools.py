@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -185,6 +186,65 @@ async def test_the_browser_the_user_named_is_used_when_the_plan_leaves_it_out(ri
     # Two browsers named: SONU can't tell which one this step is for, so the default stays.
     report = await rig.run("play faded in chromium or zen", ("media.play", {"query": "faded"}), dry_run=True)
     assert report.lines() == ["· would: Play 'faded' from YouTube in Zen Browser"]
+
+
+# ---------------------------------------------------------------- media.play on Spotify
+@pytest.mark.anyio
+async def test_play_on_spotify(rig: Rig) -> None:
+    # Found on the owner's laptop: a spotify:search: link through the media controls plays the top
+    # result — no API key needed.
+    rig.system.other_players["spotify"] = ["Old Song", "Paused"]
+    rig.system.spotify_results["alan walker faded"] = ("Faded", "Alan Walker")
+    report = await rig.run(
+        "play alan walker faded on spotify",
+        ("media.play", {"query": "alan walker faded", "service": "spotify"}),
+    )
+    assert report.lines() == ["✔ Playing 'Faded' by Alan Walker on Spotify"]
+    assert ("playerctl", "-p", "spotify", "open", "spotify:search:alan%20walker%20faded") in rig.system.calls
+    assert not any(call[0] == "yt-dlp" for call in rig.system.calls)
+
+
+@pytest.mark.anyio
+async def test_on_spotify_in_the_users_words_wins(rig: Rig) -> None:
+    rig.system.other_players["spotify"] = ["Old Song", "Paused"]
+    report = await rig.run("play believer on spotify", ("media.play", {"query": "believer"}))
+    assert report.status == "done"
+    assert rig.system.other_players["spotify"] == ["Believer", "Playing"]
+
+
+@pytest.mark.anyio
+async def test_something_else_playing_on_spotify_is_not_done(rig: Rig) -> None:
+    rig.system.other_players["spotify"] = ["Old Song", "Paused"]
+    rig.system.spotify_results["faded"] = ("Lofi Beats To Study To", "Chill Radio")
+    report = await rig.run("play faded on spotify", ("media.play", {"query": "faded", "service": "spotify"}))
+    assert report.status == "unverified"
+    assert report.lines() == [
+        "▲ Spotify is playing 'Lofi Beats To Study To' by Chill Radio — not sure that's 'faded'"
+    ]
+
+
+@pytest.mark.anyio
+async def test_spotify_is_started_when_it_isnt_running(rig: Rig) -> None:
+    rig.fake.apps["spotify-launcher"] = FakeApp("spotify", "Spotify Free")
+
+    async def spotify_appears() -> None:
+        while not any(argv[0] == "spotify-launcher" for argv in rig.fake.launched):  # noqa: ASYNC110
+            await asyncio.sleep(0.05)
+        rig.system.other_players["spotify"] = ["", "Stopped"]
+
+    task = asyncio.create_task(spotify_appears())
+    report = await rig.run("play faded on spotify", ("media.play", {"query": "faded", "service": "spotify"}))
+    await task
+    assert report.lines() == ["✔ Playing 'Faded' by Some Artist on Spotify"]
+
+
+@pytest.mark.anyio
+async def test_apple_music_by_name_is_explained_not_played_elsewhere(rig: Rig) -> None:
+    report = await rig.run(
+        "play faded on apple music", ("media.play", {"query": "faded", "browser": "apple music"})
+    )
+    assert report.lines()[0].startswith("✖ Can't play a song on Apple Music by name yet")
+    assert rig.system.calls == [] and rig.fake.launched == []
 
 
 @pytest.mark.anyio

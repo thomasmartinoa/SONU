@@ -37,8 +37,8 @@ works:
 | "Put X and Y side by side" (`windows.side_by_side`) | ✅ | both tiled on one workspace (the first window's), the tiler splits it; done only when their positions really are next to each other |
 | Save and restore a layout | 🗺 M2 | layouts need memory |
 | Screenshot of the screen, a window or an area; copy it | 🧪 this batch | `grim` (+ `slurp` for an area) into `~/Pictures/screenshot/` like the rice's keys, `wl-copy` |
-| Screen recording with **OBS** (`obs.record`): start (opens OBS if needed), stop (file verified), pause, resume | ✅ | OBS's own WebSocket server (local only; the password comes from OBS's settings) — turned on once in OBS: Tools → WebSocket Server Settings |
-| OBS scenes, streaming (always asks), virtual camera, replay buffer, muting a source; "is OBS recording?" | ✅ | `obs.scene`, `obs.control`, `obs.mute`, `system.status` `obs` — every change read back from OBS |
+| Screen recording with **OBS** (`obs.record`): start (opens OBS if needed), stop (file verified), pause, resume (not with OBS's Hybrid MP4 format — SONU says so) | ✅ | OBS's own WebSocket server (local only; the password comes from OBS's settings) — turned on once in OBS: Tools → WebSocket Server Settings |
+| OBS scenes, streaming (always asks), virtual camera (only when `v4l2loopback` is loaded), replay buffer (when enabled in OBS), muting a source; "is OBS recording?"; names the dialog OBS is stuck on | ✅ | `obs.scene`, `obs.control`, `obs.mute`, `system.status` `obs` — every change read back from OBS |
 
 ## System
 
@@ -76,7 +76,7 @@ works:
 | Play, pause, next, previous what's playing (Apple Music, browser, Spotify, mpv, …) | ✅ | `playerctl` |
 | Play a particular song or video (YouTube) | 🧪 this batch | see Browser |
 | Play on Apple Music by name | ⛔ for now | the owner's Apple Music app (apple-music-desktop, an Electron wrapper) ignores links passed to it, so a song can't be opened or started without clicking in it (M6). "Play X" plays it on YouTube |
-| Play on Spotify by name | ⏭ if installed | the Spotify app plays `spotify:track:` links through the media controls; finding the track needs a Spotify API key (the user's own) |
+| Play on Spotify by name: "play believer on spotify" (`media.play` service spotify) | ✅ | **no API key**: a `spotify:search:<your words>` link through the media controls (MPRIS OpenUri) makes Spotify play the top result; SONU starts Spotify if needed and checks it's playing a new song whose title or artist shares your words (else "unverified") |
 | Local music ("play my downloads folder") | ⏭ | `mpv` with the folder + MPRIS |
 | "What's playing?" | ✅ | `system.status` media: `playerctl metadata` (read-only; kept out of the audit log) |
 

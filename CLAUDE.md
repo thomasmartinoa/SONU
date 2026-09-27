@@ -30,7 +30,9 @@ fresh clone always has the full context.
 ## Workflow
 
 - Work on a feature branch, open a PR to `main`; the owner merges. Never push to `main`.
-- After a PR merges, restart the branch from `origin/main` before new work.
+- After a PR merges, restart the branch from `origin/main` before new work, and on the owner's laptop reinstall
+  their everyday copy at once (`uv tool install --reinstall ~/dev_works/SONU`): a stale copy made "stop recording"
+  clear the notifications.
 - The owner tests on their laptop and pastes terminal output. Each real-hardware finding becomes a regression test
   (comment: "found on real hardware"), a fix, and a line in `docs/STATUS.md`.
 - Every fix comes with a test that fails on the old code. Keep commits and PR descriptions factual.

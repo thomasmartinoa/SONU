@@ -27,7 +27,7 @@ from sonu.integrations.obs import (
 from sonu.policy import Policy
 from sonu.system import SystemControl
 from sonu.testing.fake_apps import write_desktop_files
-from sonu.testing.fake_hyprland import FakeApp, FakeHyprland
+from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_obs import FakeObs, FakeObsState
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
 from sonu.testing.fake_system import FakeSystem
@@ -227,3 +227,55 @@ async def test_recording_starts_obs_when_it_isnt_running(rig: Rig, tmp_path: Pat
     await later.__aexit__(None, None, None)
     report = await rig.run("switch to scene 3", ("obs.scene", {"scene": "scene 3"}))
     assert report.lines() == ["✖ OBS isn't running (say 'open OBS' first)"]
+
+
+# ---------------------------------------------------------------- found on the owner's laptop
+@pytest.mark.anyio
+async def test_hybrid_mp4_cant_pause_and_says_why(rig: Rig) -> None:
+    rig.obs.record_format = "mp4_output"
+    await rig.run("record", ("obs.record", {"action": "start"}))
+    report = await rig.run("pause the recording", ("obs.record", {"action": "pause"}))
+    assert report.lines() == [
+        "✖ OBS didn't pause the recording — OBS can't pause Hybrid MP4 recordings "
+        "(OBS → Settings → Output → Recording Format: MKV or MP4 can pause)"
+    ]
+
+
+@pytest.mark.anyio
+async def test_virtual_camera_without_v4l2loopback(
+    rig: Rig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sonu.tools import obs_tools
+
+    # Found on the owner's laptop: without the module OBS runs `pkexec modprobe …`, a password prompt
+    # appears, and OBS ignores every later request until it's answered. SONU doesn't start it then.
+    monkeypatch.setattr(obs_tools, "V4L2LOOPBACK", tmp_path / "no-such-module")
+    report = await rig.run("virtual camera on", ("obs.control", {"action": "virtualcam_start"}))
+    assert report.lines()[0].startswith("✖ OBS's virtual camera needs the v4l2loopback kernel module")
+    assert "StartVirtualCam" not in rig.obs.requests
+
+
+@pytest.mark.anyio
+async def test_a_dialog_obs_waits_on_is_named(rig: Rig) -> None:
+    # Found on the owner's laptop: OBS answered "ok" to StartRecord while a dialog was open, and
+    # recorded only after it was closed.
+    rig.fake_hypr.windows.append(
+        make_window("0xd1", "com.obsproject.Studio", "Failed to start virtual camera", floating=True)
+    )
+    rig.obs.stuck = True
+    report = await rig.run("record my screen", ("obs.record", {"action": "start"}))
+    assert report.lines() == [
+        "✖ OBS didn't start recording — OBS is probably waiting on 'Failed to start virtual camera': "
+        "answer or close it (OBS then does what was asked)"
+    ]
+
+
+@pytest.mark.anyio
+async def test_replay_buffer_off_in_settings(rig: Rig) -> None:
+    rig.obs.replay_available = False
+    for action in ("replay_start", "replay_save"):
+        report = await rig.run("replay", ("obs.control", {"action": action}))
+        assert report.lines() == [
+            "✖ OBS's replay buffer is off — turn it on in OBS: Settings → Output → Replay Buffer → "
+            "Enable Replay Buffer"
+        ]
