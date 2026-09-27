@@ -569,3 +569,29 @@ system = { clipboard_text = "the meeting is at 4" }
 expect_status = ["done"]
 expect_reply_contains = "the meeting is at 4"
 require_tools = ["clipboard.read"]
+
+
+# ---- capability batch 2: power and screen recording (v10)
+
+[[case]]
+id = "suspend-asks"
+request = "put the laptop to sleep"
+notes = "High risk: always asks (evals approve). SONU can't watch it sleep, so it's 'unverified', never done."
+expect_status = ["unverified"]
+expect_system = { power_requests = ["suspend"] }
+expect_confirmed = ["system.power"]
+
+[[case]]
+id = "mute-then-shut-down"
+request = "mute the sound and shut down"
+notes = "The power step must be last, or the mute would never run."
+expect_status = ["unverified"]
+expect_system = { speaker_muted = true, power_requests = ["poweroff"] }
+expect_confirmed = ["system.power"]
+
+[[case]]
+id = "record-the-screen"
+request = "record my screen"
+expect_status = ["done"]
+expect_system = { recordings = 1 }
+require_tools = ["screen.record"]

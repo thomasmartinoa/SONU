@@ -41,6 +41,7 @@ ALL_PROGRAMS = frozenset(
         "wl-paste",
         "qs",
         "nvidia-smi",
+        "wf-recorder",
     }
 )
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -91,6 +92,9 @@ class FakeSystem:
     streams: list[list[int | bool]] = field(default_factory=list)
     timers: dict[str, str] = field(default_factory=dict)  # systemd unit → notification text
     timer_times: dict[str, datetime] = field(default_factory=dict)  # systemd unit → when it fires
+    services: dict[str, list[str]] = field(default_factory=dict)  # transient user services → their argv
+    power_requests: list[str] = field(default_factory=list)  # systemctl suspend / reboot / poweroff
+    inhibited_by: str | None = None  # a program holding a sleep/shutdown lock
     area: str | None = "10,20 300x200"  # what slurp returns (None: the user cancelled)
     clipboard_type: str | None = None  # None with clipboard_text: text is copied
     clipboard_text: str | None = None
@@ -148,6 +152,10 @@ class FakeSystem:
             return players
         # Without media controls, a browser's video shows only as sound.
         return players + sum(1 for _, pid, running in self.streams if running and int(pid) >= FAKE_PID_BASE)
+
+    @property
+    def recordings(self) -> int:
+        return sum(1 for command in self.services.values() if command[0] == "wf-recorder")
 
     @property
     def reminders(self) -> int:
@@ -396,12 +404,35 @@ class FakeSystem:
 
     def _systemd_run(self, args: list[str]) -> tuple[int, str, str]:
         unit = next(a.removeprefix("--unit=") for a in args if a.startswith("--unit="))
+        command = args[args.index("--") + 1 :]
+        if not any(a.startswith("--on-calendar=") for a in args):  # a service, e.g. wf-recorder
+            if command[0] not in self.installed:
+                return 1, "", f"Failed to start transient service unit: {command[0]} not found\n"
+            self.services[unit] = command
+            if command[0] == "wf-recorder":
+                Path(command[command.index("--file") + 1]).write_bytes(b"")  # grows until it's stopped
+            return 0, f"Running as unit: {unit}.service\n", ""
         self.timers[unit] = args[-1]
         calendar = next(a.removeprefix("--on-calendar=") for a in args if a.startswith("--on-calendar="))
         self.timer_times[unit] = datetime.strptime(calendar, "%Y-%m-%d %H:%M:%S")
         return 0, f"Running timer as unit: {unit}.timer\n", ""
 
     def _systemctl(self, args: list[str]) -> tuple[int, str, str]:
+        if args[0] in ("suspend", "reboot", "poweroff"):
+            self.power_requests.append(args[0])
+            return (
+                (1, "", f'Operation inhibited by "{self.inhibited_by}"\n')
+                if self.inhibited_by
+                else (0, "", "")
+            )
+        if args[2].endswith(".service"):
+            unit = args[2].removesuffix(".service")
+            if args[1] == "stop":
+                command = self.services.pop(unit, None)
+                if command and command[0] == "wf-recorder":  # SIGINT: wf-recorder finishes the file
+                    Path(command[command.index("--file") + 1]).write_bytes(b"\x00\x00\x00\x18ftypmp42")
+                return 0, "", ""
+            return 0, ("active" if unit in self.services else "inactive") + "\n", ""
         if args[1] == "list-timers":
             timers = [
                 {"next": int(self.timer_times[unit].timestamp() * 1_000_000), "unit": f"{unit}.timer"}

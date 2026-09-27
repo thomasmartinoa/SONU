@@ -34,6 +34,7 @@ PACKAGES: dict[str, str] = {
     "slurp": "slurp",
     "wl-copy": "wl-clipboard",
     "wl-paste": "wl-clipboard",
+    "wf-recorder": "wf-recorder",
     "systemd-run": "systemd",
     "systemctl": "systemd",
     "notify-send": "libnotify",

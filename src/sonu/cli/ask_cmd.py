@@ -172,6 +172,7 @@ def print_final(console: Console, report: TaskReport, *, streamed: bool) -> None
         "done": "green",
         "planned": "blue",
         "partial": "yellow",
+        "unverified": "yellow",
         "declined": "yellow",
         "needs-input": "cyan",
     }.get(status, "red")

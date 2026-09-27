@@ -107,6 +107,11 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "which-theme": steps(("system.status", {"what": ["theme"]})),
     "next-wallpaper": steps(("desktop.wallpaper", {"action": "next"})),
     "read-clipboard": steps(("clipboard.read", {})),
+    "suspend-asks": steps(("system.power", {"action": "suspend"})),
+    "mute-then-shut-down": steps(
+        ("settings.volume", {"target": "speaker", "mute": True}), ("system.power", {"action": "shutdown"})
+    ),
+    "record-the-screen": steps(("screen.record", {"action": "start"})),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

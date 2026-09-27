@@ -14,7 +14,17 @@ from sonu.policy.engine import PolicyDecision
 from sonu.tools.base import StepStatus, ToolOutcome
 
 TaskStatus = Literal[
-    "done", "planned", "partial", "failed", "declined", "needs-input", "ask", "reply", "cannot", "error"
+    "done",
+    "unverified",
+    "planned",
+    "partial",
+    "failed",
+    "declined",
+    "needs-input",
+    "ask",
+    "reply",
+    "cannot",
+    "error",
 ]
 
 ICONS = {
@@ -84,6 +94,10 @@ class TaskReport:
         if all(status is StepStatus.DONE for status in statuses):
             # Every step worked — but if part of the request had no tool, the request isn't done.
             return "partial" if self.plan.unsupported else "done"
+        if all(status in (StepStatus.DONE, StepStatus.UNVERIFIED) for status in statuses):
+            # Everything ran and nothing failed, but not every result could be confirmed (a suspend
+            # SONU can't watch, a page in a background tab). Not "done" — and not "not done" either.
+            return "partial" if self.plan.unsupported else "unverified"
         if StepStatus.DONE in statuses:
             return "partial"
         if all(record.outcome.status is StepStatus.DENIED and record.asked for record in self.steps):
@@ -158,6 +172,7 @@ class TaskReport:
             return "Dry run — some steps would fail"
         return {
             "done": "Done — every step verified",
+            "unverified": "Done, but not confirmed — see the steps above",
             "planned": "Dry run — nothing was changed",
             "partial": "Partly done — see the steps below",
             "failed": "Not done",

@@ -58,6 +58,7 @@ _SYSTEM_PROPERTIES = {
     "bt_connected",
     "videos_playing",
     "reminders",
+    "recordings",
     "night_light",
     "keep_awake",
     "do_not_disturb",

@@ -663,6 +663,7 @@ SETTINGS_PROGRAMS: tuple[tuple[str, str], ...] = (
     ("pw-dump", "hearing that a video plays when the browser isn't in the media controls"),
     ("slurp", "screenshots of an area"),
     ("wl-copy", "copying screenshots"),
+    ("wf-recorder", "screen recording"),
     ("systemd-run", "reminders and timers"),
     ("qs", "night light, keep awake, do-not-disturb, lock (the rice's switches)"),
 )
