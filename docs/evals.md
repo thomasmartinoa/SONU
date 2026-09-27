@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v10, 77 cases)
+## The cases (v10, 79 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -95,6 +95,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-27 | `qwen3.5:4b` | v9: five cases for theme, wallpaper, clipboard | **4 / 5** of the five | "switch to the tokyo night theme" → `{"action": "next"}`. Fixed in the tool (a theme the user's words name wins over next) |
 | 2026-09-27 | `qwen3.5:4b` | v9 (69 cases) | **69 / 69** | — |
 | 2026-09-27 | `qwen3.5:4b` | v10 (77 cases): power (suspend asks, mute then shut down) and OBS (record, stop, scene, mute, go live asks, status) | **77 / 77** | — |
+| 2026-09-27 | `qwen3.5:4b` | + play on Spotify, play on Apple Music (explained, not played elsewhere); Spotify rule in the prompt | **78 / 79** | "change my wallpaper" asked which wallpaper. Rule: it's the next one (and the stale "light/dark is toggle" wording fixed) |
+| 2026-09-27 | `qwen3.5:4b` | v10 (79 cases) | **79 / 79** | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

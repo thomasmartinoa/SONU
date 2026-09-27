@@ -39,6 +39,12 @@ class FakeObsState:
     saved: list[str] = field(default_factory=list)  # files OBS wrote (recordings, replays)
     requests: list[str] = field(default_factory=list)
     stream_configured: bool = True  # False: no streaming service set up in OBS
+    # Found on the owner's laptop: Hybrid MP4 recordings can't pause (OBS says ok and doesn't),
+    # the virtual camera needs the v4l2loopback module, and the replay buffer is off in settings.
+    record_format: str = "mkv_output"  # "mp4_output": OBS's Hybrid MP4
+    virtualcam_available: bool = True
+    replay_available: bool = True
+    stuck: bool = False  # a dialog blocks OBS: requests answer "ok" but nothing changes
 
 
 class FakeObs:
@@ -151,6 +157,8 @@ class FakeObs:
         if kind == "StartRecord":
             if s.recording:
                 return False, "Recording is already active.", {}
+            if s.stuck:
+                return True, "", {}
             s.recording, s.paused = True, False
             return True, "", {}
         if kind == "StopRecord":
@@ -164,8 +172,12 @@ class FakeObs:
         if kind in ("PauseRecord", "ResumeRecord"):
             if not s.recording:
                 return False, "Recording is not active.", {}
-            s.paused = kind == "PauseRecord"
+            if s.record_format != "mp4_output":  # Hybrid MP4: accepted, nothing happens
+                s.paused = kind == "PauseRecord"
             return True, "", {}
+        if kind == "GetOutputList":
+            outputs = [("adv_file_output", s.record_format), ("virtualcam_output", "virtualcam_output")]
+            return True, "", {"outputs": [{"outputName": n, "outputKind": k} for n, k in outputs]}
         if kind == "GetSceneList":
             scenes = [{"sceneName": name, "sceneIndex": i} for i, name in enumerate(reversed(s.scenes))]
             return True, "", {"currentProgramSceneName": s.scene, "scenes": scenes}
@@ -184,8 +196,10 @@ class FakeObs:
         if kind == "GetVirtualCamStatus":
             return True, "", {"outputActive": s.virtualcam}
         if kind in ("StartVirtualCam", "StopVirtualCam"):
-            s.virtualcam = kind == "StartVirtualCam"
+            s.virtualcam = kind == "StartVirtualCam" and s.virtualcam_available
             return True, "", {}
+        if "ReplayBuffer" in kind and not s.replay_available:
+            return False, "Replay buffer is not available.", {}
         if kind == "GetReplayBufferStatus":
             return True, "", {"outputActive": s.replay_buffer}
         if kind in ("StartReplayBuffer", "StopReplayBuffer"):

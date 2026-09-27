@@ -52,6 +52,10 @@ SAMPLE_APPS: dict[str, str] = {
         "[Desktop Entry]\nName=OBS Studio\nExec=obs\nType=Application\nCategories=AudioVideo;Recorder;\n"
         "StartupWMClass=com.obsproject.Studio\n"
     ),
+    "spotify-launcher.desktop": (
+        "[Desktop Entry]\nName=Spotify (Launcher)\nExec=spotify-launcher %U\nType=Application\n"
+        "Categories=Audio;Music;Player;AudioVideo;\nStartupWMClass=spotify\n"
+    ),
     "thunar-bulk-rename.desktop": (
         "[Desktop Entry]\nName=Bulk Rename\nExec=thunar --bulk-rename %F\nType=Application\n"
         "Categories=System;Utility;Core;GTK;FileTools;\n"

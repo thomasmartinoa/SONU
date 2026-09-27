@@ -14,7 +14,7 @@ _Last update: 2026-09-27_
 | M1 Verified window operator | ✅ done and **in daily use on the owner's laptop** |
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
-| Capability batch 2 | ✅ built — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15). OBS needs its WebSocket server turned on once to try on the laptop; Apple Music by name isn't possible with the owner's app |
+| Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
 | M2 Daemon + memory | ⏭ after batch 2 — faster replies (model stays loaded), journal, "remember …" |
 | M3 Voice · M4 Projects · M5 Connect · M6 Perception · M7 Beyond | see [roadmap](PROPOSAL.md#8-roadmap) |
 
@@ -40,8 +40,8 @@ _Last update: 2026-09-27_
 
 ### Eval suite
 
-`qwen3.5:4b`: **77 / 77** on the v10 suite (2026-09-27, the laptop's GPU, ~1.1 s mean planning; power and OBS
-added). Pass/fail only. History, including the runs that failed while the prompt wording
+`qwen3.5:4b`: **79 / 79** on the v10 suite (2026-09-27, the laptop's GPU, ~1.2 s mean planning; power, OBS,
+Spotify and Apple Music added). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
@@ -110,8 +110,13 @@ sonu "how is my laptop doing?"
      shutdown only (never run for real); OBS says its WebSocket server is off → **the owner turns it on once**
      (OBS → Tools → WebSocket Server Settings → Enable), then try: `sonu record my screen`, `sonu stop recording`,
      `sonu switch obs to scene 3`, `sonu is obs recording?`;
-   - Apple Music by name: **not possible** with apple-music-desktop (it ignores links); Spotify would need the app
-     and the user's Spotify API key; local music with `mpv` waits for music in `~/Music`.
+   - OBS **verified on the laptop** (#16; the owner turned the WebSocket server on and let SONU test it): record
+     (OBS started by SONU) → 48 MB file saved, scenes 3 / only screen / main, mute and unmute the mic, virtual camera
+     on/off, status. Found: see the table below;
+   - Spotify by name **without a key** (#16, [D41](DECISIONS.md)): "play alan walker faded on spotify" → Faded by
+     Alan Walker, "play believer by imagine dragons on spotify" → Believer, both confirmed from the media controls;
+   - Apple Music by name: **not possible** with apple-music-desktop (it ignores links) — SONU says so;
+     local music with `mpv` waits for music in `~/Music`.
 3. **M2 — daemon + memory**: faster replies (the model stays loaded; no process start per request), the activity
    journal (30-day retention), "remember …" preferences (e.g. "use Code - OSS from now on"), layouts. Plan in
    [`PROPOSAL.md`](PROPOSAL.md#8-roadmap).
@@ -163,7 +168,8 @@ sonu "how is my laptop doing?"
 | #12 | 2026-09-27 | Batch 2, windows: `windows.state` (fullscreen, maximize, float/tile, pin) and `windows.side_by_side`; "on all workspaces" no longer means all windows; eval suite v7 |
 | #13 | 2026-09-27 | Batch 2: `files.open` (folders, the newest file), "what's playing?", `reminders.list` / `reminders.cancel`; the rice's file manager; eval suite v8 |
 | #14 | 2026-09-27 | Batch 2: `desktop.theme` (by name, next, light/dark), `desktop.wallpaper`, the brightness popup, `clipboard.read` / `clipboard.clear`; theme and wallpaper in `system.status`; eval suite v9 |
-| #15 | open | Batch 2: `system.power` (always asks); OBS (`obs.record`, `obs.scene`, `obs.control`, `obs.mute`, status) through its WebSocket server; tasks can end "unverified" ([D39](DECISIONS.md)); eval suite v10 |
+| #15 | 2026-09-27 | Batch 2: `system.power` (always asks); OBS (`obs.record`, `obs.scene`, `obs.control`, `obs.mute`, status) through its WebSocket server; tasks can end "unverified" ([D39](DECISIONS.md)); eval suite v10 |
+| #16 | open | OBS verified on the laptop and its failures explained (Hybrid MP4 pause, virtual camera without `v4l2loopback`, replay buffer off, dialogs OBS waits on); Spotify by name without a key; Apple Music explained |
 
 ### Found on real hardware → fixed
 
@@ -195,6 +201,13 @@ sonu "how is my laptop doing?"
 | 09-27 | Chromium played the video but wasn't in the media controls → "couldn't confirm it's playing" | a new audio stream from the browser's process confirms it ([D34](DECISIONS.md)) (#10) |
 | 09-27 | The plan's message said "Playing 'faded' by The Smashing Pumpkins" (made up) | prompt: media.play's query is the user's words only — the same request now says "Playing faded on YouTube" (a broader "never add facts" rule broke "go to youtube" in the evals and was dropped) (#10) |
 | 09-27 | After #10, the summary still said "by The 1975" / "by Faded" (the step itself played Alan Walker's Faded) | the model's summary isn't printed for steps; SONU's own step lines say what happens ([D35](DECISIONS.md)) (#11) |
+| 09-27 | The owner's everyday `sonu` was still the pre-#15 copy: "record my screen" took a screenshot, "stop recording" **cleared the notifications** | the copy is reinstalled right after each merge (in the workflow now); with #15 both go to OBS (evals `record-the-screen`, `stop-recording`) (#16) |
+| 09-27 | "pause the recording": OBS answered ok and kept recording — the format is Hybrid MP4, which can't pause | SONU says why and how to change the format (#16) |
+| 09-27 | "turn on the obs virtual camera": `v4l2loopback` wasn't loaded, OBS ran `pkexec modprobe` (a password prompt), and every later OBS request was silently queued ("record my screen" → didn't start) | SONU doesn't start the virtual camera without the module and explains; when OBS doesn't act it names the dialog OBS waits on (#16) |
+| 09-27 | "save a replay" → "Replay buffer is not available." (off in OBS's settings) | says where to turn it on (#16) |
+| 09-27 | Spotify: a `spotify:search:` link through the media controls **played** the top result | `media.play` on Spotify with no API key (#16) |
+| 09-27 | (eval) "play faded on apple music" was planned with browser "apple music" → "not installed" | SONU explains Apple Music can't play by name yet (#16) |
+| 09-27 | (eval) after a prompt change, "change my wallpaper" asked which one | rule: it's the next one; also fixed the stale "light/dark is toggle" wording (#16) |
 | 09-27 | (dry run) "shut down" listed the open windows without the terminal SONU runs in, which closes too | every window is listed (#15) |
 | 09-27 | (dry run) "switch to light mode" was planned as "next theme" | `light` / `dark` are the theme tool's own actions; eval `light-mode` (#14) |
 | 09-27 | (eval) "switch to the tokyo night theme" was planned as "next theme" | a theme the user's words name wins over "next" (#14) |

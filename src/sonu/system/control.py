@@ -42,6 +42,8 @@ _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
 _GEOMETRY = re.compile(r"^-?\d+,-?\d+ \d+x\d+$")
 _SHELL_WORD = re.compile(r"^[a-z][a-z-]{0,30}$")
 IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
+# The only link SONU sends a player: a Spotify search made of the user's words (percent-encoded).
+_SPOTIFY_SEARCH = re.compile(r"^spotify:search:[A-Za-z0-9%._~-]{1,400}$")
 # Only SONU's own timers (reminders.set names them) are ever listed or stopped.
 REMINDER_UNIT = re.compile(r"^sonu-reminder-\d{8}-\d{6}-[0-9a-f]{4}$")
 _REMINDER_PREFIX = "SONU reminder: "
@@ -362,6 +364,21 @@ class SystemControl:
         return (
             status.stdout.strip() or None
         ) if status.ok else None, title.stdout.strip() if title.ok else ""
+
+    async def player_song(self, name: str) -> tuple[str, str, str]:
+        """(title, artist, track id) of what a player has loaded; empty strings if it can't say."""
+        result = await self.runner.run(
+            ("playerctl", "-p", name, "metadata", "--format", "{{title}}\t{{artist}}\t{{mpris:trackid}}")
+        )
+        parts = [*result.stdout.rstrip("\n").split("\t"), "", "", ""][:3] if result.ok else ["", "", ""]
+        return parts[0].strip(), parts[1].strip(), parts[2].strip()
+
+    async def open_in_player(self, name: str, uri: str) -> None:
+        """MPRIS OpenUri: Spotify plays the top result of a ``spotify:search:`` link (found on the
+        owner's laptop)."""
+        if name != "spotify" or not _SPOTIFY_SEARCH.match(uri):
+            raise CommandError(f"SONU only sends Spotify a search link, not {uri!r}")
+        await self._run("playerctl", "-p", name, "open", uri)
 
     async def play_player(self, name: str) -> None:
         await self._run("playerctl", "-p", name, "play")

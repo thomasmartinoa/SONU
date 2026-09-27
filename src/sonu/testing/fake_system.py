@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import unquote
 
 from sonu.system.commands import CommandError, CommandResult, ProgramMissing
 from sonu.testing.fake_hyprland import FAKE_PID_BASE, app_pid
@@ -87,6 +88,8 @@ class FakeSystem:
     other_players: dict[str, list[str]] = field(default_factory=dict)
     browser_autoplay: bool = False  # False: the browser holds a new video back until "play"
     browser_mpris: bool = True  # False: the browser never shows up in the media controls
+    spotify_results: dict[str, tuple[str, str]] = field(default_factory=dict)  # search → (title, artist)
+    song_details: dict[str, tuple[str, str]] = field(default_factory=dict)  # player → (artist, track id)
     # Apps' sound outputs (pw-dump): [serial, pid, running]. A page the browser autoplays adds one.
     streams: list[list[int | bool]] = field(default_factory=list)
     timers: dict[str, str] = field(default_factory=dict)  # systemd unit → notification text
@@ -355,9 +358,17 @@ class FakeSystem:
         if args == ["status"]:
             return 0, player[1] + "\n", ""
         if args[:1] == ["metadata"]:
+            if "\t" in "".join(args):  # title, artist, track id
+                artist, track = self.song_details.get(name, ("", ""))
+                return 0, f"{player[0]}\t{artist}\t{track}\n", ""
             return 0, player[0] + "\n", ""
         if args == ["play"]:
             player[1] = "Playing"
+        if args[:1] == ["open"] and name == "spotify":  # plays the top result of a search, like Spotify
+            query = unquote(args[1].removeprefix("spotify:search:"))
+            title, artist = self.spotify_results.get(query, (query.title(), "Some Artist"))
+            player[:] = [title, "Playing"]
+            self.song_details[name] = (artist, f"/com/spotify/track/{zlib.crc32(query.encode()):08x}")
         return 0, "", ""
 
     def _xdg_mime(self, args: list[str]) -> tuple[int, str, str]:

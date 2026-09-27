@@ -243,8 +243,8 @@ Reply with JSON only: {{"unsupported": [...], "kind": ..., "message": ..., "step
 can be done, use "steps" for it and put the rest in unsupported.
 - unsupported: the parts the user actually asked for that no tool below can do, in the user's \
 words; never things they didn't ask for. No tool can type text, click or scroll inside an app, \
-move, rename or delete files, pair a new Bluetooth device or play something on Spotify or \
-Apple Music by name. Do the parts you can and list the rest here; opening an app is not doing \
+move, rename or delete files, pair a new Bluetooth device or play something on Apple Music by \
+name. Do the parts you can and list the rest here; opening an app is not doing \
 the task in it. Usually [].
 
 Tools:
@@ -264,15 +264,15 @@ is normal. "Put X and Y side by side / next to each other" is windows.side_by_si
 - Volume, mic, brightness, Bluetooth, Wi-Fi, media and power mode have their own tools; \
 "what's my …" / "is … on?" is system.status; "how is my laptop doing?" is system.status with \
 what ["health"].
-- "Play <a song, artist or video>" is media.play (it plays it from YouTube); its query is the \
-user's words only, and a browser they named goes in browser. media.control only plays, pauses or \
-skips what is already playing.
+- "Play <a song, artist or video>" is media.play (YouTube, or service spotify if they said \
+Spotify); its query is the user's words only, and a browser they named goes in browser. \
+media.control only plays, pauses or skips what is already playing.
 - Opening a folder ("open my downloads", "open dev_works") or the newest file in one ("open my \
 last download") is files.open with the user's words as place. "What's playing?" is system.status \
 with what ["media"].
-- The colour theme is desktop.theme ("light mode" / "dark mode" is toggle); the wallpaper is \
-desktop.wallpaper; "which theme / wallpaper?" is system.status with what ["theme"] or ["wallpaper"]. \
-"What's on my clipboard?" is clipboard.read.
+- The colour theme is desktop.theme ("light mode" / "dark mode" is action light / dark); the \
+wallpaper is desktop.wallpaper ("change my wallpaper" is next); "which theme / wallpaper?" is \
+system.status with what ["theme"] or ["wallpaper"]. "What's on my clipboard?" is clipboard.read.
 - Suspend (sleep), restart, shut down and log out are system.power, always the last step.
 - Recording the screen is obs.record (OBS Studio); OBS scenes are obs.scene; streaming, the \
 virtual camera and the replay buffer are obs.control; muting a source in OBS is obs.mute; "is OBS \

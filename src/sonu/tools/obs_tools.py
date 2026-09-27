@@ -40,6 +40,22 @@ from sonu.world.snapshot import WorldSnapshot
 MAX_CHOICES = 6
 _SCENE_FILLERS = {"scene", "the", "to", "my", "obs", "switch"}
 _SOURCE_FILLERS = {"the", "my", "in", "obs", "audio", "source", "sound"}
+# Found on the owner's laptop: what OBS can't do with some settings, and how to fix it.
+REPLAY_OFF = (
+    "OBS's replay buffer is off — turn it on in OBS: Settings → Output → Replay Buffer → Enable Replay Buffer"
+)
+CANT_PAUSE = (
+    " — OBS can't pause Hybrid MP4 recordings "
+    "(OBS → Settings → Output → Recording Format: MKV or MP4 can pause)"
+)
+NO_LOOPBACK = (
+    "OBS's virtual camera needs the v4l2loopback kernel module, which isn't loaded — load it once with: "
+    "sudo modprobe v4l2loopback exclusive_caps=1 card_label='OBS Virtual Camera' (SONU doesn't start it "
+    "without: OBS would stop at a password prompt)"
+)
+# Windows OBS waits on: its own dialogs, a password prompt, the screen-sharing picker.
+_DIALOG_CLASSES = ("com.obsproject.studio", "obs", "hyprland-share-picker", "xdg-desktop-portal")
+V4L2LOOPBACK = Path("/sys/module/v4l2loopback")
 TURN_ON = (
     "OBS's WebSocket server is off — turn it on once in OBS: Tools → WebSocket Server Settings → "
     "Enable WebSocket server"
@@ -51,6 +67,29 @@ def _home_relative(path: Path, home: Path) -> str:
         return "~/" + str(path.relative_to(home))
     except ValueError:
         return str(path)
+
+
+async def waiting_on(ctx: ToolContext) -> str:
+    """Why OBS answered "ok" but did nothing: a dialog it's waiting on (found on the owner's laptop:
+    a password prompt from the virtual camera kept every later request queued)."""
+    try:
+        snapshot = await ctx.desktop.snapshot()
+    except HyprlandError:
+        return ""
+    dialogs = [
+        window.title or window.window_class
+        for window in snapshot.windows
+        if window.floating
+        and (
+            window.window_class.lower() in _DIALOG_CLASSES
+            or "polkit" in window.window_class.lower()
+            or "authentication-agent" in window.window_class.lower()
+        )
+    ]
+    if not dialogs:
+        return ""
+    names = ", ".join(f"'{name}'" for name in dialogs[:3])
+    return f" — OBS is probably waiting on {names}: answer or close it (OBS then does what was asked)"
 
 
 def not_ready(ctx: ToolContext) -> ToolOutcome | None:
@@ -173,8 +212,11 @@ class ObsRecord(Tool):
             await obs.request("StartRecord")
             now = await _until(read, lambda s: bool(s.get("outputActive")), ctx)
             check = Check("OBS is recording", bool(now.get("outputActive")), {})
+            hint = "" if check.passed else await waiting_on(ctx)
             return outcome_from_checks(
-                [check], "Recording in OBS — say 'stop recording' to save it", "OBS didn't start recording"
+                [check],
+                "Recording in OBS — say 'stop recording' to save it",
+                f"OBS didn't start recording{hint}",
             )
         if not active:
             return ToolOutcome(StepStatus.FAILED, "OBS isn't recording")
@@ -201,6 +243,11 @@ class ObsRecord(Tool):
             )
         await obs.request("PauseRecord" if want else "ResumeRecord")
         now = await _until(read, lambda s: bool(s.get("outputPaused")) == want, ctx)
+        if bool(now.get("outputPaused")) != want:
+            outputs = (await obs.request("GetOutputList")).get("outputs", [])
+            if any(output.get("outputKind") == "mp4_output" for output in outputs):
+                return ToolOutcome(StepStatus.FAILED, f"OBS didn't {action} the recording{CANT_PAUSE}")
+            return ToolOutcome(StepStatus.FAILED, f"OBS didn't {action} the recording{await waiting_on(ctx)}")
         check = Check(
             f"the recording is {'paused' if want else 'running'}", bool(now.get("outputPaused")) == want, {}
         )
@@ -274,7 +321,10 @@ class ObsScene(Tool):
                 return ToolOutcome(StepStatus.FAILED, str(exc))
         current = now.get("currentProgramSceneName")
         check = Check(f"OBS shows '{scene}'", current == scene, {"scene": current})
-        return outcome_from_checks([check], f"OBS switched to '{scene}'", f"OBS is still on '{current}'")
+        hint = "" if check.passed else await waiting_on(ctx)
+        return outcome_from_checks(
+            [check], f"OBS switched to '{scene}'", f"OBS is still on '{current}'{hint}"
+        )
 
 
 # ---------------------------------------------------------------------------- obs.control
@@ -330,6 +380,8 @@ class ObsControl(Tool):
                 action,
                 risk=Risk.HIGH,
             )
+        if action == "virtualcam_start" and not await asyncio.to_thread(V4L2LOOPBACK.exists):
+            return ToolOutcome(StepStatus.FAILED, NO_LOOPBACK)
         if action == "replay_save":
             return Prepared("Save OBS's replay buffer (the last moments) to a file", action)
         _, _, on, what = _CONTROLS[action]
@@ -352,11 +404,14 @@ class ObsControl(Tool):
                     lambda: obs.request(status_request), lambda s: bool(s.get("outputActive")) == on, ctx
                 )
             except ObsError as exc:
+                if "Replay buffer is not available" in str(exc):
+                    return ToolOutcome(StepStatus.FAILED, REPLAY_OFF)
                 return ToolOutcome(StepStatus.FAILED, str(exc))
         state = "on" if on else "off"
         check = Check(f"{what} is {state}", bool(now.get("outputActive")) == on, {})
         verb = "Started" if on else "Stopped"
-        return outcome_from_checks([check], f"{verb} {what} in OBS", f"OBS didn't turn {what} {state}")
+        hint = "" if check.passed else await waiting_on(ctx)
+        return outcome_from_checks([check], f"{verb} {what} in OBS", f"OBS didn't turn {what} {state}{hint}")
 
     @staticmethod
     async def _save_replay(obs: ObsClient, ctx: ToolContext) -> ToolOutcome:
@@ -440,7 +495,9 @@ class ObsMute(Tool):
         state = "muted" if mute else "on"
         check = Check(f"'{source}' is {state} in OBS", bool(now.get("inputMuted")) == mute, {})
         return outcome_from_checks(
-            [check], f"{'Muted' if mute else 'Unmuted'} '{source}' in OBS", f"'{source}' didn't change in OBS"
+            [check],
+            f"{'Muted' if mute else 'Unmuted'} '{source}' in OBS",
+            f"'{source}' didn't change in OBS{'' if check.passed else await waiting_on(ctx)}",
         )
 
 
