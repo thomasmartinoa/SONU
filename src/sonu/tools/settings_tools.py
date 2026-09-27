@@ -8,6 +8,7 @@ numbers and fixed words, so nothing from the model reaches a command line as fre
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable
 from typing import Literal, Self, cast
 
@@ -203,6 +204,10 @@ class SetBrightness(Tool):
         note = (
             f" (SONU keeps at least {MIN_BRIGHTNESS}% so the screen stays visible)" if asked < wanted else ""
         )
+        if ctx.system.available("qs"):
+            # The rice's popup, like its brightness keys (volume shows by itself: the OSD watches PipeWire).
+            with contextlib.suppress(CommandError):
+                await ctx.system.show_brightness_osd(after.percent)
         return outcome_from_checks(
             [check],
             f"Screen brightness is now {after.percent}%{note}",
@@ -405,6 +410,8 @@ StatusItem = Literal[
     "temperature",
     "gpu",
     "uptime",
+    "theme",
+    "wallpaper",
 ]
 _SETTINGS_ITEMS: tuple[StatusItem, ...] = (
     "volume",
@@ -426,6 +433,8 @@ _ITEM_PROGRAM: dict[StatusItem, str | None] = {
     "media": "playerctl",
     "power_mode": "powerprofilesctl",
     "gpu": "nvidia-smi",
+    "theme": "hypr-theme",
+    "wallpaper": "hypr-wall",
 }
 _GIB = 1024**3
 
@@ -444,7 +453,8 @@ class SystemStatus(Tool):
     name = "system.status"
     description = (
         "Tell the user the current volume, mic, brightness, Bluetooth, Wi-Fi, media, power mode, battery, "
-        "or the laptop's health: CPU, memory, temperature, GPU, disk space, uptime."
+        "the laptop's health (CPU, memory, temperature, GPU, disk space, uptime), or the rice's theme and "
+        "wallpaper."
     )
     risk = Risk.READ_ONLY
     effects = frozenset({Effect.SYSTEM_READ})
@@ -496,6 +506,14 @@ class SystemStatus(Tool):
                 return f"Power mode: {await ctx.system.power_mode()}"
             if item in _HEALTH_ITEMS:
                 return await _health(item, ctx)
+            if item == "theme":  # the rice's themes, the current one first
+                themes = await ctx.system.themes()
+                current = next((t.id for t in themes if t.current), "unknown")
+                others = [t.id for t in themes if not t.current]
+                return f"Theme: {current}" + (f" (also: {', '.join(others)})" if others else "")
+            if item == "wallpaper":
+                wallpaper = await ctx.system.wallpaper()
+                return f"Wallpaper: {wallpaper.name if wallpaper else 'none set'}"
             batteries = ctx.system.batteries()
             if not batteries:
                 return "Battery: none found"
