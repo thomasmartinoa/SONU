@@ -33,8 +33,9 @@ works:
 | Open apps (on a workspace), reuse or move an open one, terminals always new | ✅ | XDG catalog + Hyprland exec rules + verification |
 | Move, focus, close windows (asks first); "this window"; by title words | ✅ | exact `stableid:` selectors |
 | Show a workspace; "what's open?" | ✅ | IPC |
-| Fullscreen, floating, pin on all workspaces | ⏭ | Hyprland dispatchers; verified from `j/clients` |
-| "Put X and Y side by side"; save and restore a layout | ⏭ / 🗺 M2 | move to one workspace (the tiler splits it); layouts need memory |
+| Fullscreen, maximize, floating/tiled, pin on all workspaces (`windows.state`) | ✅ | Hyprland 0.56 Lua dispatchers (`hl.dsp.window.fullscreen/float/pin`); read back from `j/clients`; pinning floats the window first (Hyprland only pins floating windows) |
+| "Put X and Y side by side" (`windows.side_by_side`) | ✅ | both tiled on one workspace (the first window's), the tiler splits it; done only when their positions really are next to each other |
+| Save and restore a layout | 🗺 M2 | layouts need memory |
 | Screenshot of the screen, a window or an area; copy it | 🧪 this batch | `grim` (+ `slurp` for an area) into `~/Pictures/screenshot/` like the rice's keys, `wl-copy` |
 | Screen recording | ⏭ | `wf-recorder` (start/stop, file verified) |
 
@@ -102,12 +103,12 @@ works:
 | Voice: "Hey Sonu", push-to-talk on the NitroSense key | 🗺 M3 | local speech-to-text / text-to-speech |
 | Cloud models (free tiers), Claude Code driving SONU (MCP) | 🗺 M5 | opt-in; an egress guard shows what leaves the laptop |
 
-## This batch (in progress)
+## Batches
 
-1. **Play on YouTube** (`media.play`)
-2. **Reminders and timers** (`reminders.set`)
-3. **Screenshots** (`screen.capture`)
-4. **Laptop health** in `system.status` (CPU, memory, disk, temperature, GPU, uptime, Wi-Fi network name)
-5. **The rice's switches** (`desktop.shell`): night light, keep awake, do-not-disturb, clear notifications, lock
+- **Batch 1** (done, verified on the laptop): play on YouTube, reminders and timers, screenshots, laptop health, the
+  rice's switches.
+- **Batch 2** (in progress): window states and side by side ✅ (#12); next: open folders and files, "what's playing?",
+  list and cancel reminders, the OSD popup, clipboard, wallpaper and theme, Spotify by name, local music, suspend /
+  reboot / shut down, screen recording.
 
-After it: the ⏭ items above, then M2.
+After batch 2: M2.

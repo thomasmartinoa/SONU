@@ -87,6 +87,15 @@ GOLDEN: dict[str, dict[str, Any]] = {
     ),
     "how-is-my-laptop": steps(("system.status", {"what": ["health"]})),
     "play-with-a-title-on-screen": steps(("media.play", {"query": "faded", "browser": "chromium"})),
+    "fullscreen-this-window": steps(("windows.state", {"window": {"focused": True}, "state": "fullscreen"})),
+    "maximize-this-window": steps(("windows.state", {"window": {"focused": True}, "state": "maximized"})),
+    "exit-fullscreen": steps(("windows.state", {"window": {"focused": True}, "state": "normal"})),
+    "float-a-window": steps(("windows.state", {"window": {"app": "kitty"}, "state": "floating"})),
+    "pin-on-every-workspace": steps(("windows.state", {"window": {"app": "browser"}, "state": "pinned"})),
+    "side-by-side": steps(("windows.side_by_side", {"first": {"app": "zen"}, "second": {"app": "kitty"}})),
+    "two-terminals-side-by-side": steps(
+        ("windows.side_by_side", {"first": {"app": "terminal"}, "second": {"app": "terminal"}})
+    ),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

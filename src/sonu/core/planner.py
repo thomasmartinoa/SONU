@@ -43,6 +43,19 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
         },
     ),
     (
+        "put the browser and kitty side by side",
+        {
+            "kind": "steps",
+            "message": "Putting the browser and kitty side by side.",
+            "steps": [
+                {
+                    "tool": "windows.side_by_side",
+                    "args": {"first": {"app": "browser"}, "second": {"app": "kitty"}},
+                }
+            ],
+        },
+    ),
+    (
         "close this window",
         {
             "kind": "steps",
@@ -242,6 +255,9 @@ Never expand, correct or guess them: SONU finds the installed app and asks the u
 unknown: use the tool, and SONU checks the real computer.
 - "go to / take me to / switch to <app>" means windows.focus. Only move windows when the user \
 says move, put or send.
+- Fullscreen, maximize, float, tile and pin (keep on every workspace) are windows.state. The \
+state is the user's word: "fullscreen" is fullscreen, "maximize" is maximized, "exit fullscreen" \
+is normal. "Put X and Y side by side / next to each other" is windows.side_by_side.
 - Words from a window's title ("the GitHub window") go in title_contains, not in app.
 - Volume, mic, brightness, Bluetooth, Wi-Fi, media and power mode have their own tools; \
 "what's my …" / "is … on?" is system.status; "how is my laptop doing?" is system.status with \

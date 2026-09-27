@@ -74,6 +74,19 @@ def test_lua_dialect_requests() -> None:
     assert lua.focus_window(selector) == 'dispatch hl.dsp.focus({ window = "stableid:1f" })'
     assert lua.focus_workspace(ws3) == 'dispatch hl.dsp.focus({ workspace = "3" })'
     assert lua.close_window(selector) == 'dispatch hl.dsp.window.close({ window = "stableid:1f" })'
+    # Names and argument words from Hyprland 0.56.2 (LuaBindingsDispatchers.cpp, parseToggleStr).
+    assert lua.set_fullscreen(selector, "fullscreen", True) == (
+        'dispatch hl.dsp.window.fullscreen({ mode = "fullscreen", action = "set", window = "stableid:1f" })'
+    )
+    assert lua.set_fullscreen(selector, "maximized", False) == (
+        'dispatch hl.dsp.window.fullscreen({ mode = "maximized", action = "unset", window = "stableid:1f" })'
+    )
+    assert lua.set_floating(selector, True) == (
+        'dispatch hl.dsp.window.float({ action = "enable", window = "stableid:1f" })'
+    )
+    assert lua.set_pinned(selector, False) == (
+        'dispatch hl.dsp.window.pin({ action = "disable", window = "stableid:1f" })'
+    )
 
 
 def test_hyprlang_dialect_requests() -> None:
@@ -87,6 +100,11 @@ def test_hyprlang_dialect_requests() -> None:
     assert legacy.close_window(selector) == "dispatch closewindow address:0xabc"
     with pytest.raises(HyprlandRequestError, match="address"):
         legacy.close_window(WindowSelector("stableid:1f"))
+    assert legacy.set_floating(selector, True) == "dispatch setfloating address:0xabc"
+    assert legacy.set_floating(selector, False) == "dispatch settiled address:0xabc"
+    assert legacy.set_pinned(selector, True) == "dispatch pin address:0xabc"
+    with pytest.raises(HyprlandRequestError, match="Lua config"):
+        legacy.set_fullscreen(selector, "fullscreen", True)
 
 
 def test_exec_arguments_are_shell_quoted_then_lua_escaped() -> None:
