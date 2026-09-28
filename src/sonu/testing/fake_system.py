@@ -18,6 +18,7 @@ from urllib.parse import unquote
 
 from sonu.system.commands import CommandError, CommandResult, ProgramMissing
 from sonu.testing.fake_hyprland import FAKE_PID_BASE, app_pid
+from sonu.testing.fake_kitty import FakeKitty
 
 ALL_PROGRAMS = frozenset(
     {
@@ -42,6 +43,7 @@ ALL_PROGRAMS = frozenset(
         "wl-paste",
         "qs",
         "nvidia-smi",
+        "kitty",
     }
 )
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -129,6 +131,7 @@ class FakeSystem:
     gpu_line: str = "12, 55, 4143, 8192"
     last_input: bytes | None = None
     shots: list[str] = field(default_factory=list)  # screenshot files written by grim
+    kitty: FakeKitty = field(default_factory=FakeKitty)  # SONU's terminals (kitty @ remote control)
 
     @property
     def night_light(self) -> str:
@@ -206,6 +209,9 @@ class FakeSystem:
         return CommandResult(args, code, out, err)
 
     # ------------------------------------------------------------------ programs
+    def _kitty(self, args: list[str]) -> tuple[int, str, str]:
+        return self.kitty.handle(args, self.last_input)
+
     def _wpctl(self, args: list[str]) -> tuple[int, str, str]:
         if args[0] == "get-volume":
             level, muted = (

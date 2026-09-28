@@ -127,6 +127,7 @@ class Engine:
         self.ctx.user_words = " ".join([*(turn.request for turn in history), request])
         self.ctx.recent_windows = self.conversation.last_windows() if self.conversation is not None else ()
         self.ctx.task_browser = None
+        self.ctx.task_folder = None
 
         try:
             snapshot = await self.ctx.desktop.snapshot()

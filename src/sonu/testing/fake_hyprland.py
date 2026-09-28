@@ -158,6 +158,7 @@ class FakeHyprland:
         # Called with every http(s) link a fake browser is started with, and the browser's window
         # class (e.g. FakeSystem.page_opened).
         self.on_url: Callable[[str, str], None] | None = None
+        self.on_exec: Callable[[list[str]], None] | None = None  # e.g. FakeKitty.launched
         self.requests: list[str] = []
         self.dispatch_handler: Callable[[str], str] | None = None
         # Launch simulation: argv[0] basename -> behaviour. Unknown commands open nothing.
@@ -396,6 +397,8 @@ class FakeHyprland:
         if not argv:
             return "error: empty command"
         self.launched.append(argv)
+        if self.on_exec is not None:
+            self.on_exec(argv)
         app = self.apps.get(Path(argv[0]).name)
         if app is None or not app.opens_window:
             return "ok"  # real Hyprland reports ok even if the program fails to start
@@ -410,6 +413,8 @@ class FakeHyprland:
             self._background(self._load_page(app, running[0], url))
         else:
             title = f"{url} - {app.title}" if url and app.shows_pages else None
+            if "--title" in argv[:-1]:  # kitty --title …
+                title = argv[argv.index("--title") + 1]
             if title is None and path and app.shows_pages:
                 title = f"{Path(path).name} - {app.title}"
             self._background(self._open(app, rule_workspace, title))

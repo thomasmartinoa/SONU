@@ -267,3 +267,24 @@ def test_other_unsupported_parts_are_kept() -> None:
         }
     )
     assert _problems(plan, REGISTRY, "open kitty and install htop") == []
+
+
+def test_claude_code_is_never_the_code_app() -> None:
+    # Found on real hardware: "…open claude code there on workspace 9" launched Visual Studio Code.
+    plan = _PlanModel.model_validate(
+        {
+            "kind": "steps",
+            "steps": [
+                {"tool": "files.make_folder", "args": {"name": "sonu-m4-test", "inside": "dev_works"}},
+                {"tool": "apps.launch", "args": {"app": "code", "workspace": 9}},
+            ],
+        }
+    )
+    request = "make a folder called sonu-m4-test in dev_works and open claude code there on workspace 9"
+    assert _problems(plan, REGISTRY, request) == [
+        "step 2 (apps.launch): Claude Code is not an app to launch — use dev.claude_open (with the folder) "
+        "instead"
+    ]
+    assert (
+        _problems(plan, REGISTRY, "make a folder called sonu-m4-test in dev_works and open code on 9") == []
+    )
