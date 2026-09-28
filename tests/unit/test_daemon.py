@@ -252,6 +252,8 @@ async def test_listen_hears_acts_and_says_the_reply(rig: Rig) -> None:
         ("🎙 Listening…", "Say what you need"),
         ("You: open kitty on 2", "Working on it…"),
         ("SONU", "✔ Opened kitty on workspace 2\n» Done, kitty's on 2.\nDone — every step verified"),
+        ("🎙 Still listening…", "» Done, kitty's on 2.\nDone — every step verified"),  # a follow-up?
+        ("SONU", "✔ Opened kitty on workspace 2\n» Done, kitty's on 2.\nDone — every step verified"),  # no
     ]
 
 
@@ -403,3 +405,69 @@ def test_short_answers_are_in_the_speech_hint() -> None:
     from sonu.desktop.apps.catalog import AppCatalog
 
     assert speech_hint(AppCatalog(entries=())).startswith("Hey Sonu. Yes. No.")
+
+
+# ---------------------------------------------------------------- a conversation (follow-ups)
+@pytest.mark.anyio
+async def test_after_a_reply_sonu_keeps_listening_for_the_next_request(rig: Rig) -> None:
+    # The owner: "after one command I need to call Hey Sonu again — keep hearing me a little".
+    voice = voice_rig(rig, "open kitty on 2", "hello")
+    code, out = await rig.run("listen")
+    assert code == 0
+    lines = out.splitlines()
+    assert lines.count("🎙 Still listening… (“thanks” to finish)") == 2  # after each reply; then silence
+    assert "You: hello" in lines
+    assert voice.said == ["How can I help?", "Done, kitty's on 2.", "Hey! Not much — what can I do for you?"]
+
+
+@pytest.mark.anyio
+async def test_thanks_ends_the_conversation(rig: Rig) -> None:
+    voice = voice_rig(rig, "open kitty on 2", "thank you")
+    planned = len(rig.ollama.chat_requests)
+    _, out = await rig.run("listen")
+    assert voice.said[-1] == "You're welcome."
+    assert out.splitlines()[-1] == "You: thank you"
+    assert (
+        len(rig.ollama.chat_requests) - planned == 2
+    )  # the kitty plan and its reply; "thanks" isn't planned
+
+
+@pytest.mark.anyio
+async def test_hey_sonu_again_in_a_follow_up_is_fine(rig: Rig) -> None:
+    voice_rig(rig, "open kitty on 2", "Hey Soin, hello")
+    _, out = await rig.run("listen")
+    assert "You: hello" in out.splitlines()
+
+
+@pytest.mark.anyio
+async def test_follow_ups_can_be_turned_off(rig: Rig) -> None:
+    voice = voice_rig(rig, "open kitty on 2", "hello")
+    rig.daemon.settings = rig.daemon.settings.model_copy(update={"voice": VoiceSettings(follow_up_s=0)})
+    _, out = await rig.run("listen")
+    assert "Still listening" not in out
+    assert voice.said == ["How can I help?", "Done, kitty's on 2."]
+
+
+@pytest.mark.parametrize(
+    ("text", "ends"),
+    [
+        ("thanks", True),
+        ("Thank you.", True),
+        ("that's all", True),
+        ("Nothing else", True),
+        ("never mind", True),
+        ("no thanks", True),
+        ("thanks Sonu", True),
+        ("Thank you very much!", True),
+        ("stop", True),
+        ("stop the music", False),  # a request, not the end of the conversation
+        ("thanks, and open kitty", False),
+        ("open kitty", False),
+        ("what's my battery", False),
+        ("pause the music", False),
+    ],
+)
+def test_ends_conversation(text: str, ends: bool) -> None:
+    from sonu.daemon.server import ends_conversation
+
+    assert ends_conversation(text) is ends

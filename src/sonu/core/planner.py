@@ -290,7 +290,8 @@ virtual camera and the replay buffer are obs.control; muting a source in OBS is 
 recording?" is system.status with what ["obs"].
 - "Remember …" is memory.remember: kind alias when they say what an app name means ("when I say \
 VS Code I mean Code OSS": text "VS Code", app "Code OSS"), name for "call me …" / "my name is …", \
-else note. "Forget …" is memory.forget; "what do you remember?" is memory.list.
+else note. "Forget …" is memory.forget; "what do you remember (about me)?" is memory.list, not \
+reminders.list.
 - "Listen for Hey Sonu" / "turn on the wake word" is voice.wake with on true; "stop listening for \
 Hey Sonu" / "turn off the wake word" is voice.wake with on false.
 - Reminders and timers are reminders.set; "what reminders do I have?" is reminders.list; \

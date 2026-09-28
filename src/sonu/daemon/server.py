@@ -20,6 +20,7 @@ import itertools
 import json
 import logging
 import os
+import re
 import socket
 import struct
 import time
@@ -53,7 +54,7 @@ from sonu.tools.base import Choices, Risk, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 from sonu.ui.desktop_ui import Picker
-from sonu.voice.audio import RECORD_ARGV
+from sonu.voice.audio import RECORD_ARGV, Endpointing
 from sonu.voice.engines import (
     KokoroVoice,
     VoiceUnavailable,
@@ -64,7 +65,7 @@ from sonu.voice.engines import (
     voice_installed,
 )
 from sonu.voice.session import VoiceSession
-from sonu.voice.wake import WakeListener, fix_name
+from sonu.voice.wake import WakeListener, after_wake_word, fix_name
 from sonu.world.origin import ancestor_pids
 from sonu.world.snapshot import WorldSnapshot
 
@@ -166,6 +167,25 @@ def final_message(report: TaskReport) -> dict[str, Any]:
         "headline": headline,
         "report": report.as_dict(),
     }
+
+
+# The conversation ended with nothing more to show (silence, or "thanks" after a follow-up).
+QUIET_END: dict[str, Any] = {
+    "type": "final",
+    "status": "reply",
+    "before_headline": [],
+    "headline": "",
+    "report": {},
+}
+_ENDS = re.compile(
+    r"^\W*(thanks?|thank you|that'?s (all|it)|nothing( else)?|no,? thanks?|never ?mind|stop|bye|goodbye|"
+    r"cancel|i'?m (done|good)|all good)(,? (sonu|very much|a lot))?\W*$",  # the whole of what was said
+    re.I,
+)
+
+
+def ends_conversation(text: str) -> bool:
+    return bool(_ENDS.match(text))
 
 
 def speech_hint(catalog: AppCatalog) -> str:
@@ -306,34 +326,81 @@ class Daemon:
         relay = _Relay(session, self.model)
         mode = request.get("confirm", "terminal")
         confirm, choose = self._askers(session, relay, mode)
-        voice: VoiceSession | None = None
-        if request["type"] == "listen":
-            try:
-                voice = self.voice_session()
-            except VoiceUnavailable as exc:
-                await session.send({"type": "error", "message": f"Voice isn't ready: {exc}"})
+        if request["type"] != "listen":
+            report = await self._run(
+                engine, session, relay, str(request.get("text", "")), confirm, choose, request
+            )
+            if report is not None:
+                await session.send(final_message(report))
+            return
+        try:
+            voice = self.voice_session()
+        except VoiceUnavailable as exc:
+            await session.send({"type": "error", "message": f"Voice isn't ready: {exc}"})
+            return
+        voice.hint = speech_hint(engine.ctx.resolver.catalog)
+        confirm = self._voice_confirmer(voice, confirm)
+        text = str(request.get("heard") or "")  # "Hey Sonu, open kitty": already heard
+        if not text:
+            if self.settings.voice.greet:
+                await voice.greet(self._user_name())
+            await session.send({"type": "listening"})
+            text = fix_name(await voice.hear())
+        await session.send({"type": "heard", "text": text})
+        if not text:
+            await session.send(final_message(TaskReport(request="", error="I didn't hear anything")))
+            return
+        while True:
+            report = await self._run(engine, session, relay, text, confirm, choose, request)
+            if report is None:
                 return
-            voice.hint = speech_hint(engine.ctx.resolver.catalog)
-            text = str(request.get("heard") or "")  # "Hey Sonu, open kitty": already heard
-            if not text:
-                if self.settings.voice.greet:
-                    await voice.greet(self._user_name())
-                await session.send({"type": "listening"})
-                text = fix_name(await voice.hear())
-            await session.send({"type": "heard", "text": text})
-            if not text:
-                await session.send(final_message(TaskReport(request="", error="I didn't hear anything")))
+            follow_up = self.settings.voice.follow_up_s > 0 and not request.get("dry_run")
+            await session.send({**final_message(report), "more": follow_up})
+            if self.settings.voice.speak_replies:
+                await voice.say(
+                    report.reply or (report.headline() if report.plan is not None else report.error or "")
+                )
+            if not follow_up:
                 return
-            request = {**request, "text": text}
-            confirm = self._voice_confirmer(voice, confirm)
+            follow = await self._follow_up(session, voice)
+            if follow is None:
+                return
+            text = follow
+
+    async def _follow_up(self, session: _Session | _DesktopSession, voice: VoiceSession) -> str | None:
+        """After a spoken request, keep listening a little: the next request needs no key and no
+        "Hey Sonu". Silence, or "thanks" / "that's all", ends the conversation (None).
+
+        The owner: "I need it to keep hearing me after one command … like a conversation flow."
+        """
+        await session.send({"type": "listening", "follow_up": True})
+        heard = fix_name(await voice.hear(Endpointing(start_timeout_s=self.settings.voice.follow_up_s)))
+        text = after_wake_word(heard) or heard if heard else ""  # "Hey Sonu, …" again is fine too
+        if not text:
+            await session.send(QUIET_END)
+            return None
+        await session.send({"type": "heard", "text": text})
+        if ends_conversation(text):
+            await session.send(QUIET_END)
+            await voice.say("You're welcome." if re.match(r"\W*thank", text, re.I) else "Okay.")
+            return None
+        return text
+
+    async def _run(
+        self,
+        engine: Engine,
+        session: _Session | _DesktopSession,
+        relay: _Relay,
+        text: str,
+        confirm: Any,
+        choose: Any,
+        request: dict[str, Any],
+    ) -> TaskReport | None:
+        """One request through the engine, streaming progress; None if the client went away."""
 
         async def run() -> TaskReport:
             return await engine.run(
-                str(request.get("text", "")),
-                confirm=confirm,
-                choose=choose,
-                dry_run=bool(request.get("dry_run")),
-                observer=relay,
+                text, confirm=confirm, choose=choose, dry_run=bool(request.get("dry_run")), observer=relay
             )
 
         task = asyncio.create_task(run())
@@ -346,15 +413,12 @@ class Daemon:
                 await asyncio.wait({task}, timeout=0.05)
             report = task.result()
         except asyncio.CancelledError:
-            return  # the client left (Ctrl+C): stop, like the CLI does
+            return None  # the client left (Ctrl+C): stop, like the CLI does
         finally:
             if watcher is not None:
                 watcher.cancel()
         await relay.flush()
-        await session.send(final_message(report))
-        if voice is not None and self.settings.voice.speak_replies:
-            said = report.reply or (report.headline() if report.plan is not None else report.error or "")
-            await voice.say(said)
+        return report
 
     # -------------------------------------------------------------- voice
     def voice_session(self) -> VoiceSession:

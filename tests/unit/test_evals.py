@@ -132,6 +132,7 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "what-do-you-remember": steps(("memory.list", {})),
     "wake-word-on": steps(("voice.wake", {"on": True})),
     "wake-word-off": steps(("voice.wake", {"on": False})),
+    "wake-word-misheard": steps(("voice.wake", {"on": True})),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

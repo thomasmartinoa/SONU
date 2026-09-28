@@ -108,17 +108,23 @@ class Progress:
 
     def update(self, message: dict[str, Any]) -> None:
         kind = message.get("type")
-        if kind == "listening":
+        if kind == "listening" and message.get("follow_up"):
+            said = "\n".join(self.lines[-2:]) if self.lines else ""
+            self.notice.show("🎙 Still listening…", said or "Anything else? (“thanks” to finish)", seconds=20)
+        elif kind == "listening":
             self.notice.show("🎙 Listening…", "Say what you need", seconds=20)
         elif kind == "heard":
+            self.lines = []
             self.notice.show(f"You: {message.get('text') or '(nothing)'}", "Working on it…", seconds=30)
         elif kind == "step":
             self.lines.append(str(message.get("line", "")))
         elif kind == "error":
             self.notice.show("SONU", f"✖ {message.get('message')}")
         elif kind == "final":
-            lines = [*self.lines, *message.get("before_headline", []), message.get("headline") or ""]
-            self.notice.show("SONU", "\n".join(line for line in lines if line))
+            self.lines = [*self.lines, *message.get("before_headline", []), message.get("headline") or ""]
+            self.lines = [line for line in self.lines if line]
+            if self.lines:
+                self.notice.show("SONU", "\n".join(self.lines))
 
 
 def _style(text: str, code: str, out: TextIO) -> str:
@@ -176,6 +182,7 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
         "env": {key: os.environ[key] for key in ENV_KEYS if key in os.environ},
     }
     progress = Progress(notice) if notice is not None else None
+    code: int | None = None
     with conn, conn.makefile("rb") as reader:
         conn.sendall(encode(request))
         for raw in reader:
@@ -195,7 +202,10 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                     + "\n"
                 )
             elif kind == "listening" and not as_json:
-                out.write(_style("🎙 Listening…", "36", out) + "\n")
+                still = (
+                    "🎙 Still listening… (“thanks” to finish)" if message.get("follow_up") else "🎙 Listening…"
+                )
+                out.write(_style(still, "36", out) + "\n")
             elif kind == "heard" and not as_json:
                 out.write(_style(f"You: {message['text'] or '(nothing)'}", "2", out) + "\n")
             elif kind == "step" and not as_json:
@@ -221,7 +231,12 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                     if headline:
                         out.write(_style(headline, _COLOURS.get(message["status"], "31"), out) + "\n")
                 out.flush()
-                return 0 if message["status"] in SUCCESS else 1
+                if message.get("report"):  # a quiet end (silence after a follow-up) keeps the last code
+                    code = 0 if message["status"] in SUCCESS else 1
+                if not message.get("more"):  # "more": SONU keeps listening for a follow-up
+                    return code if code is not None else 0
             out.flush()
+    if code is not None:
+        return code
     out.write(_style("✖ The SONU daemon stopped before answering", "31", out) + "\n")
     return 1

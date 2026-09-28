@@ -60,6 +60,13 @@ def test_other_words_are_left_alone(heard: str) -> None:
     assert fix_name(heard) == heard
 
 
+def test_the_name_written_as_one_word() -> None:
+    # Found on the laptop (large-v3): "Listen for HeySanu."
+    assert fix_name("Listen for HeySanu.") == "Listen for Hey Sonu."
+    assert after_wake_word("HiSonu, open kitty") == "open kitty"
+    assert fix_name("Heysham is a town") == "Heysham is a town"
+
+
 def test_a_misheard_name_still_wakes() -> None:
     assert after_wake_word("Hey Soin, open kitty") == "open kitty"
     assert after_wake_word("He Soenu") == ""
