@@ -46,6 +46,7 @@ def test_after_wake_word(heard: str, words: str | None) -> None:
         "Listen for He Sonu",
         "Listen for Hey Soenu",
         "Listen for Hey Soin",
+        "Listen for his sonu",  # `sonu voice check` with the owner's voice (large-v3-turbo)
     ],
 )
 def test_a_misheard_name_after_a_greeting_is_sonu(heard: str) -> None:
@@ -54,7 +55,17 @@ def test_a_misheard_name_after_a_greeting_is_sonu(heard: str) -> None:
 
 @pytest.mark.parametrize(
     "heard",
-    ["hey son, come here", "Hey Siri", "I told Sonny", "hi sunny", "he said so", "hey sony", "okay so"],
+    [
+        "his son is here",
+        "his sound",
+        "hey son, come here",
+        "Hey Siri",
+        "I told Sonny",
+        "hi sunny",
+        "he said so",
+        "hey sony",
+        "okay so",
+    ],
 )
 def test_other_words_are_left_alone(heard: str) -> None:
     assert fix_name(heard) == heard

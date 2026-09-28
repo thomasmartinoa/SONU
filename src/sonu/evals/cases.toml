@@ -709,3 +709,87 @@ notes = "Found on the laptop: the owner's 'listen for Hey Sonu' was heard as thi
 expect_status = ["done"]
 require_tools = ["voice.wake"]
 expect_confirmed = ["voice.wake"]
+
+# ---- complex requests (v14): several tools in one sentence, the way the owner talks to SONU
+
+[[case]]
+id = "complex-apps-search-volume"
+request = "open kitty on workspace 3, open chromium on workspace 4 and search youtube for lofi hip hop, then set the volume to 30 percent"
+expect_status = ["done"]
+expect_windows = [
+  { class = "kitty", workspace = 3 },
+  { class = "chromium", workspace = 4, title_contains = "youtube.com/results?search_query=lofi" },
+]
+expect_system = { speaker = 0.3 }
+
+[[case]]
+id = "complex-evening"
+request = "turn on the night light, set the brightness to 40 percent, pause the music and remind me in 20 minutes to stretch"
+system = { player = "Playing" }
+expect_status = ["done"]
+expect_system = { night_light = "on", brightness = 40, player = "Paused", reminders = 1 }
+
+[[case]]
+id = "complex-side-by-side-dnd-dark"
+request = "put kitty and zen side by side, turn on do not disturb and switch to dark mode"
+windows = [{ class = "zen", title = "Zen Browser", workspace = 2 }, { class = "kitty", title = "zsh", workspace = 1, focused = true }]
+system = { theme = "hyprmono-light" }
+expect_status = ["done"]
+expect_side_by_side = ["kitty", "zen"]
+expect_system = { do_not_disturb = true, theme = "hyprmono" }
+
+[[case]]
+id = "complex-with-an-unsupported-part"
+request = "open kitty on workspace 2, install htop and turn on bluetooth"
+notes = "Installing isn't possible yet (M4.5): the rest is done and that part reported, never dropped."
+expect_status = ["partial"]
+expect_windows = [{ class = "kitty", workspace = 2 }]
+expect_system = { bluetooth_powered = true }
+expect_unsupported = true
+
+[[case]]
+id = "complex-three-questions"
+request = "what's open right now, how is my laptop doing and what's my battery?"
+windows = [{ class = "kitty", title = "zsh", workspace = 1 }]
+battery = 80
+expect_status = ["done"]
+require_tools = ["desktop.describe", "system.status"]
+expect_reply_contains = "80"
+
+[[case]]
+id = "complex-move-show-maximize"
+request = "move kitty to workspace 5, go to workspace 5 and maximize it"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { class = "zen", title = "Zen Browser", workspace = 1 }]
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 5, fullscreen = 1 }, { class = "zen", workspace = 1 }]
+expect_shown = 5
+
+[[case]]
+id = "complex-dev-setup"
+request = "open code oss on workspace 2, open chromium on workspace 3 and go to github.com/thomasmartinoa/SONU, then show workspace 2"
+expect_status = ["done"]
+expect_windows = [
+  { class = "code-oss", workspace = 2 },
+  { class = "chromium", workspace = 3, title_contains = "github.com/thomasmartinoa/SONU" },
+]
+expect_shown = 2
+
+[[case]]
+id = "complex-spoken-rambling"
+request = "Okay so right now I'm on workspace one, can you open me a kitty terminal on workspace four and also open the browser there and play me alone by marshmello"
+notes = "How the owner talks by voice: filler, 'there' = workspace 4, the song after the browser."
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 4 }, { class = "zen", workspace = 4 }]
+expect_system = { videos_playing = 1 }
+expect_unsupported = false
+
+[[case]]
+id = "complex-alone-music"
+request = "Can you open me a kitty terminal on workspace 4 and browser open in workspace 4 and play me alone music there"
+notes = "Found on real hardware (heard by voice): 'play me alone music' was put in unsupported, so the task was partial."
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 4 }, { class = "zen", workspace = 4 }]
+expect_system = { videos_playing = 1 }
+require_tools = ["media.play"]
+expect_unsupported = false
+

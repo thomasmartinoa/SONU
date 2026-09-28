@@ -133,6 +133,51 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "wake-word-on": steps(("voice.wake", {"on": True})),
     "wake-word-off": steps(("voice.wake", {"on": False})),
     "wake-word-misheard": steps(("voice.wake", {"on": True})),
+    "complex-apps-search-volume": steps(
+        ("apps.launch", {"app": "kitty", "workspace": 3}),
+        ("apps.launch", {"app": "chromium", "workspace": 4}),
+        ("web.search", {"query": "lofi hip hop", "site": "youtube", "browser": "chromium"}),
+        ("settings.volume", {"target": "speaker", "level": 30}),
+    ),
+    "complex-evening": steps(
+        ("desktop.shell", {"action": "night_light_on"}),
+        ("settings.brightness", {"level": 40}),
+        ("media.control", {"action": "pause"}),
+        ("reminders.set", {"text": "stretch", "in_minutes": 20}),
+    ),
+    "complex-side-by-side-dnd-dark": steps(
+        ("windows.side_by_side", {"first": {"app": "kitty"}, "second": {"app": "zen"}}),
+        ("desktop.shell", {"action": "do_not_disturb_on"}),
+        ("desktop.theme", {"action": "dark"}),
+    ),
+    "complex-with-an-unsupported-part": {
+        **steps(("apps.launch", {"app": "kitty", "workspace": 2}), ("settings.bluetooth", {"on": True})),
+        "unsupported": ["install htop"],
+    },
+    "complex-three-questions": steps(
+        ("desktop.describe", {}), ("system.status", {"what": ["cpu", "memory", "temperature", "battery"]})
+    ),
+    "complex-move-show-maximize": steps(
+        ("windows.move", {"window": {"app": "kitty"}, "workspace": 5}),
+        ("workspaces.show", {"workspace": 5}),
+        ("windows.state", {"window": {"app": "kitty"}, "state": "maximized"}),
+    ),
+    "complex-dev-setup": steps(
+        ("apps.launch", {"app": "code oss", "workspace": 2}),
+        ("apps.launch", {"app": "chromium", "workspace": 3}),
+        ("web.open", {"site": "github.com/thomasmartinoa/SONU", "browser": "chromium"}),
+        ("workspaces.show", {"workspace": 2}),
+    ),
+    "complex-spoken-rambling": steps(
+        ("apps.launch", {"app": "kitty", "workspace": 4}),
+        ("apps.launch", {"app": "browser", "workspace": 4}),
+        ("media.play", {"query": "alone by marshmello"}),
+    ),
+    "complex-alone-music": steps(
+        ("apps.launch", {"app": "kitty", "workspace": 4}),
+        ("apps.launch", {"app": "browser", "workspace": 4}),
+        ("media.play", {"query": "alone music"}),
+    ),
     # The browser is left out on purpose: SONU uses the one the request names.
     "play-in-the-named-browser": steps(("media.play", {"query": "lofi"})),
     "song-in-a-browser-without-media-controls": steps(

@@ -36,7 +36,8 @@ PRE_ROLL_FRAMES = 500 // FRAME_MS  # audio kept from just before speech was noti
 
 # Found on the laptop, the owner's voice through the built-in mic: "Hey Sovenue", "Hey Soinu",
 # "He Sonu", "Hey Soenu", "Hey Soin". After a greeting, a word close enough to "Sonu" is the name.
-_CALLED = re.compile(r"\b(?:hey|hay|he|hi|hello|ok(?:ay)?|yo)([\s,.!]+)([a-z']+)", re.I)
+# "his": found with `sonu voice check` — the owner's "Listen for Hey Sonu" as "Listen for his sonu".
+_CALLED = re.compile(r"\b(?:hey|hay|he|his|hi|hello|ok(?:ay)?|yo)([\s,.!]+)([a-z']+)", re.I)
 _EXACT = {"sonu", "sanu", "sonoo", "sonnu"}
 _WORDS = {"son", "sons", "soon", "sun", "song", "sonny", "sunny", "some", "soul", "sound", "sure", "sony"}
 CLOSE = 0.7  # "Soin" 0.75, "Sovenue" 0.73, "Soenu" 0.89 — "Sonny" 0.67, "Sunny" 0.44

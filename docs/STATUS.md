@@ -41,7 +41,8 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **86 / 86** twice on the v13 suite (2026-09-28, the laptop's GPU, ~1.2 s mean planning). Pass/fail only. History, including the runs that failed while the prompt wording
+`qwen3.5:4b`: **95 / 95** twice on the v14 suite (2026-09-28, the laptop's GPU, ~0.9 s mean planning), including nine
+complex multi-step requests. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
@@ -112,7 +113,11 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    After #24 the owner: "it's working perfectly" — asked for a conversation flow (no "Hey Sonu" before every
    request) and better accuracy → #25: SONU keeps listening ~6 s after each reply (tried through the virtual mic:
    battery → laptop health → "thank you" → "You're welcome.", one key press); `sonu voice check` measures the
-   speech models on the owner's own voice. Next: the owner runs `sonu voice check`; talk over SONU to stop it.
+   speech models on the owner's own voice. The owner's `sonu voice check`: large-v3-turbo and large-v3 both 96 % of words
+   (turbo 0.22 s vs 0.35 s) — turbo stays; its one real miss, "Listen for his sonu", is fixed in #26. Complex requests
+   (#26): eight multi-step requests dry-run on the real desktop — all planned right; nine eval cases pass (fake
+   desktop, every step checked); one ran for real (volume 30 % + night light + battery → done, verified, then set back).
+   Next: talk over SONU to stop it; the activity journal; M4.
 3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
    read back), the prompt writer, GitHub via `gh` (merge after approval).
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
@@ -178,12 +183,15 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #22 | 2026-09-28 | Voice: SONU greets you when the key is pressed ("How can I help?", taking turns, prepared in advance) and a desktop notification shows listening → what it heard → the result; `[voice] greet` |
 | #23 | 2026-09-28 | M3 part 2: "Hey Sonu", opt-in (`voice.wake`, asked first, remembered): the name at the start wakes SONU, the rest is the request; `state.json` for a bar; `sonu voice status` shows it; eval suite v12 |
 | #24 | 2026-09-28 | Voice accuracy from the owner's first real use: a misheard name after a greeting ("Hey Soin", "He Sonu") is SONU's name; "yes"/"no" in Whisper's hint; beam size 5; a question isn't shown twice |
-| #25 | open | Voice: a conversation (SONU keeps listening ~6 s after each reply; `[voice] follow_up_s`); `sonu voice check` (the owner's voice through each speech model, scored); "HeySanu" as one word; eval suite v13 (86) |
+| #25 | 2026-09-28 | Voice: a conversation (SONU keeps listening ~6 s after each reply; `[voice] follow_up_s`); `sonu voice check` (the owner's voice through each speech model, scored); "HeySanu" as one word; eval suite v13 (86) |
+| #26 | open | Complex requests: nine multi-step eval cases (suite v14, 95 cases); a "play …" part listed as unsupported is sent back to the model; "his sonu" is the name |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (voice) "…and browser open in workspace 4 and play me alone music there" → the song went to unsupported, task partial; the same words dry-run twice: right once, wrong once (the conversation history differed) | a "play …" part in unsupported with no media.play step is sent back to the model; eval `complex-alone-music` (#26) |
+| 09-28 | (`sonu voice check`) "Listen for Hey Sonu" → "Listen for his sonu" | "his" counts as a greeting before a word like "Sonu" (#26) |
 | 09-28 | (voice) after one request the owner had to say "Hey Sonu" again for the next | SONU keeps listening ~6 s after each reply; "thanks" / "that's all" / silence ends it (#25) |
 | 09-28 | (voice) "listen for Hey Sonu" was heard as "Listen for his own" (twice) | the model now plans it as the wake word (eval `wake-word-misheard`); a `sonu voice check` to measure models on the owner's voice (#25) |
 | 09-28 | (eval, after a prompt change) "what do you remember about me?" → reminders.list | "…, not reminders.list" in the rule (#25) |
