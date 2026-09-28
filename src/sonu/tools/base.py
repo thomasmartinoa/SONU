@@ -59,6 +59,7 @@ class Effect(StrEnum):
     FILE_WRITE = "file.write"  # creates folders (never changes or deletes what exists)
     TERMINAL_INPUT = "terminal.input"  # types into a terminal SONU opened (e.g. a prompt for Claude Code)
     GITHUB_WRITE = "github.write"  # changes something on GitHub (merges a pull request)
+    INSTALL = "install"  # installs software (root, through the system's own password prompt)
 
 
 class StepStatus(StrEnum):

@@ -320,6 +320,8 @@ Claude doing? / is it done?" is dev.read. "Write (the best) prompt for my idea: 
 idea …, make a prompt for Claude" is dev.prompt with idea = the user's words for the idea (SONU writes \
 the prompt and shows it). files.make_folder only when the user asks to make or create a folder; for \
 a folder that exists, dev.claude_open alone.
+- "Install <app>" is packages.install with name = the user's words for it (SONU finds the package and \
+asks). Removing software isn't possible yet.
 - GitHub: "my pull requests / PRs" is github.prs; "merge the pull request (in <repo>)" is \
 github.merge — give the number only if the user said one; SONU finds the pull request.
 - "Listen for Hey Sonu" / "turn on the wake word" is voice.wake with on true; "stop listening for \

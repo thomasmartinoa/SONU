@@ -18,7 +18,8 @@ _Last update: 2026-09-28_
 | M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
 | M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)) |
-| M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
+| M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
+| M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
 
@@ -42,7 +43,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **104 / 104** twice on the v17 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
+`qwen3.5:4b`: **107 / 107** twice on the v18 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
 complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -134,7 +135,11 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    angelpsalu/smartchefai #4 with their checks; while #31's CI ran, "merge …" was refused ("checks are still running");
    once green, SONU offered it (17 files, +600 −10, checks passing) and asked — declined, #31 stayed open.
    **M4 is complete** with this; next: M4.5 installs.
-4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
+4. **M4.5 — installs** ([D54](DECISIONS.md)): ~~"install <app>"~~ (#32) — dry runs on the laptop: "install vlc" / "install
+   obs studio" → already installed; "install cowsay" → "Install cowsay 3.8.4-1 from the official extra repo (…, 19.40 KiB
+   to download). Your password is asked by the system itself."; "install spotify" → a list (official first,
+   spotify-launcher marked installed, the AUR's spotify last). A real install needs the owner's password — the
+   owner's first try is the check. Next: M5 connect, M6 screen control.
 5. **M5 — connect** (cloud models opt-in, MCP) and **M6 — screen control** (vision model + input, opt-in, high risk).
 
 Waiting on music in `~/Music`: local music with `mpv`.
@@ -203,12 +208,15 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #28 | 2026-09-28 | M4 part 1: make folders; Claude Code in SONU-owned terminals (kitty remote control over a private socket) — open (asks to trust a folder), type the user's words (asks), `/model` for this session, what it's doing; eval suite v15 (100) |
 | #29 | 2026-09-28 | M4 part 2: the prompt writer — an idea → a clear prompt (the local model), shown in full, asked (by voice: shown on screen, a short question), sent as one paste; the user's longer app name wins in aliases; eval suite v16 (101) |
 | #30 | 2026-09-28 | CI green again: mypy knows numpy is optional (the voice extra); main's CI had failed since #16 (an OBS test that read the host, fixed in #21) and #21 (numpy) — every CI step reproduced locally on 3.12–3.14 |
-| #31 | open | M4 part 3: GitHub through `gh` — "what are my open pull requests?" (with checks), "merge the pull request" (SONU finds it; never when a draft, conflicting, failing or still running; high risk; done only when GitHub says merged); eval suite v17 (104) |
+| #31 | 2026-09-28 | M4 part 3: GitHub through `gh` — "what are my open pull requests?" (with checks), "merge the pull request" (SONU finds it; never when a draft, conflicting, failing or still running; high risk; done only when GitHub says merged); eval suite v17 (104) |
+| #32 | open | M4.5: "install <app>" — official repos first, then the AUR (with a warning); SONU picks or asks (installed ones marked); high risk; installed in a SONU window with the system's own password prompt (pkexec); done when `pacman -Q` shows it; eval suite v18 (107) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (M4.5) `pacman -Ss spotify` lists alphabetically — gst-plugin-spotify before spotify-launcher | SONU ranks: the name said, names starting with it, all words, descriptions; the AUR by votes (#32) |
+| 09-28 | (M4.5) `pacman -Q code` answers "visual-studio-code-bin" — the package providing it | "code is already there — visual-studio-code-bin provides it"; installed options are marked in the list (#32) |
 | 09-28 | (M4) "merge the pull request in SONU" was planned as only listing it, and the **reply said "I merged PR #31"** — nothing was merged | replies may not claim a consequential action (merged, deleted, installed, sent, closed, shut down, …) that no result line shows — SONU says the plain result instead; a merge request without a merge step is sent back with the exact step (after a declined merge the model kept listing: 3/3 right after the change) (#31) |
 | 09-28 | (CI) GitHub's CI had failed on every PR since #16 — first the host-dependent OBS test (fixed in #21), then mypy without numpy (CI doesn't install the voice extra); checks were only run on the laptop, where both passed | a mypy override for numpy; then, on CI's 3.13/3.14 only, a recorder pipe left to the garbage collector ("unclosed transport") — SONU's audio pipes are now closed explicitly; CI's steps reproduced in a clean env on 3.12–3.14 (with ResourceWarnings as errors); each PR's CI is checked before it's reported ready (#30) |
 | 09-28 | (M4) the prompt writer added things never said (prices, a checkout, backups) | its instructions: Requirements are only the user's words; anything missing becomes a question for Claude Code — and the full prompt is always shown before it's sent (#29) |
