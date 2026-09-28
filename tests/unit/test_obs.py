@@ -110,7 +110,11 @@ class Rig:
 
 
 @pytest.fixture
-async def rig(fake_hypr: FakeHyprland, tmp_path: Path) -> AsyncIterator[Rig]:
+async def rig(fake_hypr: FakeHyprland, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Rig]:
+    # The real /sys/module/v4l2loopback depends on the host (found after a reboot unloaded it).
+    from sonu.tools import obs_tools
+
+    monkeypatch.setattr(obs_tools, "V4L2LOOPBACK", tmp_path)
     home = tmp_path / "home"
     (home / "Videos").mkdir(parents=True)
     write_desktop_files(tmp_path / "share" / "applications")

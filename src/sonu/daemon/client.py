@@ -16,7 +16,7 @@ from typing import Any, TextIO
 from sonu.daemon.protocol import ENV_KEYS, decode, encode, socket_path
 
 CONNECT_TIMEOUT_S = 0.3
-_COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop", "daemon"}
+_COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop", "daemon", "voice"}
 _FLAGS = {"--dry-run", "--json", "--notify", "-v", "-vv", "-vvv", "--verbose"}
 _COLOURS = {
     "done": "32",
@@ -31,7 +31,13 @@ SUCCESS = {"done", "planned", "reply", "ask"}  # exit 0, as the CLI (ask_cmd.SUC
 
 def parse(argv: list[str]) -> dict[str, Any] | None:
     """`sonu [--dry-run] [--json] [--notify] [--confirm X] <request…>` → options; None: not for us."""
-    options: dict[str, Any] = {"dry_run": False, "json": False, "notify": False, "confirm": "auto"}
+    options: dict[str, Any] = {
+        "type": "request",
+        "dry_run": False,
+        "json": False,
+        "notify": False,
+        "confirm": "auto",
+    }
     index = 0
     while index < len(argv):
         arg = argv[index]
@@ -50,7 +56,12 @@ def parse(argv: list[str]) -> dict[str, Any] | None:
             break
         index += 1
     words = argv[index:]
-    if not words or words[0] in _COMMANDS or options["confirm"] not in ("auto", "terminal", "gui", "never"):
+    if words == ["listen"]:  # push-to-talk: the SONU key runs `sonu listen`
+        options["type"] = "listen"
+        words = []
+    elif not words or words[0] in _COMMANDS:
+        return None
+    if options["confirm"] not in ("auto", "terminal", "gui", "never"):
         return None
     if options["confirm"] == "auto":
         options["confirm"] = "terminal" if sys.stdin.isatty() else "gui"
@@ -126,6 +137,10 @@ def try_run(argv: list[str], out: TextIO = sys.stdout) -> int | None:
                     )
                     + "\n"
                 )
+            elif kind == "listening" and not as_json:
+                out.write(_style("🎙 Listening…", "36", out) + "\n")
+            elif kind == "heard" and not as_json:
+                out.write(_style(f"You: {message['text'] or '(nothing)'}", "2", out) + "\n")
             elif kind == "step" and not as_json:
                 out.write(message["line"] + "\n")
             elif kind == "confirm":

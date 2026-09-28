@@ -4,7 +4,7 @@ The living record of where SONU is: what works on real hardware, what's next, wh
 **Updated in every PR.** Design and research live in [`PROPOSAL.md`](PROPOSAL.md); decisions in
 [`DECISIONS.md`](DECISIONS.md).
 
-_Last update: 2026-09-27_
+_Last update: 2026-09-28_
 
 ## Where we are
 
@@ -16,7 +16,8 @@ _Last update: 2026-09-27_
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
 | M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
-| M3 Voice · M4 Developer operator · M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
+| M3 Voice | 🚧 part 1 🧪 **push-to-talk**: `sonu listen` → hears (Whisper on the GPU), acts, **says the reply** (Kokoro), medium risk by a spoken yes (#21, [D46](DECISIONS.md)); part 2 "Hey Sonu" next |
+| M4 Developer operator · M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
 
@@ -100,9 +101,12 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    workspace 2" → "Kitty is up on workspace two.", "move it to workspace 4" (the window SONU opened), "play faded on
    spotify", "pause it", "play it again", small talk. ~~"Remember …"~~ (#20, [D45](DECISIONS.md)) — on the laptop:
    "remember that when I say editor I mean visual studio code" → "open my editor" opens Visual Studio Code; notes
-   listed back. Next: **M3 voice**; the activity journal after it.
-2. **M3 — voice**: push-to-talk on the NitroSense key, then "Hey Sonu"; faster-whisper (GPU) + a natural local
-   voice; barge-in; high risk never approved by voice alone.
+   listed back. The activity journal comes after voice.
+2. **M3 — voice** ([D46](DECISIONS.md)): ~~push-to-talk~~ (#21) — tried on the laptop through a virtual microphone
+   (a PipeWire null sink with Kokoro speaking into it): "What's my battery?" → "✔ Battery 100%" and the reply spoken;
+   "Remember that when I say editor, I mean Visual Studio Code" → stored, reply spoken; ~2 s from the end of speech
+   to the reply. Next: the owner tries it with the real mic and the SONU key; then **"Hey Sonu"** (wake word), talk
+   over SONU to stop it, a listening indicator in the bar.
 3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
    read back), the prompt writer, GitHub via `gh` (merge after approval).
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
@@ -118,7 +122,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
   worked on the next try.
 - "search for username X in github" searches repositories for those words; `open github.com/X` opens the profile.
 - Deep planner: `qwen3.5:9b` isn't pulled yet; `sonu eval --deep -m qwen3:8b` would measure the installed alternative.
-- NitroSense key hold-to-talk (M3): check in `wev` that *released* arrives when a 2-second hold ends.
+- NitroSense key: voice part 1 is press-to-talk (one press, SONU hears until you stop), so key release isn't needed.
+  Hold-to-talk would need `wev` to show *released* arriving when a 2-second hold ends.
 - M1 exit criterion not yet measured formally: the VS Code + Chromium placement example in ≥ 9/10 runs.
 - **`sonu resume song` printed nothing at all** (2026-09-25, not reproduced yet): every path prints at least a line;
   `sonu audit tail` after running it again should show what happened.
@@ -162,12 +167,18 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #17 | 2026-09-27 | Roadmap: the goal is a voice operator for the whole PC ([D42](DECISIONS.md)); M2 gains conversation, M4 becomes the developer operator, M4.5 installs, M6 screen control |
 | #18 | 2026-09-27 | M2 part 1: `sonud` (model kept loaded and warmed, private socket, questions relayed to the client, Ctrl+C cancels), `sonu` as a thin client with a fallback, `sonu daemon install/status/uninstall` |
 | #19 | 2026-09-27 | M2 part 2: natural replies after every request (checked in code), small talk, one conversation ("it", "again"); `[assistant]` settings |
-| #20 | open | M2 part 3: "remember …" (app aliases, name, notes), "forget …", "what do you remember?"; reminder text must be the user's words; a site given as the browser is ignored; "go to <site>" isn't the browser app |
+| #20 | 2026-09-27 | M2 part 3: "remember …" (app aliases, name, notes), "forget …", "what do you remember?"; reminder text must be the user's words; a site given as the browser is ignored; "go to <site>" isn't the browser app |
+| #21 | open | M3 part 1: push-to-talk voice — `sonu listen`, Whisper (GPU) + Silero VAD + Kokoro, spoken replies, medium risk by a spoken yes (high never), `sonu voice setup/test/status`, `[voice]` settings |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (voice) `pw-record` wrote an AU header and `pw-play` rejected raw samples ("Format not recognised"); a failing player looked like success | `--raw` for both; the speaker raises when the player fails (#21) |
+| 09-28 | (voice) Ending the recording on loudness cut sentences short — the built-in mic's noise floor is ~450 RMS | Silero VAD decides the end of speech; loudness is only the fallback (#21) |
+| 09-28 | (voice) "open kitty" was heard as "open KIDDI" | the installed apps' names go to Whisper as a hint (#21) |
+| 09-28 | (voice) kokoro-onnx's bundled espeak data points at its build machine's path | the system's `espeak-ng` (#21) |
+| 09-28 | (tests) after a reboot `v4l2loopback` was loaded and an OBS test changed result | the test no longer reads the host's `/sys/module` (#21) |
 | 09-24 | `doctor` suggested an embedding model and an "Uncensored" model as planner | never suggest those (M0) |
 | 09-24 | "open kitty" asked "kitty or kitty URL Launcher?" (a hidden helper entry) | app name beats program name; hidden entries only by exact name (#2) |
 | 09-24 | `sonu --dry-run open kitty …` was rejected | ask options may come before the request (#2) |

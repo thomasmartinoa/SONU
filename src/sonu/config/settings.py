@@ -98,6 +98,17 @@ class AuditSettings(_Section):
     enabled: bool = True
 
 
+class VoiceSettings(_Section):
+    # Speech recognition: "large-v3-turbo" (best with accents and noise) or "small.en" (lighter).
+    stt_model: str = Field(default="large-v3-turbo", pattern=r"^[A-Za-z0-9._-]{1,60}$")
+    device: Literal["cuda", "cpu"] = "cuda"
+    # SONU's voice (Kokoro): af_heart, af_bella, am_michael, bm_george, … — `sonu voice test` to hear one.
+    voice: str = Field(default="af_heart", pattern=r"^[a-z]{2}_[a-z]{1,20}$")
+    speed: float = Field(default=1.0, ge=0.5, le=2.0)
+    # Say every reply out loud when you talk to SONU (typed requests stay silent).
+    speak_replies: bool = True
+
+
 class AssistantSettings(_Section):
     # The name SONU answers to and uses for itself in replies.
     name: str = Field(default="Sonu", min_length=1, max_length=30)
@@ -120,6 +131,7 @@ class Settings(_Section):
     verify: VerifySettings = VerifySettings()
     audit: AuditSettings = AuditSettings()
     assistant: AssistantSettings = AssistantSettings()
+    voice: VoiceSettings = VoiceSettings()
 
 
 class ConfigError(Exception):
@@ -221,4 +233,12 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # Your name, used now and then — not set by default. Example: user_name = "Martin"
 # replies = true              # a short natural reply after every request
 # conversation_minutes = 10   # "it" / "that" refer back this long
+
+[voice]
+# Talking to SONU needs the voice extra and `sonu voice setup` (downloads the models).
+# stt_model = "large-v3-turbo"   # or "small.en" (lighter)
+# device = "cuda"
+# voice = "af_heart"             # `sonu voice test` to hear the others
+# speed = 1.0
+# speak_replies = true
 """

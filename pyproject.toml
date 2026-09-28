@@ -35,6 +35,16 @@ Issues = "https://github.com/thomasmartinoa/SONU/issues"
 [project.scripts]
 sonu = "sonu.cli.entry:main"
 
+[project.optional-dependencies]
+# Talking to SONU (M3): speech recognition on the GPU and a local voice. Big (~2.6 GB with the CUDA
+# libraries), so optional: `uv sync --extra voice`, or install SONU with `sonu[voice]`.
+voice = [
+    "faster-whisper>=1.2,<2",
+    "kokoro-onnx>=0.6,<1",
+    "nvidia-cublas-cu12>=12.9,<13",   # CTranslate2's CUDA 12 math library (the system has CUDA 13)
+    "nvidia-cudnn-cu12>=9.26,<10",
+]
+
 [dependency-groups]
 dev = [
     "mypy>=1.17",
@@ -90,6 +100,12 @@ strict = true
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
 files = ["src", "tests"]
+
+# The optional voice engines (the `voice` extra) ship without usable type information.
+[[tool.mypy.overrides]]
+module = ["faster_whisper", "faster_whisper.*", "kokoro_onnx", "kokoro_onnx.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pydantic-mypy]
 init_forbid_extra = true

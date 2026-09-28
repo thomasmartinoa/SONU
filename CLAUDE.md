@@ -54,7 +54,7 @@ sonu eval                               # real planner model on the eval suite (
 ```
 src/sonu/
   cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config,
-                  audit, desktop, daemon
+                  audit, desktop, daemon, voice (+ `sonu listen` through the daemon)
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
@@ -63,6 +63,7 @@ src/sonu/
   system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …)
   desktop/        hyprland/ (IPC, events, Lua/hyprlang dialects, desktop adapter), apps/ (XDG catalog, resolver)
   world/          snapshot.py, origin.py (the terminal SONU runs in)
+  voice/          audio.py (pw-record/pw-play, end of speech), engines.py (Whisper, Kokoro, Silero), session.py
   verify/ policy/ audit/ llm/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS)
   testing/        FakeHyprland (simulates dispatch, apps, browsers), FakeOllama, sample apps, scripted planner
   evals/          cases.toml + runner

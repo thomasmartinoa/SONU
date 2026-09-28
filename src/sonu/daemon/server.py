@@ -46,10 +46,20 @@ from sonu.llm.chat import OllamaChatModel
 from sonu.llm.ollama import OllamaClient, OllamaError
 from sonu.policy.engine import Policy
 from sonu.runtime import app_aliases, assistant_parts, load_memory
-from sonu.tools.base import Choices, StepStatus
+from sonu.tools.base import Choices, Risk, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 from sonu.ui.desktop_ui import Picker
+from sonu.voice.engines import (
+    KokoroVoice,
+    VoiceUnavailable,
+    WhisperEars,
+    missing_files,
+    silero_detector,
+    voice_dir,
+    voice_installed,
+)
+from sonu.voice.session import VoiceSession
 from sonu.world.origin import ancestor_pids
 from sonu.world.snapshot import WorldSnapshot
 
@@ -139,6 +149,12 @@ def final_message(report: TaskReport) -> dict[str, Any]:
     }
 
 
+def speech_hint(catalog: AppCatalog) -> str:
+    """What Whisper should expect to hear: SONU's name and the installed apps' names."""
+    names = sorted({entry.name for entry in catalog.entries if not entry.no_display}, key=len)[:40]
+    return "Sonu, workspace, " + ", ".join(names)
+
+
 class Daemon:
     def __init__(
         self,
@@ -162,6 +178,7 @@ class Daemon:
         self._ids = itertools.count(1)
         self._server: asyncio.Server | None = None
         self._warming: asyncio.Task[None] | None = None
+        self._voice: VoiceSession | None = None
 
     # -------------------------------------------------------------- lifetime
     async def start(self, path: Path | None = None) -> Path:
@@ -189,6 +206,11 @@ class Daemon:
                 await self.planner.plan("what's open right now?", WorldSnapshot(windows=()), self.registry)
             except (OllamaError, PlanningError) as exc:  # Ollama may start later: the first request pays
                 logger.warning("couldn't warm up %s: %s", self.model, exc)
+            if voice_installed() and not missing_files(voice_dir(self.paths.data_dir)):
+                try:  # the ears and voice too, so the first press of the key answers at once
+                    await self.voice_session().warm_up()
+                except VoiceUnavailable as exc:
+                    logger.warning("voice isn't ready: %s", exc)
 
     async def serve_forever(self) -> None:
         if self._server is None:
@@ -216,8 +238,10 @@ class Daemon:
             if pid is None:
                 return
             request = decode(await reader.readline())
-            if request.get("type") != "request":
+            if request.get("type") not in ("request", "listen"):
                 return
+            if request["type"] == "listen" and self._voice is not None:
+                self._voice.stop_talking()  # pressing the key while SONU talks cuts it short
             async with self.lock:
                 await self._handle(session, request, pid)
         except (ConnectionError, ValueError, asyncio.IncompleteReadError) as exc:
@@ -248,6 +272,22 @@ class Daemon:
         relay = _Relay(session, self.model)
         mode = request.get("confirm", "terminal")
         confirm, choose = self._askers(session, relay, mode)
+        voice: VoiceSession | None = None
+        if request["type"] == "listen":
+            try:
+                voice = self.voice_session()
+            except VoiceUnavailable as exc:
+                await session.send({"type": "error", "message": f"Voice isn't ready: {exc}"})
+                return
+            voice.hint = speech_hint(engine.ctx.resolver.catalog)
+            await session.send({"type": "listening"})
+            text = await voice.hear()
+            await session.send({"type": "heard", "text": text})
+            if not text:
+                await session.send(final_message(TaskReport(request="", error="I didn't hear anything")))
+                return
+            request = {**request, "text": text}
+            confirm = self._voice_confirmer(voice, confirm)
 
         async def run() -> TaskReport:
             return await engine.run(
@@ -271,6 +311,37 @@ class Daemon:
             watcher.cancel()
         await relay.flush()
         await session.send(final_message(report))
+        if voice is not None and self.settings.voice.speak_replies:
+            said = report.reply or (report.headline() if report.plan is not None else report.error or "")
+            await voice.say(said)
+
+    # -------------------------------------------------------------- voice
+    def voice_session(self) -> VoiceSession:
+        """The ears and the voice, built once (the models load on first use, then stay)."""
+        if self._voice is None:
+            if not voice_installed():
+                raise VoiceUnavailable("the voice extra isn't installed — see `sonu voice setup`")
+            settings = self.settings.voice
+            folder = voice_dir(self.paths.data_dir)
+            if missing_files(folder):
+                raise VoiceUnavailable("the voice's model files aren't downloaded — run `sonu voice setup`")
+            self._voice = VoiceSession(
+                WhisperEars(settings.stt_model, settings.device),
+                KokoroVoice(folder, settings.voice, settings.speed),
+                detector=silero_detector(),
+            )
+        return self._voice
+
+    def _voice_confirmer(self, voice: VoiceSession, physical: Any) -> Any:
+        """Medium risk: a spoken yes. High risk: said aloud, answered only on the desktop (D42)."""
+
+        async def confirm(request: ConfirmRequest) -> bool:
+            if request.risk is Risk.HIGH:
+                await voice.say(f"This one needs your OK on screen: {request.description}.")
+                return bool(await physical(request))
+            return await voice.confirm_by_voice(request)
+
+        return confirm
 
     async def _read_answers(self, session: _Session, task: asyncio.Task[TaskReport]) -> None:
         """Answers from the client; if it disconnects, the request is cancelled."""
