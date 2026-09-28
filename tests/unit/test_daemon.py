@@ -471,3 +471,21 @@ def test_ends_conversation(text: str, ends: bool) -> None:
     from sonu.daemon.server import ends_conversation
 
     assert ends_conversation(text) is ends
+
+
+@pytest.mark.anyio
+async def test_talking_over_the_reply_stops_it_and_sonu_listens(rig: Rig) -> None:
+    voice = voice_rig(rig, "open kitty on 2", "hello")
+    session = rig.daemon._voice
+    assert session is not None
+    watched: list[str] = []
+
+    async def talked_over(spoken: str) -> bool:
+        watched.append(spoken)
+        return spoken.startswith("Done")  # the user talks over the first reply only
+
+    session.interruptions = talked_over
+    _, out = await rig.run("listen")
+    assert watched == ["Done, kitty's on 2.", "Hey! Not much — what can I do for you?"]  # replies only
+    assert "You: hello" in out.splitlines()  # after being talked over, SONU listened
+    assert voice.said[0] == "How can I help?"

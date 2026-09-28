@@ -111,6 +111,8 @@ class VoiceSettings(_Section):
     greet: bool = True
     # After answering, keep listening this many seconds for a follow-up (no key, no "Hey Sonu"); 0: off.
     follow_up_s: float = Field(default=6.0, ge=0, le=30)
+    # Talk over SONU to stop it (adds a "SONU (echo cancel)" speaker and mic to PipeWire while sonud runs).
+    barge_in: bool = True
 
 
 class AssistantSettings(_Section):
@@ -247,4 +249,5 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # speak_replies = true
 # greet = true                   # "How can I help?" when the key is pressed
 # follow_up_s = 6.0              # keep listening after a reply for the next request (0: off)
+# barge_in = true                # talk over SONU to stop it (a PipeWire echo canceller)
 """

@@ -16,7 +16,7 @@ _Last update: 2026-09-28_
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
 | M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
-| M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); next: talk over SONU to stop it |
+| M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
 | M4 Developer operator · M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -117,7 +117,9 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    (turbo 0.22 s vs 0.35 s) — turbo stays; its one real miss, "Listen for his sonu", is fixed in #26. Complex requests
    (#26): eight multi-step requests dry-run on the real desktop — all planned right; nine eval cases pass (fake
    desktop, every step checked); one ran for real (volume 30 % + night light + battery → done, verified, then set back).
-   Next: talk over SONU to stop it; the activity journal; M4.
+   ~~Talk over SONU to stop it~~ (#27) — on the laptop, acoustically (the real speakers and mic, another voice
+   playing the user): "Stop." 3.5 s into a long reply → SONU quiet and listening ~1.2 s later; then "What's my
+   battery?" → answered; "Thank you." → done. Next: the activity journal; M4 (developer operator).
 3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
    read back), the prompt writer, GitHub via `gh` (merge after approval).
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
@@ -184,12 +186,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #23 | 2026-09-28 | M3 part 2: "Hey Sonu", opt-in (`voice.wake`, asked first, remembered): the name at the start wakes SONU, the rest is the request; `state.json` for a bar; `sonu voice status` shows it; eval suite v12 |
 | #24 | 2026-09-28 | Voice accuracy from the owner's first real use: a misheard name after a greeting ("Hey Soin", "He Sonu") is SONU's name; "yes"/"no" in Whisper's hint; beam size 5; a question isn't shown twice |
 | #25 | 2026-09-28 | Voice: a conversation (SONU keeps listening ~6 s after each reply; `[voice] follow_up_s`); `sonu voice check` (the owner's voice through each speech model, scored); "HeySanu" as one word; eval suite v13 (86) |
-| #26 | open | Complex requests: nine multi-step eval cases (suite v14, 95 cases); a "play …" part listed as unsupported is sent back to the model; "his sonu" is the name |
+| #26 | 2026-09-28 | Complex requests: nine multi-step eval cases (suite v14, 95 cases); a "play …" part listed as unsupported is sent back to the model; "his sonu" is the name |
+| #27 | open | Voice: talk over SONU to stop it — its own PipeWire echo canceller (WebRTC) while sonud runs; `[voice] barge_in` |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (voice) SONU's own voice from the built-in speaker reached the mic as speech the whole time (RMS 2467) — talking over it couldn't be told apart | SONU plays through its own echo canceller and listens on its source (RMS 214, one 0.38 s blip that transcribes to nothing); ≥ 0.4 s of speech whose words aren't SONU's sentence stops it (#27) |
 | 09-28 | (voice) "…and browser open in workspace 4 and play me alone music there" → the song went to unsupported, task partial; the same words dry-run twice: right once, wrong once (the conversation history differed) | a "play …" part in unsupported with no media.play step is sent back to the model; eval `complex-alone-music` (#26) |
 | 09-28 | (`sonu voice check`) "Listen for Hey Sonu" → "Listen for his sonu" | "his" counts as a greeting before a word like "Sonu" (#26) |
 | 09-28 | (voice) after one request the owner had to say "Hey Sonu" again for the next | SONU keeps listening ~6 s after each reply; "thanks" / "that's all" / silence ends it (#25) |
