@@ -846,3 +846,29 @@ expect_claude = { folder = "SONU", sent_count = 1 }
 expect_confirmed = ["dev.prompt"]
 require_tools = ["dev.prompt"]
 
+# ---- M4: GitHub (v17) — a fake gh: SONU #31 (checks passing), hypr-dotfiles #5 (checks failing)
+
+[[case]]
+id = "github-open-prs"
+request = "what are my open pull requests?"
+expect_status = ["done"]
+require_tools = ["github.prs"]
+expect_reply_contains = "SONU #31"
+expect_merged = []
+
+[[case]]
+id = "github-merge-asks"
+request = "merge the pull request in SONU"
+notes = "High risk: it asks (evals approve); by voice the OK must come from the screen."
+expect_status = ["done"]
+expect_confirmed = ["github.merge"]
+expect_merged = ["thomasmartinoa/SONU#31"]
+
+[[case]]
+id = "github-failing-checks-not-merged"
+request = "merge the hypr dotfiles pull request"
+notes = "Its checks are failing: SONU won't offer the merge."
+expect_status = ["failed"]
+require_tools = ["github.merge"]
+expect_merged = []
+

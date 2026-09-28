@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v16, 101 cases)
+## The cases (v17, 104 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -108,6 +108,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-28 | `qwen3.5:4b` | v15: four Claude Code cases (make a folder + open it; open with the trust question; open + "tell it: …"; open + switch to Sonnet) | **2 / 4** | "open claude code in the SONU folder" also made a folder (copying the example); "…and tell it: …" dropped the typing step |
 | 2026-09-28 | `qwen3.5:4b` | the example shows make + open + tell; a rule "make a folder only when asked" | **4 / 4**, then + `claude-code-is-not-the-code-app` (found on the laptop: the app "code" was launched) with a check that sends such a plan back | **100 / 100** twice |
 | 2026-09-28 | `qwen3.5:4b` | v16: + `claude-code-prompt-from-an-idea`; a rule for the prompt writer | **101 / 101**, then **100 / 101** | `remember-app-alias` ("…I mean code oss") planned with app "code" — every time after the rule; fixed in code (the user's longer app name wins), then **101 / 101** twice |
+| 2026-09-28 | `qwen3.5:4b` | v17: three GitHub cases (list; merge asks; failing checks not merged) | **1 / 3** | "merge the pull request …" was planned as only listing them (github.prs) |
+| 2026-09-28 | `qwen3.5:4b` | + a merge example | **104 / 104** twice | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

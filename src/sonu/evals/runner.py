@@ -120,6 +120,7 @@ class EvalCase(_Model):
     expect_obs: dict[str, Any] = Field(default_factory=dict)  # OBS's state at the end
     # Claude Code in a SONU terminal at the end: {"folder": name, "sent": [texts], "model": "Sonnet 5"}.
     expect_claude: dict[str, Any] = Field(default_factory=dict)
+    expect_merged: list[str] | None = None  # pull requests merged at the end ("owner/repo#n"); [] = none
 
     @field_validator("system", "expect_system")
     @classmethod
@@ -230,6 +231,8 @@ def check_expectations(
     if system is not None:
         failures.extend(_system_failures(case, system))
         failures.extend(_claude_failures(case, system))
+        if case.expect_merged is not None and system.github.merged != case.expect_merged:
+            failures.append(f"merged {system.github.merged}, should be {case.expect_merged}")
     failures.extend(
         f"{tool} should have asked first" for tool in case.expect_confirmed if tool not in (confirmed or [])
     )

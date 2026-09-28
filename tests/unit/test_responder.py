@@ -212,3 +212,20 @@ async def test_it_and_again_come_from_the_conversation(engine_rig: tuple[ToolCon
         "✔ Playing 'Faded' by Some Artist on Spotify",
     )
     assert second.reply == "Playing it again."
+
+
+def test_a_reply_never_claims_an_action_the_results_dont_show() -> None:
+    # Found on real hardware: "merge the pull request in SONU" was planned as only listing it, and
+    # the reply said "I merged PR #31" — nothing was merged.
+    listed = report_with(
+        ToolOutcome(StepStatus.DONE, "1 open pull request in SONU: SONU #31 “M4 part 3” — checks passing"),
+        request="merge the pull request in SONU",
+    )
+    allowed = "merge the pull request in SONU 1 open pull request SONU #31 checks passing"
+    assert not acceptable("I merged PR #31, and all its checks are now passing.", listed, allowed)
+    assert acceptable("PR #31 in SONU is open, and its checks are passing.", listed, allowed)
+    assert acceptable("I haven't merged it — PR #31 is open with checks passing.", listed, allowed)
+    merged = report_with(ToolOutcome(StepStatus.DONE, "Merged SONU #31 on GitHub"))
+    assert acceptable("Merged — PR #31 is in.", merged, "Merged SONU #31 on GitHub")
+    sent = report_with(ToolOutcome(StepStatus.DONE, "Opened kitty on workspace 2"))
+    assert not acceptable("Kitty's open, and I sent your message.", sent, "workspace 2")
