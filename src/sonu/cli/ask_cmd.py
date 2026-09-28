@@ -163,7 +163,8 @@ def print_final(console: Console, report: TaskReport, *, streamed: bool) -> None
     if not streamed or report.plan is None or report.plan.kind != "steps" or not report.steps:
         if not (report.reply and report.plan is not None and report.plan.kind == "reply"):
             for line in report.lines():
-                console.print(escape(line))
+                if line != report.reply:  # an "ask" whose reply is the question itself: once
+                    console.print(escape(line))
     else:
         for line in report.not_done:
             console.print(f"[red]{escape(line)}[/]")

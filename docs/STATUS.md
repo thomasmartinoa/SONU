@@ -109,7 +109,8 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    (#23, opt-in) — tried through the virtual mic with the branch daemon: turned on by a typed request (asked
    first); "Hey Sonu, what's my battery?" → answered (~2 s after the sentence ended); "I told Sonny the song was
    great" → ignored; "Hey Sonu." → greeting, then "How is my laptop doing?" → answered; "Hey Sonu, stop listening
-   for Hey Sonu" → off, reply spoken. Next: the owner tries it; talk over SONU to stop it; the activity journal.
+   for Hey Sonu" → off, reply spoken. The owner's first try (the key): the name was misheard every time → #24.
+   Next: the owner tries again; talk over SONU to stop it; the activity journal.
 3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
    read back), the prompt writer, GitHub via `gh` (merge after approval).
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
@@ -173,12 +174,16 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #20 | 2026-09-27 | M2 part 3: "remember …" (app aliases, name, notes), "forget …", "what do you remember?"; reminder text must be the user's words; a site given as the browser is ignored; "go to <site>" isn't the browser app |
 | #21 | 2026-09-28 | M3 part 1: push-to-talk voice — `sonu listen`, Whisper (GPU) + Silero VAD + Kokoro, spoken replies, medium risk by a spoken yes (high never), `sonu voice setup/test/status`, `[voice]` settings |
 | #22 | 2026-09-28 | Voice: SONU greets you when the key is pressed ("How can I help?", taking turns, prepared in advance) and a desktop notification shows listening → what it heard → the result; `[voice] greet` |
-| #23 | open | M3 part 2: "Hey Sonu", opt-in (`voice.wake`, asked first, remembered): the name at the start wakes SONU, the rest is the request; `state.json` for a bar; `sonu voice status` shows it; eval suite v12 |
+| #23 | 2026-09-28 | M3 part 2: "Hey Sonu", opt-in (`voice.wake`, asked first, remembered): the name at the start wakes SONU, the rest is the request; `state.json` for a bar; `sonu voice status` shows it; eval suite v12 |
+| #24 | open | Voice accuracy from the owner's first real use: a misheard name after a greeting ("Hey Soin", "He Sonu") is SONU's name; "yes"/"no" in Whisper's hint; beam size 5; a question isn't shown twice |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (voice, the owner's own voice) "listen for Hey Sonu" was heard as "…Hey Sovenue", "…Hey Soinu", "…He Sonu", "…Hey Soenu", "…Hey Soin"; the model asked "did you mean Hey Sonu?" each time | after a greeting, a word close to "Sonu" is the name ("Sonny", "son", "sunny" aren't) — for the key and for "Hey Sonu"; Whisper beam size 5 (+15 ms) (#24) |
+| 09-28 | (voice) the answer "yes" was heard as "Peace" | "Yes. No." in Whisper's hint (#24) |
+| 09-28 | A question ("Did you mean …?") was shown twice, in the terminal and the notification | the planner's line is left out when the reply is the same (#24) |
 | 09-28 | Pressed the SONU key after #21 merged: nothing happened. The everyday copy wasn't reinstalled yet (it planned "listen" as a request), and from the key there's no terminal, so nothing showed that SONU was listening | reinstalled with the voice extra; SONU says a greeting and a notification shows each stage (#22) |
 | 09-28 | (voice) `pw-record` wrote an AU header and `pw-play` rejected raw samples ("Format not recognised"); a failing player looked like success | `--raw` for both; the speaker raises when the player fails (#21) |
 | 09-28 | (voice) Ending the recording on loudness cut sentences short — the built-in mic's noise floor is ~450 RMS | Silero VAD decides the end of speech; loudness is only the fallback (#21) |

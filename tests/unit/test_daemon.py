@@ -117,6 +117,8 @@ async def rig(
         "close zen": CLOSE_ZEN,
         "start listening for hey sonu": WAKE_ON,
         "stop listening for hey sonu": WAKE_OFF,
+        "Listen for Hey Sonu": WAKE_ON,
+        "which kitty?": {"kind": "ask", "message": "Did you mean kitty or Kitty URL Launcher?", "steps": []},
     }
 
     def respond(body: dict[str, Any]) -> str:
@@ -375,3 +377,29 @@ async def test_hey_sonu_cant_start_without_voice(rig: Rig) -> None:
     assert code == 1
     assert "voice isn't ready" in out or "voice extra" in out
     assert not rig.daemon.wake.file.exists()
+
+
+@pytest.mark.anyio
+async def test_a_misheard_name_reaches_the_planner_right(rig: Rig) -> None:
+    # Found on real hardware: "listen for Hey Sonu" was heard as "Listen for Hey Soin" / "…Sovenue",
+    # and the model asked "did you mean Hey Sonu?" instead of turning it on.
+    voice = voice_rig(rig, "Listen for Hey Soin", "no")
+    _, out = await rig.run("listen")
+    assert "You: Listen for Hey Sonu" in out
+    assert voice.said[1].startswith("Should I listen for 'Hey Sonu'")
+
+
+@pytest.mark.anyio
+async def test_a_question_is_shown_once(rig: Rig) -> None:
+    # Found on real hardware: the notification said "Did you mean …? » Did you mean …?".
+    _, out = await rig.run("which", "kitty?")
+    assert out.count("Did you mean kitty or Kitty URL Launcher?") == 1
+    assert rig.notices == [("SONU", "» Did you mean kitty or Kitty URL Launcher?")]
+
+
+def test_short_answers_are_in_the_speech_hint() -> None:
+    # Found on real hardware: a spoken "yes" came out as "Peace".
+    from sonu.daemon.server import speech_hint
+    from sonu.desktop.apps.catalog import AppCatalog
+
+    assert speech_hint(AppCatalog(entries=())).startswith("Hey Sonu. Yes. No.")

@@ -64,7 +64,7 @@ from sonu.voice.engines import (
     voice_installed,
 )
 from sonu.voice.session import VoiceSession
-from sonu.voice.wake import WakeListener
+from sonu.voice.wake import WakeListener, fix_name
 from sonu.world.origin import ancestor_pids
 from sonu.world.snapshot import WorldSnapshot
 
@@ -153,6 +153,7 @@ def final_message(report: TaskReport) -> dict[str, Any]:
         }
     streamed = report.plan is not None and report.plan.kind == "steps" and bool(report.steps)
     before = [*report.not_done, *(f"? {q}" for q in report.questions)] if streamed else report.lines()
+    before = [line for line in before if line != report.reply]  # found on the laptop: said twice
     if report.reply:
         if report.plan is not None and report.plan.kind == "reply":
             before = []  # the natural reply replaces the planner's short one
@@ -168,9 +169,10 @@ def final_message(report: TaskReport) -> dict[str, Any]:
 
 
 def speech_hint(catalog: AppCatalog) -> str:
-    """What Whisper should expect to hear: SONU's name and the installed apps' names."""
+    """What Whisper should expect to hear: SONU's name, short answers and the installed apps' names.
+    Found on the laptop: a spoken "yes" came out as "Peace"."""
     names = sorted({entry.name for entry in catalog.entries if not entry.no_display}, key=len)[:40]
-    return "Sonu, workspace, " + ", ".join(names)
+    return "Hey Sonu. Yes. No. Workspace, " + ", ".join(names)
 
 
 class Daemon:
@@ -317,7 +319,7 @@ class Daemon:
                 if self.settings.voice.greet:
                     await voice.greet(self._user_name())
                 await session.send({"type": "listening"})
-                text = await voice.hear()
+                text = fix_name(await voice.hear())
             await session.send({"type": "heard", "text": text})
             if not text:
                 await session.send(final_message(TaskReport(request="", error="I didn't hear anything")))
@@ -533,7 +535,7 @@ class _WakeWord:
             voice.detector,
             self.daemon._on_wake,
             busy=self.daemon._busy,
-            hint=lambda: f"Hey Sonu, {voice.hint}",
+            hint=lambda: voice.hint,
             argv=self.argv,
         )
         self.task = asyncio.create_task(listener.run())
