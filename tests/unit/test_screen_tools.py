@@ -152,3 +152,126 @@ async def test_by_voice_the_screen_answer_is_read_out_as_is(rig: Rig) -> None:
     report = await rig.run("what's on my screen?", ("screen.read", {"question": "what's on my screen?"}))
     assert report.reply == ""  # no model rewrote it
     assert spoken_reply(report) == "The error says: permission denied for /etc/hosts."
+
+
+# ---------------------------------------------------------------------------- pressing a button (part 2)
+def spotify_controls() -> list[dict[str, object]]:
+    def button(path: str, name: str, **extra: object) -> dict[str, object]:
+        return {
+            "path": path,
+            "name": name,
+            "role": "push button",
+            "actions": ["click"],
+            "showing": True,
+            "enabled": True,
+            **extra,
+        }
+
+    return [
+        button("0/1/0", "Play", then="Pause"),
+        button("0/1/1", "Next"),
+        button("0/1/2", "Previous"),
+        button("0/2/0", "Delete playlist"),
+        button("0/3/0", "Next up", showing=False),
+        {
+            "path": "0/4",
+            "name": "Shuffle",
+            "role": "toggle button",
+            "actions": ["click"],
+            "showing": True,
+            "enabled": False,
+        },
+    ]
+
+
+@pytest.fixture
+def spotify(rig: Rig) -> Rig:
+    window = make_window("0xc3", "Spotify", "Spotify Premium", workspace_id=1, pid=4242)
+    rig.fake.windows.append(window)
+    rig.fake.active_address = "0xc3"
+    rig.system.a11y_apps[4242] = spotify_controls()
+    return rig
+
+
+async def press(
+    rig: Rig, request: str, control: str, *, approve: bool = True, **window: Any
+) -> tuple[TaskReport, list[Any]]:
+    asked: list[Any] = []
+
+    async def confirm(request_: Any) -> bool:
+        asked.append(request_)
+        return approve
+
+    engine = Engine(
+        planner=ScriptedPlanner(
+            {
+                request: steps_plan(
+                    ("screen.press", {"control": control, **({"window": window} if window else {})})
+                )
+            }
+        ),
+        registry=ToolRegistry(),
+        ctx=rig.ctx,
+        policy=Policy("confirm-risky"),
+    )
+    return await engine.run(request, confirm=confirm), asked
+
+
+@pytest.mark.anyio
+async def test_press_a_button_by_name(spotify: Rig) -> None:
+    report, [asked] = await press(spotify, "press play in spotify", "play", app="spotify")
+    assert report.status == "done", lines(report)
+    assert asked.description == "Press “Play” (push button) in Spotify" and asked.risk.value == "medium"
+    assert spotify.system.presses == ["Play:click"] and lines(report) == [
+        "Pressed “Play” (push button) in Spotify"
+    ]
+
+
+@pytest.mark.anyio
+async def test_nothing_is_pressed_without_approval(spotify: Rig) -> None:
+    report, _ = await press(spotify, "press play", "play", approve=False)
+    assert report.status == "declined" and spotify.system.presses == []
+
+
+@pytest.mark.anyio
+async def test_a_button_that_cant_be_taken_back_is_high_risk(spotify: Rig) -> None:
+    _, [asked] = await press(spotify, "press delete playlist", "delete playlist")
+    assert asked.risk.value == "high"
+
+
+@pytest.mark.anyio
+async def test_the_visible_one_wins_and_disabled_ones_are_never_pressed(spotify: Rig) -> None:
+    await press(spotify, "press next", "next")
+    assert spotify.system.presses == ["Next:click"]  # not the hidden "Next up"
+    report, _ = await press(spotify, "press shuffle", "shuffle")
+    assert report.status == "failed" and spotify.system.presses == ["Next:click"]
+
+
+@pytest.mark.anyio
+async def test_an_unknown_button_lists_what_there_is(spotify: Rig) -> None:
+    report, _ = await press(spotify, "press frobnicate", "frobnicate")
+    assert report.status == "failed"
+    assert lines(report) == ["No “frobnicate” in Spotify — it has: Play, Next, Previous, Delete playlist"]
+    assert report.steps[0].outcome.private  # the app's own words: shown, not given to SONU's models
+
+
+@pytest.mark.anyio
+async def test_nothing_changed_is_unverified(spotify: Rig) -> None:
+    report, _ = await press(spotify, "press next", "next")
+    assert report.status == "unverified"
+    assert lines(report) == ["Pressed “Next” (push button) in Spotify, but couldn't see anything change"]
+
+
+@pytest.mark.anyio
+async def test_an_app_without_accessibility_says_so(rig: Rig) -> None:
+    kitty = next(w for w in rig.fake.windows if w["class"] == "kitty")
+    kitty["pid"] = 777
+    report, _ = await press(rig, "press the menu button", "menu")
+    assert report.status == "failed" and "doesn't show its buttons to SONU" in lines(report)[0]
+
+
+@pytest.mark.anyio
+async def test_the_kind_of_control_in_the_words_is_ignored(spotify: Rig) -> None:
+    # Found on real hardware: "press the home button in thunar" → control "home button"; Thunar has "Home".
+    await press(spotify, "press the next button", "next button")
+    assert spotify.system.presses == ["Next:click"]

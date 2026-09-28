@@ -247,3 +247,12 @@ def test_after_a_failure_a_reply_promises_nothing() -> None:
     assert acceptable(
         "Got it, I'll remember that editor means Visual Studio Code.", done, "editor Visual Studio Code"
     )
+
+
+def test_a_reply_never_claims_an_earlier_press() -> None:
+    # Found on real hardware: "press the frobnicate button in thunar" (not done) → "I pressed Back in
+    # Thunar, but there's no Frobnicate button" — Back was the request before.
+    partial = report_with(ToolOutcome(StepStatus.FAILED, "No “frobnicate” in thunar — it has: Back, Home"))
+    allowed = "No frobnicate in thunar it has Back Home"
+    assert not acceptable("I pressed Back in Thunar, but there's no Frobnicate button.", partial, allowed)
+    assert acceptable("Thunar has no Frobnicate button — it has Back and Home.", partial, allowed)

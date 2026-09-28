@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from sonu.core.conversation import Turn
 from sonu.core.planning import Plan, PlannedStep, PlanningError
-from sonu.desktop.apps.resolver import normalize
+from sonu.desktop.apps.resolver import ROLES, normalize
 from sonu.llm.chat import ChatMessage, ChatModel, ChatModelError
 from sonu.tools.base import Effect
 from sonu.tools.grounding import ungrounded_words
@@ -410,6 +410,7 @@ def build_system_prompt(
 # web.search turns a "site:github.com" operator into its site itself, so it isn't the model's words.
 _SITE_OPERATOR = re.compile(r"\bsite:\S+", re.IGNORECASE)
 _PLAY = re.compile(r"^\W*(?:play|put on)\b", re.IGNORECASE)
+_PRESS = re.compile(r"^\W*(?:press|click|tap|hit)\b", re.IGNORECASE)
 
 
 def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[str]:
@@ -425,6 +426,14 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
         if step.tool == "apps.launch" and not web_step:
             app = str(step.args.get("app", ""))
             # Found in an eval: "go to youtube" was planned as launching the browser app.
+            # Found in the evals (2026-09-28, after weeks passing): "the browser on 2" was planned as
+            # "firefox" — not installed, not the user's word. SONU resolves the user's own words.
+            if app and normalize(app) not in ROLES and (invented := ungrounded_words(app, request)):
+                problems.append(
+                    f"step {index + 1} (apps.launch): app must be the user's own word for it "
+                    f"({', '.join(repr(w) for w in invented)} not in the request) — "
+                    "e.g. 'browser', 'terminal'"
+                )
             if normalize(app) in ("browser", "web browser") and (named := sites_named_in(request)):
                 problems.append(
                     f"step {index + 1} (apps.launch): '{named[0]}' is a website — use web.open with site "
@@ -486,6 +495,16 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 problems.append(
                     f"'{part}' is possible: media.play plays any song or video by name — add a media.play "
                     "step (query: the user's words for what to play) and remove it from unsupported"
+                )
+    # Found on real hardware: "press the frobnicate button in thunar" was listed as unsupported; SONU
+    # looks the button up itself and says what the app has.
+    if not any(step.tool == "screen.press" for step in plan.steps):
+        for part in plan.unsupported:
+            if _PRESS.match(part):
+                problems.append(
+                    f"'{part}' is possible: screen.press presses a button in an app by its name — add "
+                    "a screen.press step (control: the user's words for the button) and remove it from "
+                    "unsupported"
                 )
     return problems
 

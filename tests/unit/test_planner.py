@@ -85,14 +85,16 @@ async def test_valid_plan_first_try() -> None:
 @pytest.mark.anyio
 async def test_non_thinking_models_get_no_think_parameter() -> None:
     fake = fake_with(GOOD, capabilities=("completion", "tools"))
-    await make_planner(fake).plan("x", SNAPSHOT, REGISTRY)
+    await make_planner(fake).plan("open vscodium on 3", SNAPSHOT, REGISTRY)
     assert "think" not in fake.chat_requests[0]
 
 
 @pytest.mark.anyio
 async def test_deep_role_turns_thinking_on() -> None:
     fake = fake_with(GOOD)
-    await make_planner(fake, ModelRole(model="qwen3.5:4b", think=True)).plan("x", SNAPSHOT, REGISTRY)
+    await make_planner(fake, ModelRole(model="qwen3.5:4b", think=True)).plan(
+        "open vscodium on 3", SNAPSHOT, REGISTRY
+    )
     assert fake.chat_requests[0]["think"] is True
 
 
@@ -217,7 +219,7 @@ async def test_unsupported_parts_are_kept_and_cleaned() -> None:
         "message": "Opening Bluetooth Manager.",
         "steps": [{"tool": "apps.launch", "args": {"app": "bluetooth manager"}}],
     }
-    plan = await make_planner(fake_with(reply)).plan("r", SNAPSHOT, REGISTRY)
+    plan = await make_planner(fake_with(reply)).plan("open bluetooth manager", SNAPSHOT, REGISTRY)
     assert plan.unsupported == ("turn on bluetooth", "x" * 120)
 
 
@@ -302,3 +304,28 @@ def test_merging_a_pull_request_is_never_only_listing_them() -> None:
     ]
     any_repo = _PlanModel.model_validate({"kind": "steps", "steps": [{"tool": "github.prs", "args": {}}]})
     assert _problems(any_repo, REGISTRY, "what are my pull requests?") == []
+
+
+def test_an_app_the_user_didnt_name_is_sent_back() -> None:
+    # Found in the evals: "…the browser on 2…" was planned as "firefox" (not installed, not said).
+    plan = _PlanModel.model_validate(
+        {"kind": "steps", "steps": [{"tool": "apps.launch", "args": {"app": "firefox", "workspace": 2}}]}
+    )
+    request = "set up my workspace: code on 3, the browser on 2 and a terminal on 3"
+    assert _problems(plan, REGISTRY, request) == [
+        "step 1 (apps.launch): app must be the user's own word for it ('firefox' not in the request) — "
+        "e.g. 'browser', 'terminal'"
+    ]
+    browser = _PlanModel.model_validate(
+        {"kind": "steps", "steps": [{"tool": "apps.launch", "args": {"app": "browser"}}]}
+    )
+    assert _problems(browser, REGISTRY, request) == []
+
+
+def test_a_press_listed_as_unsupported_is_sent_back() -> None:
+    # Found on real hardware: "press the frobnicate button in thunar" went to unsupported.
+    gave_up = _PlanModel.model_validate(
+        {"kind": "steps", "steps": [], "unsupported": ["press the frobnicate button in thunar"]}
+    )
+    problems = _problems(gave_up, REGISTRY, "press the frobnicate button in thunar")
+    assert "'press the frobnicate button in thunar' is possible: screen.press" in problems[-1]
