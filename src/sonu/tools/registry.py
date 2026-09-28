@@ -13,6 +13,7 @@ from typing import Any
 
 from sonu.tools.base import Tool
 from sonu.tools.desktop_tools import DEFAULT_TOOLS
+from sonu.tools.dev_tools import DEV_TOOLS
 from sonu.tools.everyday_tools import EVERYDAY_TOOLS
 from sonu.tools.file_tools import FILE_TOOLS
 from sonu.tools.media_tools import MEDIA_TOOLS
@@ -63,6 +64,7 @@ class ToolRegistry:
             *OBS_TOOLS,
             *MEMORY_TOOLS,
             *VOICE_TOOLS,
+            *DEV_TOOLS,
         ),
     ) -> None:
         self._tools = {tool.name: tool for tool in tools}

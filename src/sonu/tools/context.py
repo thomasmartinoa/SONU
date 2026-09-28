@@ -12,6 +12,7 @@ from sonu.core.memory import Memory
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.integrations.kitty import SonuTerminals, runtime_folder
 from sonu.integrations.obs import ObsLink
 from sonu.system.control import SystemControl
 from sonu.world.origin import ancestor_pids
@@ -70,6 +71,15 @@ class ToolContext:
     obs: ObsLink = field(default_factory=ObsLink)
     # "Hey Sonu" listening — only sonud has one (the CLI alone can't keep the microphone open).
     wake: WakeSwitch | None = None
+    # SONU-owned terminals (kitty with remote control over a private socket); None: the default place.
+    terminals: SonuTerminals | None = None
+    # The folder an earlier step of this task made ("make a folder … and open Claude Code there").
+    task_folder: Path | None = None
+
+    def sonu_terminals(self) -> SonuTerminals:
+        if self.terminals is None:
+            self.terminals = SonuTerminals(runtime_folder(), self.system.runner)
+        return self.terminals
 
     def learned(self, entry: AppEntry) -> set[str]:
         return self.learned_classes.get(entry.desktop_id, set())

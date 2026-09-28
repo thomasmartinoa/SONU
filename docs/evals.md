@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v14, 95 cases)
+## The cases (v15, 100 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -105,6 +105,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-28 | `qwen3.5:4b` | the rule reworded, then shortened | **85 / 86** | both fixed, but `close-one` ("close kitty") now closed the *focused* window, every time — the rule itself (any wording) changed that plan; with no misheard-name rule the model already plans `wake-word-misheard` right |
 | 2026-09-28 | `qwen3.5:4b` | v13 with no misheard-name rule; "what do you remember (about me)? is memory.list, not reminders.list" | **86 / 86** twice | — |
 | 2026-09-28 | `qwen3.5:4b` | v14 (95): nine complex multi-step requests (apps + search + volume; night light + brightness + pause + reminder; side by side + DND + dark; an unsupported install; three questions; move + show + maximize; a dev setup; two spoken, rambling requests from real use); a "play …" in unsupported is sent back | **9 / 9** of the new ones, then **95 / 95** twice | — |
+| 2026-09-28 | `qwen3.5:4b` | v15: four Claude Code cases (make a folder + open it; open with the trust question; open + "tell it: …"; open + switch to Sonnet) | **2 / 4** | "open claude code in the SONU folder" also made a folder (copying the example); "…and tell it: …" dropped the typing step |
+| 2026-09-28 | `qwen3.5:4b` | the example shows make + open + tell; a rule "make a folder only when asked" | **4 / 4**, then + `claude-code-is-not-the-code-app` (found on the laptop: the app "code" was launched) with a check that sends such a plan back | **100 / 100** twice |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

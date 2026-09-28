@@ -793,3 +793,47 @@ expect_system = { videos_playing = 1 }
 require_tools = ["media.play"]
 expect_unsupported = false
 
+# ---- M4: the developer operator — Claude Code in SONU-owned terminals (v15)
+
+[[case]]
+id = "folder-and-claude-code"
+request = "make a folder called shop-app in dev_works and open claude code there"
+notes = "The owner's goal session, step 2. A folder this request made is trusted without asking."
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", title_contains = "Claude Code · shop-app" }]
+expect_claude = { folder = "shop-app" }
+require_tools = ["files.make_folder", "dev.claude_open"]
+
+[[case]]
+id = "claude-code-in-a-folder-asks-to-trust"
+request = "open claude code in the SONU folder on workspace 3"
+notes = "A folder Claude Code doesn't trust yet: SONU asks (evals approve), then answers Claude Code."
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 3, title_contains = "Claude Code · SONU" }]
+expect_claude = { folder = "SONU" }
+expect_confirmed = ["dev.claude_open"]
+
+[[case]]
+id = "claude-code-and-a-prompt"
+request = "open claude code in the SONU folder and tell it: add a dark mode toggle to the settings page"
+notes = "Typing goes to Anthropic: the user's exact words, shown and asked first."
+expect_status = ["done"]
+expect_claude = { folder = "SONU", sent = ["add a dark mode toggle to the settings page"] }
+expect_confirmed = ["dev.type"]
+
+[[case]]
+id = "claude-code-on-sonnet"
+request = "open claude code in the SONU folder and switch it to sonnet"
+expect_status = ["done"]
+expect_claude = { folder = "SONU", model = "Sonnet 5" }
+require_tools = ["dev.claude_model"]
+
+[[case]]
+id = "claude-code-is-not-the-code-app"
+request = "make a folder called sonu-m4-test in dev_works and open claude code there on workspace 9"
+notes = "Found on real hardware: planned as launching the app 'code' (Visual Studio Code opened, on 9)."
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 9, title_contains = "Claude Code · sonu-m4-test" }]
+expect_absent = ["code-oss"]
+expect_claude = { folder = "sonu-m4-test" }
+

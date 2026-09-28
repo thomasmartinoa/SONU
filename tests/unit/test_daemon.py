@@ -445,6 +445,10 @@ async def test_follow_ups_can_be_turned_off(rig: Rig) -> None:
     rig.daemon.settings = rig.daemon.settings.model_copy(update={"voice": VoiceSettings(follow_up_s=0)})
     _, out = await rig.run("listen")
     assert "Still listening" not in out
+    for _ in range(40):  # the client is done at the result; the daemon still says the reply
+        if len(voice.said) == 2:
+            break
+        await asyncio.sleep(0.05)
     assert voice.said == ["How can I help?", "Done, kitty's on 2."]
 
 

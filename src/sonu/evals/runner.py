@@ -26,6 +26,7 @@ from sonu.core.report import TaskReport
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.integrations.kitty import SonuTerminals
 from sonu.integrations.obs import ObsLink, ObsSettings
 from sonu.llm.chat import ChatModel
 from sonu.policy.engine import Policy
@@ -116,6 +117,8 @@ class EvalCase(_Model):
     expect_side_by_side: list[str] = Field(default_factory=list)
     obs: dict[str, Any] = Field(default_factory=dict)  # OBS's state at the start (FakeObsState fields)
     expect_obs: dict[str, Any] = Field(default_factory=dict)  # OBS's state at the end
+    # Claude Code in a SONU terminal at the end: {"folder": name, "sent": [texts], "model": "Sonnet 5"}.
+    expect_claude: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("system", "expect_system")
     @classmethod
@@ -196,6 +199,21 @@ def _side_by_side(fake: FakeHyprland, classes: list[str]) -> bool:
     )
 
 
+def _claude_failures(case: EvalCase, system: FakeSystem) -> list[str]:
+    wanted = case.expect_claude
+    if not wanted:
+        return []
+    claude = system.kitty.claude(str(wanted["folder"]))
+    if claude is None or claude.state == "closed":
+        return [f"Claude Code should be open in {wanted['folder']}"]
+    failures = [] if claude.state == "ready" else [f"Claude Code is in state {claude.state!r}, not ready"]
+    if "sent" in wanted and claude.sent != wanted["sent"]:
+        failures.append(f"Claude Code should have got {wanted['sent']}, got {claude.sent}")
+    if "model" in wanted and claude.model != wanted["model"]:
+        failures.append(f"Claude Code should be on {wanted['model']}, is on {claude.model}")
+    return failures
+
+
 def check_expectations(
     case: EvalCase,
     report: TaskReport,
@@ -206,6 +224,7 @@ def check_expectations(
     failures: list[str] = []
     if system is not None:
         failures.extend(_system_failures(case, system))
+        failures.extend(_claude_failures(case, system))
     failures.extend(
         f"{tool} should have asked first" for tool in case.expect_confirmed if tool not in (confirmed or [])
     )
@@ -299,6 +318,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
             desktop = await HyprlandDesktop.connect(fake.instance)
             system = FakeSystem(**case.system)
             fake.on_url = system.page_opened
+            fake.on_exec = system.kitty.launched
             sys_dir = workdir / "sys" / "class" / "thermal" / "thermal_zone0"
             sys_dir.mkdir(parents=True, exist_ok=True)
             (sys_dir / "type").write_text("x86_pkg_temp\n")
@@ -323,6 +343,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 system=SystemControl(system, power_supply=power_supply, sys=workdir / "sys", home=workdir),
                 obs=ObsLink(settings=ObsSettings(enabled=True, port=obs.port, password=obs.password)),
                 wake=FakeWake(),
+                terminals=SonuTerminals(workdir / "run" / "terminals", system),
             )
             engine = Engine(
                 planner=LLMPlanner(model),

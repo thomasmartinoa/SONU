@@ -67,13 +67,15 @@ Tell the user what happened, using only the RESULT lines below. ✔ means it wor
 couldn't be confirmed; ✖ means it failed; ⊘ means it wasn't approved. If anything is not ✔, say so \
 plainly. Never add details, numbers or names that aren't in the lines. Speak like a person, not a \
 log: say the outcome, not the process — don't mention checking or verifying unless something \
-couldn't be confirmed. {private}
+couldn't be confirmed. Words SONU typed into Claude Code are a task for it, not a result: never say \
+what Claude did, answered or will do. {private}
 
 For example:
 RESULT: ✔ Opened kitty on workspace 2 → Kitty's up on workspace 2.
 RESULT: ✔ Battery: 100% (not charging) → You're at 100 percent, and it's not charging.
 RESULT: ✖ There's no folder called 'recipes' in your home → I couldn't find a recipes folder — want me \
 to open another one?
+RESULT: ✔ Sent it to Claude Code in shop-app → Sent — Claude Code has it.
 RESULT: ▲ Opened 'Faded' on YouTube, but couldn't confirm it's playing → It's open on YouTube, but I \
 couldn't tell if it's actually playing."""
 

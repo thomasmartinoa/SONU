@@ -220,6 +220,19 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
             "steps": [{"tool": "system.status", "args": {"what": ["temperature", "cpu", "gpu"]}}],
         },
     ),
+    (
+        "make a folder called shop-app in dev_works, open claude code there and tell it: build a "
+        "landing page",
+        {
+            "kind": "steps",
+            "message": "Making shop-app, opening Claude Code in it and giving it your prompt.",
+            "steps": [
+                {"tool": "files.make_folder", "args": {"name": "shop-app", "inside": "dev_works"}},
+                {"tool": "dev.claude_open", "args": {}},
+                {"tool": "dev.type", "args": {"text": "build a landing page"}},
+            ],
+        },
+    ),
     ("open it", {"kind": "ask", "message": "Which app should I open?", "steps": []}),
     ("thanks!", {"kind": "reply", "message": "You're welcome!", "steps": []}),
     (
@@ -292,6 +305,11 @@ recording?" is system.status with what ["obs"].
 VS Code I mean Code OSS": text "VS Code", app "Code OSS"), name for "call me …" / "my name is …", \
 else note. "Forget …" is memory.forget; "what do you remember (about me)?" is memory.list, not \
 reminders.list.
+- Claude Code: "open Claude Code in <folder>" is dev.claude_open (no folder: the one this request \
+made); "tell it / tell Claude / type: <words>" is dev.type with text = exactly the user's words \
+after that (never rewrite them); "switch it to Sonnet/Opus/Haiku" is dev.claude_model; "what is \
+Claude doing? / is it done?" is dev.read. files.make_folder only when the user asks to make or \
+create a folder; for a folder that exists, dev.claude_open alone.
 - "Listen for Hey Sonu" / "turn on the wake word" is voice.wake with on true; "stop listening for \
 Hey Sonu" / "turn off the wake word" is voice.wake with on false.
 - Reminders and timers are reminders.set; "what reminders do I have?" is reminders.list; \
@@ -419,6 +437,16 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                     f"step {index + 1} ({step.tool}): {name} must use only the user's own words; "
                     f"{', '.join(repr(word) for word in missing)} are not in the request "
                     "(keep the other arguments)"
+                )
+    # Found on real hardware: "…open claude code there on workspace 9" was planned as launching the app
+    # "code" — Visual Studio Code opened (and restored the user's last project) instead of Claude Code.
+    if "claude code" in normalize(request):
+        for index, step in enumerate(plan.steps):
+            app = normalize(str(step.args.get("app", ""))) if step.tool == "apps.launch" else ""
+            if {"code", "claude"} & set(app.split()):
+                problems.append(
+                    f"step {index + 1} (apps.launch): Claude Code is not an app to launch — use "
+                    "dev.claude_open (with the folder) instead"
                 )
     # Found on real hardware (by voice): "…and play me alone music there" was listed as unsupported —
     # once, not the next time — although media.play plays any song or video by name.
