@@ -13,7 +13,7 @@ from rich.markup import escape
 
 from sonu import __version__
 from sonu.audit import AuditError, AuditLog
-from sonu.cli import ask_cmd, audit_cmd, config_cmd, daemon_cmd, desktop_cmd, eval_cmd
+from sonu.cli import ask_cmd, audit_cmd, config_cmd, daemon_cmd, desktop_cmd, eval_cmd, voice_cmd
 from sonu.cli.state import AppState, env_snapshot, get_state
 from sonu.doctor import DoctorContext, as_json, render_console, run_checks, summarize
 from sonu.logs import setup_logging
@@ -34,6 +34,7 @@ app.add_typer(config_cmd.app, name="config")
 app.add_typer(audit_cmd.app, name="audit")
 app.add_typer(desktop_cmd.app, name="desktop")
 app.add_typer(daemon_cmd.app, name="daemon")
+app.add_typer(voice_cmd.app, name="voice")
 
 
 def _version_callback(value: bool) -> None:
@@ -90,7 +91,7 @@ def doctor(
         raise typer.Exit(code=1)
 
 
-COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop", "daemon"}
+COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop", "daemon", "voice", "listen"}
 _GLOBAL_FLAGS = {"-v", "-vv", "-vvv", "--verbose"}
 # `sonu ask` options that may come before a bare request: `sonu --dry-run open kitty`.
 _ASK_FLAGS = {"--dry-run", "--deep", "--json", "--notify"}
@@ -120,6 +121,13 @@ def rewrite_bare_request(args: list[str]) -> list[str]:
     if index < len(args) and not args[index].startswith("-") and args[index] not in COMMANDS:
         return [*global_flags, "ask", *ask_options, *args[index:]]
     return args
+
+
+@app.command("listen")
+def listen() -> None:
+    """Talk to SONU (the SONU key runs this). Needs the daemon: it keeps the voice models loaded."""
+    typer.echo("✖ Voice needs the SONU daemon: `sonu daemon install`, then `sonu voice setup`", err=True)
+    raise typer.Exit(code=1)
 
 
 def main() -> None:

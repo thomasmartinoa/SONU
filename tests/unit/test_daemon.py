@@ -6,7 +6,7 @@ import io
 import json
 import socket
 from collections.abc import AsyncIterator, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -37,12 +37,16 @@ CLOSE_ZEN = {
 def test_parse(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("sys.stdin", io.StringIO())  # not a terminal: questions go to the picker
     assert parse(["open", "kitty", "on", "2"]) == {
+        "type": "request",
         "dry_run": False,
         "json": False,
         "notify": False,
         "confirm": "gui",
         "text": "open kitty on 2",
     }
+    listen = parse(["listen"])  # the SONU key
+    assert listen is not None and listen["type"] == "listen" and listen["text"] == ""
+    assert parse(["voice", "setup"]) is None
     options = parse(["--dry-run", "--confirm", "never", "-v", "close", "zen"])
     assert options is not None and options["dry_run"] and options["confirm"] == "never"
     assert options["text"] == "close zen"
@@ -81,6 +85,7 @@ class Rig:
     fake: FakeHyprland
     ollama: FakeOllama
     run: Callable[..., Any]
+    daemon: Daemon
 
 
 @pytest.fixture
@@ -119,7 +124,7 @@ async def rig(
         code = await asyncio.to_thread(try_run, list(argv), out)
         return code, out.getvalue()
 
-    yield Rig(fake_hypr, ollama, run)
+    yield Rig(fake_hypr, ollama, run, daemon)
     serving.cancel()
     await daemon.stop()
 
@@ -173,3 +178,75 @@ def test_the_service_starts_and_stops_with_the_hyprland_session() -> None:
     unit = unit_text("/home/me/.local/bin/sonu")
     assert "ExecStart=/home/me/.local/bin/sonu daemon run" in unit
     assert "PartOf=graphical-session.target" in unit and "WantedBy=graphical-session.target" in unit
+
+
+# ---------------------------------------------------------------- voice (`sonu listen`, the SONU key)
+@dataclass
+class FakeEars:
+    heard: list[str]
+
+    def load(self) -> None: ...
+
+    def transcribe(self, pcm16: bytes, hint: str = "") -> str:
+        return self.heard.pop(0) if self.heard else ""
+
+
+@dataclass
+class FakeVoice:
+    said: list[str] = field(default_factory=list)
+    rate: int = 24000
+
+    def load(self) -> None: ...
+
+    def speak(self, text: str) -> bytes:
+        self.said.append(text)
+        return b"\x00" * 8
+
+
+def voice_rig(rig: Rig, *heard: str) -> FakeVoice:
+    from sonu.voice.audio import Utterance
+    from sonu.voice.session import VoiceSession
+
+    async def recorder(endpointing: Any, detector: Any) -> Utterance:
+        utterance = Utterance()
+        utterance.spoke = bool(ears.heard)
+        return utterance
+
+    ears, voice = FakeEars(list(heard)), FakeVoice()
+    rig.daemon._voice = VoiceSession(ears, voice, recorder=recorder, speaker_argv=("true",))  # type: ignore[arg-type]
+    return voice
+
+
+@pytest.mark.anyio
+async def test_listen_hears_acts_and_says_the_reply(rig: Rig) -> None:
+    voice = voice_rig(rig, "open kitty on 2")
+    code, out = await rig.run("listen")
+    assert code == 0
+    assert out.splitlines()[:2] == ["🎙 Listening…", "You: open kitty on 2"]
+    assert "✔ Opened kitty on workspace 2" in out
+    assert voice.said == ["Done, kitty's on 2."]  # the reply, out loud
+
+
+@pytest.mark.anyio
+async def test_nothing_heard_ends_quietly(rig: Rig) -> None:
+    voice = voice_rig(rig)
+    _, out = await rig.run("listen")
+    assert out.splitlines() == ["🎙 Listening…", "You: (nothing)", "✖ I didn't hear anything"]
+    assert voice.said == []
+
+
+@pytest.mark.anyio
+async def test_a_medium_risk_step_takes_a_spoken_yes(rig: Rig) -> None:
+    voice = voice_rig(rig, "close zen", "yes, go ahead")
+    _, out = await rig.run("--confirm", "never", "listen")
+    assert "✔ Closed zen" in out
+    assert voice.said[0] == "Should I close zen (workspace 1)? Say yes or no."
+    assert not rig.fake.windows_of_class("zen")
+
+
+@pytest.mark.anyio
+async def test_an_unclear_answer_is_a_no(rig: Rig) -> None:
+    voice_rig(rig, "close zen", "hmm what")
+    _, out = await rig.run("--confirm", "never", "listen")
+    assert "Nothing changed — not approved" in out
+    assert rig.fake.windows_of_class("zen")
