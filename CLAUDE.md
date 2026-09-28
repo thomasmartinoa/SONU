@@ -57,11 +57,11 @@ src/sonu/
                   audit, desktop, daemon, voice (+ `sonu listen` through the daemon)
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
-                  responder.py (replies), conversation.py, memory.py, prompt_writer.py (prompts for Claude Code)
+                  responder.py (replies), conversation.py, memory.py, prompt_writer.py, screen_reader.py
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py, rice_tools.py, power_tools.py, obs_tools.py,
                   voice_tools.py, dev_tools.py (folders, Claude Code), github_tools.py, package_tools.py,
-                  grounding.py, registry.py (plan schema), targets.py, context.py
+                  screen_tools.py, grounding.py, registry.py (plan schema), targets.py, context.py
   system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …),
                   github.py (gh), packages.py (pacman, yay)
   desktop/        hyprland/ (IPC, events, Lua/hyprlang dialects, desktop adapter), apps/ (XDG catalog, resolver)

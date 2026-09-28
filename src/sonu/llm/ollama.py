@@ -154,7 +154,7 @@ class OllamaClient:
     async def chat(
         self,
         model: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         *,
         format_schema: dict[str, Any] | None = None,
         think: bool | None = None,

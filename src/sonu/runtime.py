@@ -18,6 +18,7 @@ from sonu.core.memory import Memory
 from sonu.core.planner import LLMPlanner
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.responder import Responder
+from sonu.core.screen_reader import ScreenReader
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
@@ -106,6 +107,9 @@ async def build_runtime(
     )
     planner = LLMPlanner(OllamaChatModel(client, role, settings.ollama))
     ctx.writer = PromptWriter(OllamaChatModel(client, settings.models.planner, settings.ollama))
+    ctx.reader = ScreenReader(
+        OllamaChatModel(client, settings.models.planner, settings.ollama), settings.ollama.host
+    )
     audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
     conversation, responder = assistant_parts(settings, paths, client, memory=memory)
     engine = Engine(

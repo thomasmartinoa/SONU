@@ -39,6 +39,7 @@ from sonu.core.planner import LLMPlanner
 from sonu.core.planning import Plan, PlanningError
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.report import ICONS, StepRecord, TaskReport
+from sonu.core.screen_reader import ScreenReader
 from sonu.daemon.client import Notice, Progress
 from sonu.daemon.protocol import ENV_KEYS, decode, encode, socket_path
 from sonu.desktop.apps.catalog import AppCatalog
@@ -190,6 +191,19 @@ _ENDS = re.compile(
 
 def ends_conversation(text: str) -> bool:
     return bool(_ENDS.match(text))
+
+
+def spoken_reply(report: TaskReport) -> str:
+    """What SONU says out loud after a spoken request. Private results (the screen read, a song
+    title) never go to a model — when they're all there is, SONU reads those lines out itself."""
+    if report.reply:
+        return report.reply
+    private = [
+        r.outcome.summary for r in report.steps if r.outcome.private and r.outcome.status is StepStatus.DONE
+    ]
+    if private and len(private) == len(report.steps):
+        return " ".join(private)
+    return report.headline() if report.plan is not None else report.error or ""
 
 
 def speech_hint(catalog: AppCatalog) -> str:
@@ -363,8 +377,9 @@ class Daemon:
             follow_up = self.settings.voice.follow_up_s > 0 and not request.get("dry_run")
             await session.send({**final_message(report), "more": follow_up})
             if self.settings.voice.speak_replies:
-                said = report.reply or (report.headline() if report.plan is not None else report.error or "")
-                await voice.say(said, interruptible=follow_up)  # talked over: it stops and listens
+                await voice.say(
+                    spoken_reply(report), interruptible=follow_up
+                )  # talked over: it stops and listens
             if not follow_up:
                 return
             follow = await self._follow_up(session, voice)
@@ -566,6 +581,10 @@ class Daemon:
             wake=self.wake,
             writer=PromptWriter(
                 OllamaChatModel(self.ollama, self.settings.models.planner, self.ollama_settings)
+            ),
+            reader=ScreenReader(
+                OllamaChatModel(self.ollama, self.settings.models.planner, self.ollama_settings),
+                self.settings.ollama.host,
             ),
         )
         conversation, responder = assistant_parts(

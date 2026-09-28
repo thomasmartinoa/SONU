@@ -897,3 +897,30 @@ expect_status = ["done"]
 require_tools = ["packages.install"]
 expect_reply_contains = "already installed"
 
+# ---- M6 part 1: reading the screen (v19) — a stand-in for the vision model
+
+[[case]]
+id = "whats-on-my-screen"
+request = "what's on my screen right now?"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+expect_status = ["done"]
+require_tools = ["screen.read"]
+forbid_tools = ["desktop.describe", "screen.capture"]
+
+[[case]]
+id = "read-the-error-in-this-window"
+request = "read the error in this window"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+expect_status = ["done"]
+require_tools = ["screen.read"]
+forbid_tools = ["screen.capture"]
+
+[[case]]
+id = "read-a-window-on-another-workspace"
+request = "what is open in zen?"
+notes = "Found on the laptop: planned as only focusing Zen, or only reading — screen.read now shows the window itself."
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { class = "zen", title = "Zen Browser", workspace = 3 }]
+expect_status = ["done"]
+require_tools = ["screen.read"]
+expect_shown = 3
+

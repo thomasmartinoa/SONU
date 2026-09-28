@@ -229,3 +229,21 @@ def test_a_reply_never_claims_an_action_the_results_dont_show() -> None:
     assert acceptable("Merged — PR #31 is in.", merged, "Merged SONU #31 on GitHub")
     sent = report_with(ToolOutcome(StepStatus.DONE, "Opened kitty on workspace 2"))
     assert not acceptable("Kitty's open, and I sent your message.", sent, "workspace 2")
+
+
+def test_after_a_failure_a_reply_promises_nothing() -> None:
+    # Found on real hardware: "what is open in zen?" (Zen on another workspace) → "Zen isn't showing
+    # up yet; I'll get it onto your screen." — nothing more happened.
+    failed = report_with(
+        ToolOutcome(StepStatus.FAILED, "zen is on workspace 3, not on screen — show it first")
+    )
+    allowed = "zen is on workspace 3, not on screen — show it first"
+    assert not acceptable("Zen isn't showing up yet; I'll get it onto your screen.", failed, allowed)
+    assert not acceptable("Zen isn't on screen — let me bring it over.", failed, allowed)
+    assert acceptable(
+        "Zen is on workspace 3, so I couldn't see it — show it first and ask again.", failed, allowed
+    )
+    done = report_with(ToolOutcome(StepStatus.DONE, "I'll remember that “editor” means Visual Studio Code"))
+    assert acceptable(
+        "Got it, I'll remember that editor means Visual Studio Code.", done, "editor Visual Studio Code"
+    )

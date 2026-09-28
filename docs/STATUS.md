@@ -19,7 +19,8 @@ _Last update: 2026-09-28_
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
 | M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)) |
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
-| M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
+| M6 Screen control | 🚧 part 1 🧪 **reading the screen** with the local vision model (#33, [D55](DECISIONS.md)); next: pressing buttons through accessibility, then vision + input |
+| M5 Connect | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
 
@@ -43,7 +44,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **107 / 107** twice on the v18 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
+`qwen3.5:4b`: **110 / 110** twice on the v19 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
 complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -139,7 +140,13 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    obs studio" → already installed; "install cowsay" → "Install cowsay 3.8.4-1 from the official extra repo (…, 19.40 KiB
    to download). Your password is asked by the system itself."; "install spotify" → a list (official first,
    spotify-launcher marked installed, the AUR's spotify last). A real install needs the owner's password — the
-   owner's first try is the check. Next: M5 connect, M6 screen control.
+   owner's first try is the check.
+5. **M6 — screen control** (the owner's choice over M5): ~~part 1, reading the screen~~ (#33) — on the laptop:
+   "what does this window say at the bottom?" → the terminal's status line quoted exactly; "what's on my screen?" →
+   described; "what is open in zen?" (Zen on another workspace) → shown, then read; 1.2 s per look (9 s the first
+   time); the picture deleted after. Next: **part 2, pressing buttons by name through accessibility (AT-SPI)** — the
+   accessibility bus is off on the laptop (`org.a11y.Status IsEnabled = false`), so browsers and Electron apps don't
+   expose their buttons yet; turning it on is the owner's call. Then part 3: vision + input where nothing else works.
 5. **M5 — connect** (cloud models opt-in, MCP) and **M6 — screen control** (vision model + input, opt-in, high risk).
 
 Waiting on music in `~/Music`: local music with `mpv`.
@@ -209,12 +216,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #29 | 2026-09-28 | M4 part 2: the prompt writer — an idea → a clear prompt (the local model), shown in full, asked (by voice: shown on screen, a short question), sent as one paste; the user's longer app name wins in aliases; eval suite v16 (101) |
 | #30 | 2026-09-28 | CI green again: mypy knows numpy is optional (the voice extra); main's CI had failed since #16 (an OBS test that read the host, fixed in #21) and #21 (numpy) — every CI step reproduced locally on 3.12–3.14 |
 | #31 | 2026-09-28 | M4 part 3: GitHub through `gh` — "what are my open pull requests?" (with checks), "merge the pull request" (SONU finds it; never when a draft, conflicting, failing or still running; high risk; done only when GitHub says merged); eval suite v17 (104) |
-| #32 | open | M4.5: "install <app>" — official repos first, then the AUR (with a warning); SONU picks or asks (installed ones marked); high risk; installed in a SONU window with the system's own password prompt (pkexec); done when `pacman -Q` shows it; eval suite v18 (107) |
+| #32 | 2026-09-28 | M4.5: "install <app>" — official repos first, then the AUR (with a warning); SONU picks or asks (installed ones marked); high risk; installed in a SONU window with the system's own password prompt (pkexec); done when `pacman -Q` shows it; eval suite v18 (107) |
+| #33 | open | M6 part 1: reading the screen — "what's on my screen?", "read the error in this window", "what is open in zen?" (shown first if hidden) with the local vision model only; the answer private, read out as-is by voice; replies never promise after a failure; eval suite v19 (110) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (M6) "what is open in zen?" with Zen on another workspace: planned as only a read (refused: not on screen) or only a focus (never answered); the reply promised "I'll get it onto your screen" | screen.read shows the window itself, then reads it; after a failure a reply may not promise to act (#33) |
 | 09-28 | (M4.5) `pacman -Ss spotify` lists alphabetically — gst-plugin-spotify before spotify-launcher | SONU ranks: the name said, names starting with it, all words, descriptions; the AUR by votes (#32) |
 | 09-28 | (M4.5) `pacman -Q code` answers "visual-studio-code-bin" — the package providing it | "code is already there — visual-studio-code-bin provides it"; installed options are marked in the list (#32) |
 | 09-28 | (M4) "merge the pull request in SONU" was planned as only listing it, and the **reply said "I merged PR #31"** — nothing was merged | replies may not claim a consequential action (merged, deleted, installed, sent, closed, shut down, …) that no result line shows — SONU says the plain result instead; a merge request without a merge step is sent back with the exact step (after a declined merge the model kept listing: 3/3 right after the change) (#31) |

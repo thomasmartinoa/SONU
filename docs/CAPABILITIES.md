@@ -118,6 +118,7 @@ works:
 | Claude Code: write the best prompt from an idea ("write the best prompt for my idea: …") | 🧪 M4 part 2 | the local model writes it; shown in full, asked, then pasted into Claude Code ([D52](DECISIONS.md)) |
 | GitHub: "what are my open pull requests?" (with checks), "merge the pull request in SONU" | 🧪 M4 part 3 | `gh` (already signed in); SONU finds the PR, won't merge a draft/conflicting/failing/running one; merging is high risk ([D53](DECISIONS.md)) |
 | Install software by name ("install Spotify") | 🧪 M4.5 | official repos then the AUR (`yay`), explained and asked (high risk); installs in a SONU window with the system's own password prompt (pkexec); checked with `pacman -Q` ([D54](DECISIONS.md)) |
+| "What's on my screen?", "read the error in this window", "what is open in zen?" | 🧪 M6 part 1 | grim + the local vision model (`qwen3.5:4b`); a hidden window shown first; the answer private ([D55](DECISIONS.md)) |
 | Operate any app by looking at the screen | 🗺 M6 | vision model (local `qwen3.5`/`gemma4` or opt-in cloud) + input; high risk, confirmed |
 | Cloud models (free tiers), Claude Code driving SONU (MCP) | 🗺 M5 | opt-in; an egress guard shows what leaves the laptop |
 
