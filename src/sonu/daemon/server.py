@@ -208,7 +208,7 @@ class Daemon:
                 logger.warning("couldn't warm up %s: %s", self.model, exc)
             if voice_installed() and not missing_files(voice_dir(self.paths.data_dir)):
                 try:  # the ears and voice too, so the first press of the key answers at once
-                    await self.voice_session().warm_up()
+                    await self.voice_session().warm_up(self._user_name())
                 except VoiceUnavailable as exc:
                     logger.warning("voice isn't ready: %s", exc)
 
@@ -280,6 +280,8 @@ class Daemon:
                 await session.send({"type": "error", "message": f"Voice isn't ready: {exc}"})
                 return
             voice.hint = speech_hint(engine.ctx.resolver.catalog)
+            if self.settings.voice.greet:
+                await voice.greet(self._user_name())
             await session.send({"type": "listening"})
             text = await voice.hear()
             await session.send({"type": "heard", "text": text})
@@ -331,6 +333,9 @@ class Daemon:
                 detector=silero_detector(),
             )
         return self._voice
+
+    def _user_name(self) -> str | None:
+        return load_memory(self.paths).name() or self.settings.assistant.user_name
 
     def _voice_confirmer(self, voice: VoiceSession, physical: Any) -> Any:
         """Medium risk: a spoken yes. High risk: said aloud, answered only on the desktop (D42)."""

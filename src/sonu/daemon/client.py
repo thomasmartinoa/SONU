@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
+import subprocess
 import sys
 from typing import Any, TextIO
 
@@ -69,6 +71,33 @@ def parse(argv: list[str]) -> dict[str, Any] | None:
     return options
 
 
+class Notice:
+    """One desktop notification, updated in place (``notify-send -p`` / ``--replace-id``).
+
+    Found on the laptop: the SONU key runs `sonu listen` with no terminal, so nothing showed that
+    SONU was listening, what it heard, or what it did.
+    """
+
+    def __init__(self, program: str | None = None) -> None:
+        self.program = program if program is not None else shutil.which("notify-send")
+        self.id = ""
+
+    def show(self, title: str, body: str = "", *, seconds: float = 8.0) -> None:
+        if not self.program:
+            return
+        argv = [self.program, "--app-name=SONU", "--transient", "-p", f"--expire-time={int(seconds * 1000)}"]
+        if self.id:
+            argv.append(f"--replace-id={self.id}")
+        try:  # "--": the heard words can never be read as a flag
+            done = subprocess.run(
+                [*argv, "--", title, body[:300]], capture_output=True, text=True, timeout=2, check=False
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return
+        if done.stdout.strip().isdigit():
+            self.id = done.stdout.strip()
+
+
 def _style(text: str, code: str, out: TextIO) -> str:
     return f"\033[{code}m{text}\033[0m" if out.isatty() else text
 
@@ -99,11 +128,13 @@ def _ask_choice(message: dict[str, Any], out: TextIO) -> str | None:
     return None
 
 
-def try_run(argv: list[str], out: TextIO = sys.stdout) -> int | None:
+def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = None) -> int | None:
     """Run the request through the daemon; the exit code, or None if the full CLI should do it."""
     options = parse(argv)
     if options is None:
         return None
+    if notice is None and options["type"] == "listen" and not out.isatty():
+        notice = Notice()  # started from the SONU key: show it on the desktop
     path = socket_path()
     if not path.exists():
         return None
@@ -121,6 +152,7 @@ def try_run(argv: list[str], out: TextIO = sys.stdout) -> int | None:
         **options,
         "env": {key: os.environ[key] for key in ENV_KEYS if key in os.environ},
     }
+    shown: list[str] = []  # the step lines, for the notification
     with conn, conn.makefile("rb") as reader:
         conn.sendall(encode(request))
         for raw in reader:
@@ -139,10 +171,15 @@ def try_run(argv: list[str], out: TextIO = sys.stdout) -> int | None:
                 )
             elif kind == "listening" and not as_json:
                 out.write(_style("🎙 Listening…", "36", out) + "\n")
+                if notice:
+                    notice.show("🎙 Listening…", "Say what you need", seconds=20)
             elif kind == "heard" and not as_json:
                 out.write(_style(f"You: {message['text'] or '(nothing)'}", "2", out) + "\n")
+                if notice:
+                    notice.show(f"You: {message['text'] or '(nothing)'}", "Working on it…", seconds=30)
             elif kind == "step" and not as_json:
                 out.write(message["line"] + "\n")
+                shown.append(message["line"])
             elif kind == "confirm":
                 conn.sendall(
                     encode({"type": "answer", "id": message["id"], "value": _ask_yes_no(message, out)})
@@ -153,6 +190,8 @@ def try_run(argv: list[str], out: TextIO = sys.stdout) -> int | None:
                 )
             elif kind == "error":
                 out.write(_style(f"✖ {message['message']}", "31", out) + "\n")
+                if notice:
+                    notice.show("SONU", f"✖ {message['message']}")
                 return 1
             elif kind == "final":
                 if as_json:
@@ -163,6 +202,9 @@ def try_run(argv: list[str], out: TextIO = sys.stdout) -> int | None:
                     headline = message.get("headline")
                     if headline:
                         out.write(_style(headline, _COLOURS.get(message["status"], "31"), out) + "\n")
+                if notice:
+                    lines = [*shown, *message.get("before_headline", []), message.get("headline") or ""]
+                    notice.show("SONU", "\n".join(line for line in lines if line))
                 out.flush()
                 return 0 if message["status"] in SUCCESS else 1
             out.flush()

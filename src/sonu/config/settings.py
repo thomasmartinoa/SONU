@@ -107,6 +107,8 @@ class VoiceSettings(_Section):
     speed: float = Field(default=1.0, ge=0.5, le=2.0)
     # Say every reply out loud when you talk to SONU (typed requests stay silent).
     speak_replies: bool = True
+    # Say "How can I help?" (or similar) when the SONU key is pressed, then listen.
+    greet: bool = True
 
 
 class AssistantSettings(_Section):
@@ -241,4 +243,5 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # voice = "af_heart"             # `sonu voice test` to hear the others
 # speed = 1.0
 # speak_replies = true
+# greet = true                   # "How can I help?" when the key is pressed
 """
