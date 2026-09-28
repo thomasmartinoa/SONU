@@ -59,11 +59,12 @@ src/sonu/
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py, rice_tools.py, power_tools.py, obs_tools.py,
-                  grounding.py, registry.py (plan schema), targets.py, context.py
+                  voice_tools.py, grounding.py, registry.py (plan schema), targets.py, context.py
   system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …)
   desktop/        hyprland/ (IPC, events, Lua/hyprlang dialects, desktop adapter), apps/ (XDG catalog, resolver)
   world/          snapshot.py, origin.py (the terminal SONU runs in)
-  voice/          audio.py (pw-record/pw-play, end of speech), engines.py (Whisper, Kokoro, Silero), session.py
+  voice/          audio.py (pw-record/pw-play, end of speech), engines.py (Whisper, Kokoro, Silero), session.py,
+                  wake.py ("Hey Sonu")
   verify/ policy/ audit/ llm/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS)
   testing/        FakeHyprland (simulates dispatch, apps, browsers), FakeOllama, sample apps, scripted planner
   evals/          cases.toml + runner

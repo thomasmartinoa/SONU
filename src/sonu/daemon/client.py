@@ -98,6 +98,29 @@ class Notice:
             self.id = done.stdout.strip()
 
 
+class Progress:
+    """A spoken request on the desktop (no terminal): one notification, updated as it goes —
+    listening → what was heard → the result. Used by the key's client and by "Hey Sonu" in sonud."""
+
+    def __init__(self, notice: Notice) -> None:
+        self.notice = notice
+        self.lines: list[str] = []  # the step lines so far
+
+    def update(self, message: dict[str, Any]) -> None:
+        kind = message.get("type")
+        if kind == "listening":
+            self.notice.show("🎙 Listening…", "Say what you need", seconds=20)
+        elif kind == "heard":
+            self.notice.show(f"You: {message.get('text') or '(nothing)'}", "Working on it…", seconds=30)
+        elif kind == "step":
+            self.lines.append(str(message.get("line", "")))
+        elif kind == "error":
+            self.notice.show("SONU", f"✖ {message.get('message')}")
+        elif kind == "final":
+            lines = [*self.lines, *message.get("before_headline", []), message.get("headline") or ""]
+            self.notice.show("SONU", "\n".join(line for line in lines if line))
+
+
 def _style(text: str, code: str, out: TextIO) -> str:
     return f"\033[{code}m{text}\033[0m" if out.isatty() else text
 
@@ -152,12 +175,14 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
         **options,
         "env": {key: os.environ[key] for key in ENV_KEYS if key in os.environ},
     }
-    shown: list[str] = []  # the step lines, for the notification
+    progress = Progress(notice) if notice is not None else None
     with conn, conn.makefile("rb") as reader:
         conn.sendall(encode(request))
         for raw in reader:
             message = decode(raw)
             kind = message["type"]
+            if progress is not None:
+                progress.update(message)
             if kind == "plan" and message.get("kind") == "steps" and not as_json:
                 steps = message["steps"]
                 out.write(
@@ -171,15 +196,10 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                 )
             elif kind == "listening" and not as_json:
                 out.write(_style("🎙 Listening…", "36", out) + "\n")
-                if notice:
-                    notice.show("🎙 Listening…", "Say what you need", seconds=20)
             elif kind == "heard" and not as_json:
                 out.write(_style(f"You: {message['text'] or '(nothing)'}", "2", out) + "\n")
-                if notice:
-                    notice.show(f"You: {message['text'] or '(nothing)'}", "Working on it…", seconds=30)
             elif kind == "step" and not as_json:
                 out.write(message["line"] + "\n")
-                shown.append(message["line"])
             elif kind == "confirm":
                 conn.sendall(
                     encode({"type": "answer", "id": message["id"], "value": _ask_yes_no(message, out)})
@@ -190,8 +210,6 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                 )
             elif kind == "error":
                 out.write(_style(f"✖ {message['message']}", "31", out) + "\n")
-                if notice:
-                    notice.show("SONU", f"✖ {message['message']}")
                 return 1
             elif kind == "final":
                 if as_json:
@@ -202,9 +220,6 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                     headline = message.get("headline")
                     if headline:
                         out.write(_style(headline, _COLOURS.get(message["status"], "31"), out) + "\n")
-                if notice:
-                    lines = [*shown, *message.get("before_headline", []), message.get("headline") or ""]
-                    notice.show("SONU", "\n".join(line for line in lines if line))
                 out.flush()
                 return 0 if message["status"] in SUCCESS else 1
             out.flush()

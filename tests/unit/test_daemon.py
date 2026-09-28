@@ -26,6 +26,8 @@ LAUNCH_KITTY = {
     "message": "",
     "steps": [{"tool": "apps.launch", "args": {"app": "kitty", "workspace": 2}}],
 }
+WAKE_ON = {"kind": "steps", "message": "", "steps": [{"tool": "voice.wake", "args": {"on": True}}]}
+WAKE_OFF = {"kind": "steps", "message": "", "steps": [{"tool": "voice.wake", "args": {"on": False}}]}
 CLOSE_ZEN = {
     "kind": "steps",
     "message": "",
@@ -110,7 +112,12 @@ async def rig(
     write_desktop_files(apps)
     ollama = FakeOllama()
     ollama.add_model("qwen3.5:4b", size_gib=3.2, capabilities=["completion", "tools"])
-    plans = {"open kitty on 2": LAUNCH_KITTY, "close zen": CLOSE_ZEN}
+    plans = {
+        "open kitty on 2": LAUNCH_KITTY,
+        "close zen": CLOSE_ZEN,
+        "start listening for hey sonu": WAKE_ON,
+        "stop listening for hey sonu": WAKE_OFF,
+    }
 
     def respond(body: dict[str, Any]) -> str:
         if "format" not in body:  # the natural reply (free text), not a plan
@@ -310,3 +317,61 @@ def test_notice_updates_one_notification(tmp_path: Path) -> None:
     first, second = log.read_text().splitlines()
     assert "--replace-id" not in first
     assert "--replace-id=42" in second and "-- You: --help" in second
+
+
+@pytest.mark.anyio
+async def test_hey_sonu_turned_on_hears_acts_and_is_remembered(rig: Rig, tmp_path: Path) -> None:
+    from tests.unit.test_wake import loud_parts, silence, speech
+
+    voice = voice_rig(rig, "Hey Sonu, open kitty on 2")
+    session = rig.daemon._voice
+    assert session is not None
+    session.detector = loud_parts
+    rig.daemon.notice = lambda: NoticeLog(rig.notices)
+    mic = tmp_path / "mic.raw"  # after the request that turns it on has finished
+    mic.write_bytes(silence(0.3) + speech(0.9) + silence(1.5))
+    # One frame shows the mic works; the speech comes once that request has finished (while SONU
+    # is busy, what the mic hears is dropped).
+    go = tmp_path / "go"
+    rig.daemon.wake.argv = (
+        "sh",
+        "-c",
+        f"head -c 960 /dev/zero; while [ ! -e {go} ]; do sleep 0.05; done; cat {mic}; sleep 30",
+    )
+
+    code, out = await rig.run(
+        "--confirm", "terminal", "start", "listening", "for", "hey", "sonu", answers=["y"]
+    )
+    assert code == 0, out
+    assert "? Listen for 'Hey Sonu' — the microphone stays on" in out
+    assert "✔ Listening for 'Hey Sonu'" in out
+    assert rig.daemon.wake.file.exists()  # still on after a restart
+    assert json.loads((rig.daemon.path.parent / "state.json").read_text()) == {"wake_word": True}
+    go.touch()  # now someone says it
+
+    for _ in range(100):
+        if rig.fake.windows_of_class("kitty"):
+            break
+        await asyncio.sleep(0.05)
+    assert [w["workspace"]["id"] for w in rig.fake.windows_of_class("kitty")] == [2]
+    for _ in range(40):
+        if voice.said:
+            break
+        await asyncio.sleep(0.05)
+    assert voice.said == ["Done, kitty's on 2."]  # no greeting: the request came with the name
+    assert ("You: open kitty on 2", "Working on it…") in rig.notices  # on the desktop: no terminal
+
+    code, out = await rig.run("stop", "listening", "for", "hey", "sonu")
+    assert "✔ Stopped listening for 'Hey Sonu'" in out
+    assert not rig.daemon.wake.listening and not rig.daemon.wake.file.exists()
+    assert json.loads((rig.daemon.path.parent / "state.json").read_text()) == {"wake_word": False}
+
+
+@pytest.mark.anyio
+async def test_hey_sonu_cant_start_without_voice(rig: Rig) -> None:
+    code, out = await rig.run(
+        "--confirm", "terminal", "start", "listening", "for", "hey", "sonu", answers=["y"]
+    )
+    assert code == 1
+    assert "voice isn't ready" in out or "voice extra" in out
+    assert not rig.daemon.wake.file.exists()

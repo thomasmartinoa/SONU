@@ -17,11 +17,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import itertools
+import json
 import logging
 import os
 import socket
 import struct
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -35,6 +37,7 @@ from sonu.core.engine import ConfirmRequest, Engine, Observer
 from sonu.core.planner import LLMPlanner
 from sonu.core.planning import Plan, PlanningError
 from sonu.core.report import ICONS, StepRecord, TaskReport
+from sonu.daemon.client import Notice, Progress
 from sonu.daemon.protocol import ENV_KEYS, decode, encode, socket_path
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
@@ -50,6 +53,7 @@ from sonu.tools.base import Choices, Risk, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 from sonu.ui.desktop_ui import Picker
+from sonu.voice.audio import RECORD_ARGV
 from sonu.voice.engines import (
     KokoroVoice,
     VoiceUnavailable,
@@ -60,6 +64,7 @@ from sonu.voice.engines import (
     voice_installed,
 )
 from sonu.voice.session import VoiceSession
+from sonu.voice.wake import WakeListener
 from sonu.world.origin import ancestor_pids
 from sonu.world.snapshot import WorldSnapshot
 
@@ -82,10 +87,23 @@ class _Session:
         await self.writer.drain()
 
 
+class _DesktopSession:
+    """A spoken request nobody typed ("Hey Sonu"): progress goes to a desktop notification, and
+    questions to the picker."""
+
+    def __init__(self, progress: Progress | None) -> None:
+        self.progress = progress
+        self.answers: dict[int, asyncio.Future[Any]] = {}
+
+    async def send(self, message: dict[str, Any]) -> None:
+        if self.progress is not None:
+            await asyncio.to_thread(self.progress.update, message)
+
+
 class _Relay(Observer):
     """Sends progress to the client as it happens."""
 
-    def __init__(self, session: _Session, model: str) -> None:
+    def __init__(self, session: _Session | _DesktopSession, model: str) -> None:
         self.session, self.model = session, model
         self.pending: list[dict[str, Any]] = []
 
@@ -179,6 +197,12 @@ class Daemon:
         self._server: asyncio.Server | None = None
         self._warming: asyncio.Task[None] | None = None
         self._voice: VoiceSession | None = None
+        self.wake = _WakeWord(self)
+        self.notice: Callable[[], Notice] = Notice  # tests record instead of showing
+        self._client_env: dict[str, str] = {}  # the latest client's (for requests nobody typed)
+        self._waking = False  # a "Hey Sonu" request is starting
+        self._wake_request_task: asyncio.Task[None] | None = None
+        self._quiet_until = 0.0  # SONU just spoke: its own voice isn't a wake word
 
     # -------------------------------------------------------------- lifetime
     async def start(self, path: Path | None = None) -> Path:
@@ -211,6 +235,10 @@ class Daemon:
                     await self.voice_session().warm_up(self._user_name())
                 except VoiceUnavailable as exc:
                     logger.warning("voice isn't ready: %s", exc)
+                    return
+                # the user turned "Hey Sonu" on earlier
+                if self.wake.file.exists() and (problem := await self.wake.set(True)):
+                    logger.warning("couldn't listen for 'Hey Sonu': %s", problem)
 
     async def serve_forever(self) -> None:
         if self._server is None:
@@ -221,6 +249,7 @@ class Daemon:
     async def stop(self) -> None:
         if self._warming is not None:
             self._warming.cancel()
+        await self.wake.stop()
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
@@ -262,8 +291,11 @@ class Daemon:
         )
         return pid if uid == os.getuid() else None
 
-    async def _handle(self, session: _Session, request: dict[str, Any], pid: int) -> None:
-        env = {**self.env, **{k: str(v) for k, v in request.get("env", {}).items() if k in ENV_KEYS}}
+    async def _handle(self, session: _Session | _DesktopSession, request: dict[str, Any], pid: int) -> None:
+        client_env = {k: str(v) for k, v in request.get("env", {}).items() if k in ENV_KEYS}
+        if isinstance(session, _Session):
+            self._client_env = client_env
+        env = {**self.env, **client_env}
         try:
             engine = await self._engine(env, pid)
         except HyprlandError as exc:
@@ -280,10 +312,12 @@ class Daemon:
                 await session.send({"type": "error", "message": f"Voice isn't ready: {exc}"})
                 return
             voice.hint = speech_hint(engine.ctx.resolver.catalog)
-            if self.settings.voice.greet:
-                await voice.greet(self._user_name())
-            await session.send({"type": "listening"})
-            text = await voice.hear()
+            text = str(request.get("heard") or "")  # "Hey Sonu, open kitty": already heard
+            if not text:
+                if self.settings.voice.greet:
+                    await voice.greet(self._user_name())
+                await session.send({"type": "listening"})
+                text = await voice.hear()
             await session.send({"type": "heard", "text": text})
             if not text:
                 await session.send(final_message(TaskReport(request="", error="I didn't hear anything")))
@@ -301,7 +335,9 @@ class Daemon:
             )
 
         task = asyncio.create_task(run())
-        watcher = asyncio.create_task(self._read_answers(session, task))
+        watcher = (
+            asyncio.create_task(self._read_answers(session, task)) if isinstance(session, _Session) else None
+        )
         try:
             while not task.done():
                 await relay.flush()
@@ -310,7 +346,8 @@ class Daemon:
         except asyncio.CancelledError:
             return  # the client left (Ctrl+C): stop, like the CLI does
         finally:
-            watcher.cancel()
+            if watcher is not None:
+                watcher.cancel()
         await relay.flush()
         await session.send(final_message(report))
         if voice is not None and self.settings.voice.speak_replies:
@@ -333,6 +370,32 @@ class Daemon:
                 detector=silero_detector(),
             )
         return self._voice
+
+    # -------------------------------------------------------------- "Hey Sonu"
+    def _busy(self) -> bool:
+        """SONU is working, talking, or just finished: what the mic hears isn't a wake word."""
+        return self.lock.locked() or self._waking or time.monotonic() < self._quiet_until
+
+    async def _on_wake(self, words: str) -> None:
+        """SONU's name was said: handle it like a press of the key (in its own task, so turning
+        "Hey Sonu" off by voice doesn't cancel the request doing it)."""
+        if self._busy():
+            return
+        self._waking = True
+        self._wake_request_task = asyncio.create_task(self._wake_request(words))
+
+    async def _wake_request(self, words: str) -> None:
+        try:
+            async with self.lock:
+                self._waking = False
+                session = _DesktopSession(Progress(self.notice()))
+                request = {"type": "listen", "confirm": "gui", "heard": words, "env": self._client_env}
+                await self._handle(session, request, os.getpid())
+        except Exception:  # never let a failed request stop the listening
+            logger.exception("a 'Hey Sonu' request failed")
+        finally:
+            self._waking = False
+            self._quiet_until = time.monotonic() + 0.8
 
     def _user_name(self) -> str | None:
         return load_memory(self.paths).name() or self.settings.assistant.user_name
@@ -360,7 +423,7 @@ class Daemon:
             if message.get("type") == "answer" and future is not None and not future.done():
                 future.set_result(message.get("value"))
 
-    def _askers(self, session: _Session, relay: _Relay, mode: str) -> tuple[Any, Any]:
+    def _askers(self, session: _Session | _DesktopSession, relay: _Relay, mode: str) -> tuple[Any, Any]:
         """Confirm/choose through the client's terminal, the desktop picker, or nobody (refuse)."""
         if mode == "terminal":
 
@@ -421,6 +484,7 @@ class Daemon:
             default_terminal=role_defaults.get("terminal"),
             ancestors=lambda: ancestor_pids(pid),  # the terminal the request was typed in
             memory=memory,
+            wake=self.wake,
         )
         conversation, responder = assistant_parts(
             self.settings, self.paths, self.ollama, self.ollama_settings, memory
@@ -434,6 +498,74 @@ class Daemon:
             conversation=conversation,
             responder=responder,
         )
+
+
+class _WakeWord:
+    """Listening for "Hey Sonu" (D47): on only when the user turns it on; remembered across restarts
+    (a file in the voice folder); its state is in ``$XDG_RUNTIME_DIR/sonu/state.json`` for a bar."""
+
+    def __init__(self, daemon: Daemon) -> None:
+        self.daemon = daemon
+        self.file = voice_dir(daemon.paths.data_dir) / "wake-word"
+        self.task: asyncio.Task[None] | None = None
+        self.argv: Sequence[str] = RECORD_ARGV  # the microphone (tests read a file)
+
+    @property
+    def listening(self) -> bool:
+        return self.task is not None and not self.task.done()
+
+    async def set(self, on: bool) -> str | None:
+        if not on:
+            await self.stop()
+            self.file.unlink(missing_ok=True)
+            self._publish()
+            return None
+        if self.listening:
+            return None
+        try:
+            voice = self.daemon.voice_session()
+        except VoiceUnavailable as exc:
+            return f"voice isn't ready: {exc}"
+        if voice.detector is None:
+            return "no speech detector"
+        listener = WakeListener(
+            voice.ears.transcribe,
+            voice.detector,
+            self.daemon._on_wake,
+            busy=self.daemon._busy,
+            hint=lambda: f"Hey Sonu, {voice.hint}",
+            argv=self.argv,
+        )
+        self.task = asyncio.create_task(listener.run())
+        self.task.add_done_callback(self._ended)
+        for _ in range(60):  # the check: audio really arrives from the microphone
+            if listener.heard_frames or self.task.done():
+                break
+            await asyncio.sleep(0.05)
+        if not listener.heard_frames:
+            await self.stop()
+            return "the microphone didn't start (pw-record)"
+        self.file.parent.mkdir(parents=True, exist_ok=True)
+        self.file.write_text("on\n")
+        self._publish()
+        return None
+
+    async def stop(self) -> None:
+        if self.task is not None:
+            self.task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await self.task
+        self.task = None
+
+    def _ended(self, task: asyncio.Task[None]) -> None:
+        if not task.cancelled() and task.exception() is not None:
+            logger.warning("stopped listening for 'Hey Sonu': %s", task.exception())
+        self._publish()
+
+    def _publish(self) -> None:
+        path = getattr(self.daemon, "path", socket_path(self.daemon.env)).parent / "state.json"
+        with contextlib.suppress(OSError):
+            path.write_text(json.dumps({"wake_word": self.listening}) + "\n")
 
 
 async def run_daemon(settings: Settings, paths: SonuPaths, env: Mapping[str, str]) -> None:

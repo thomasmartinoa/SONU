@@ -291,6 +291,8 @@ recording?" is system.status with what ["obs"].
 - "Remember …" is memory.remember: kind alias when they say what an app name means ("when I say \
 VS Code I mean Code OSS": text "VS Code", app "Code OSS"), name for "call me …" / "my name is …", \
 else note. "Forget …" is memory.forget; "what do you remember?" is memory.list.
+- "Listen for Hey Sonu" / "turn on the wake word" is voice.wake with on true; "stop listening for \
+Hey Sonu" / "turn off the wake word" is voice.wake with on false.
 - Reminders and timers are reminders.set; "what reminders do I have?" is reminders.list; \
 cancelling one is reminders.cancel. Screenshots are screen.capture; night light, keeping the \
 screen awake, do-not-disturb, clearing notifications and locking are desktop.shell. "Turn off do \

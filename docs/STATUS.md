@@ -16,7 +16,7 @@ _Last update: 2026-09-28_
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
 | M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
-| M3 Voice | 🚧 part 1 🧪 **push-to-talk**: `sonu listen` → hears (Whisper on the GPU), acts, **says the reply** (Kokoro), medium risk by a spoken yes (#21, [D46](DECISIONS.md)); part 2 "Hey Sonu" next |
+| M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)); next: talk over SONU to stop it |
 | M4 Developer operator · M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -41,8 +41,8 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **79 / 79** on the v10 suite (2026-09-27, the laptop's GPU, ~1.2 s mean planning; power, OBS,
-Spotify and Apple Music added). Pass/fail only. History, including the runs that failed while the prompt wording
+`qwen3.5:4b`: **85 / 85** on the v12 suite (2026-09-28, the laptop's GPU, ~1 s mean planning; one earlier run
+84 / 85). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
@@ -105,8 +105,11 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 2. **M3 — voice** ([D46](DECISIONS.md)): ~~push-to-talk~~ (#21) — tried on the laptop through a virtual microphone
    (a PipeWire null sink with Kokoro speaking into it): "What's my battery?" → "✔ Battery 100%" and the reply spoken;
    "Remember that when I say editor, I mean Visual Studio Code" → stored, reply spoken; ~2 s from the end of speech
-   to the reply. Next: the owner tries it with the real mic and the SONU key; then **"Hey Sonu"** (wake word), talk
-   over SONU to stop it, a listening indicator in the bar.
+   to the reply. **The owner used it with the real mic and the SONU key** (2026-09-28, after #22). ~~"Hey Sonu"~~
+   (#23, opt-in) — tried through the virtual mic with the branch daemon: turned on by a typed request (asked
+   first); "Hey Sonu, what's my battery?" → answered (~2 s after the sentence ended); "I told Sonny the song was
+   great" → ignored; "Hey Sonu." → greeting, then "How is my laptop doing?" → answered; "Hey Sonu, stop listening
+   for Hey Sonu" → off, reply spoken. Next: the owner tries it; talk over SONU to stop it; the activity journal.
 3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
    read back), the prompt writer, GitHub via `gh` (merge after approval).
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
@@ -169,7 +172,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #19 | 2026-09-27 | M2 part 2: natural replies after every request (checked in code), small talk, one conversation ("it", "again"); `[assistant]` settings |
 | #20 | 2026-09-27 | M2 part 3: "remember …" (app aliases, name, notes), "forget …", "what do you remember?"; reminder text must be the user's words; a site given as the browser is ignored; "go to <site>" isn't the browser app |
 | #21 | 2026-09-28 | M3 part 1: push-to-talk voice — `sonu listen`, Whisper (GPU) + Silero VAD + Kokoro, spoken replies, medium risk by a spoken yes (high never), `sonu voice setup/test/status`, `[voice]` settings |
-| #22 | open | Voice: SONU greets you when the key is pressed ("How can I help?", taking turns, prepared in advance) and a desktop notification shows listening → what it heard → the result; `[voice] greet` |
+| #22 | 2026-09-28 | Voice: SONU greets you when the key is pressed ("How can I help?", taking turns, prepared in advance) and a desktop notification shows listening → what it heard → the result; `[voice] greet` |
+| #23 | open | M3 part 2: "Hey Sonu", opt-in (`voice.wake`, asked first, remembered): the name at the start wakes SONU, the rest is the request; `state.json` for a bar; `sonu voice status` shows it; eval suite v12 |
 
 ### Found on real hardware → fixed
 

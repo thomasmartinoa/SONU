@@ -683,3 +683,21 @@ id = "what-do-you-remember"
 request = "what do you remember about me?"
 expect_status = ["done"]
 require_tools = ["memory.list"]
+
+# ---- M3: "Hey Sonu" (v12)
+
+[[case]]
+id = "wake-word-on"
+request = "start listening for hey sonu"
+notes = "The microphone stays on: it asks first (evals approve)."
+expect_status = ["done"]
+require_tools = ["voice.wake"]
+expect_confirmed = ["voice.wake"]
+
+[[case]]
+id = "wake-word-off"
+request = "stop listening for hey sonu"
+notes = "It wasn't on in the eval: nothing to change, and it must not be read as OBS or media."
+expect_status = ["done"]
+require_tools = ["voice.wake"]
+forbid_tools = ["obs.record", "media.control"]

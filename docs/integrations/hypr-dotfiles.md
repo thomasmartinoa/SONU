@@ -59,11 +59,30 @@ hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu prompt"))   -- SONU prompt (NitroSe
 anything risky with a **No-first** yes/no box, shows a pick list when a name matches several apps or windows, and
 shows the verified result as a notification.
 
-In milestone 3 the same key becomes push-to-talk:
+With voice (M3, `sonu voice setup`) the key talks to SONU instead — press it, SONU says "How can I help?", then
+say the request (it stops listening when you stop talking):
 
 ```lua
--- hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen start"))
--- hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen stop"), { release = true })
+hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen"))   -- the SONU key: talk to SONU
+```
+
+**"Hey Sonu"** needs no key: say or type "listen for Hey Sonu" (it asks first) and `sonud` keeps the microphone
+open until you say "stop listening for Hey Sonu". A bar can show it: `sonud` writes
+`$XDG_RUNTIME_DIR/sonu/state.json` (`{"wake_word": true}`) whenever it changes. A Quickshell sketch for the bar (not
+part of the rice; add it yourself if you want it):
+
+```qml
+// A mic icon while SONU listens for "Hey Sonu".
+FileView {
+    id: sonuState
+    path: Quickshell.env("XDG_RUNTIME_DIR") + "/sonu/state.json"
+    watchChanges: true
+    onFileChanged: reload()
+}
+Text {
+    visible: { try { return JSON.parse(sonuState.text()).wake_word } catch (e) { return false } }
+    text: "󰍬"
+}
 ```
 
 ## 4. "Ask SONU" in the `SUPER+SPACE` menu

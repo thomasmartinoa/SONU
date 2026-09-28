@@ -109,7 +109,8 @@ works:
 | "Remember …": what an app name means ("when I say editor I mean Visual Studio Code"), your name ("call me …"), notes; "what do you remember?", "forget …" | ✅ M2 part 3 | a local memory file; aliases feed the app resolver |
 | Activity journal ("what was I doing yesterday?") | 🗺 later (after voice) | local, 30-day retention |
 | Voice, push-to-talk: press the SONU key (`sonu listen`), SONU says "How can I help?", say the request, hear the reply (a notification shows what it heard and did); medium-risk steps by a spoken "yes"; pressing again stops SONU talking | 🧪 M3 part 1 | Whisper large-v3-turbo on the GPU (~0.2 s), Silero VAD for end of speech, Kokoro voice (CPU, ~0.8 s), `pw-record`/`pw-play`; high risk needs the picker ([D46](DECISIONS.md)) |
-| Voice: "Hey Sonu" (wake word), talk over it to stop it | 🗺 M3 part 2 | faster-whisper (GPU) speech-to-text, Kokoro/Piper voice, wake word; high risk never approved by voice alone |
+| Voice: "Hey Sonu" — off until you say "listen for Hey Sonu" (it asks first); "Hey Sonu, open kitty on 2" or "Hey Sonu" then the request; "stop listening for Hey Sonu" | 🧪 M3 part 2 | `sonud` keeps the mic open: Silero VAD finds speech, Whisper checks only its first ~1.8 s for the name at the start; everything else is dropped unheard ([D47](DECISIONS.md)) |
+| Voice: talk over SONU to stop it | 🗺 M3 part 3 | faster-whisper (GPU) speech-to-text, Kokoro/Piper voice, wake word; high risk never approved by voice alone |
 | Claude Code by voice: open it in a folder, type a prompt, `/model sonnet`, write the best prompt from an idea | 🗺 M4 | SONU-owned kitty windows with remote control (only those), screen text read back to confirm |
 | GitHub: list pull requests and checks, merge after approval | 🗺 M4 | `gh` (already signed in) — merging is high risk |
 | Install software by name ("install Spotify") | 🗺 M4.5 | `pacman -Ss` then AUR (`yay`); install through polkit — the password prompt appears only then |

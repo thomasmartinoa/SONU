@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Protocol
 
 from sonu.config.settings import Settings
 from sonu.core.memory import Memory
@@ -25,6 +26,17 @@ TERMINAL_EXEC: dict[str, tuple[str, ...]] = {
     "konsole": ("konsole", "-e"),
     "gnome-terminal": ("gnome-terminal", "--"),
 }
+
+
+class WakeSwitch(Protocol):
+    """ "Hey Sonu" listening, owned by sonud (the tool turns it on/off; None: no daemon)."""
+
+    @property
+    def listening(self) -> bool: ...
+
+    async def set(self, on: bool) -> str | None:
+        """Turn it on or off; a reason when it couldn't be."""
+        ...
 
 
 @dataclass
@@ -56,6 +68,8 @@ class ToolContext:
     now: Callable[[], datetime] = datetime.now
     # OBS Studio's WebSocket server (tests and evals point it at a fake OBS).
     obs: ObsLink = field(default_factory=ObsLink)
+    # "Hey Sonu" listening — only sonud has one (the CLI alone can't keep the microphone open).
+    wake: WakeSwitch | None = None
 
     def learned(self, entry: AppEntry) -> set[str]:
         return self.learned_classes.get(entry.desktop_id, set())
