@@ -205,7 +205,7 @@ Waiting on music in `~/Music`: local music with `mpv`.
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
-| 09-28 | (CI) GitHub's CI had failed on every PR since #16 — first the host-dependent OBS test (fixed in #21), then mypy without numpy (CI doesn't install the voice extra); checks were only run on the laptop, where both passed | a mypy override for numpy; CI's steps reproduced in a clean env on 3.12–3.14; each PR's CI is checked before it's reported ready (#30) |
+| 09-28 | (CI) GitHub's CI had failed on every PR since #16 — first the host-dependent OBS test (fixed in #21), then mypy without numpy (CI doesn't install the voice extra); checks were only run on the laptop, where both passed | a mypy override for numpy; then, on CI's 3.13/3.14 only, a recorder pipe left to the garbage collector ("unclosed transport") — SONU's audio pipes are now closed explicitly; CI's steps reproduced in a clean env on 3.12–3.14 (with ResourceWarnings as errors); each PR's CI is checked before it's reported ready (#30) |
 | 09-28 | (M4) the prompt writer added things never said (prices, a checkout, backups) | its instructions: Requirements are only the user's words; anything missing becomes a question for Claude Code — and the full prompt is always shown before it's sent (#29) |
 | 09-28 | (M4) a multi-line prompt shows in Claude Code as "[Pasted text #1 +4 lines]", not its text | typed = the text or that marker in the input box; sent = it left the input box (#29) |
 | 09-28 | (eval, after a prompt change) "…I mean code oss" was planned with app "code" → "Code - OSS or VSCodium?" | the longer installed app name in the user's words wins (#29) |

@@ -18,6 +18,7 @@ import array
 import asyncio
 import contextlib
 import math
+import os
 from collections.abc import AsyncGenerator, Callable, Sequence
 from dataclasses import dataclass
 
@@ -111,20 +112,32 @@ class AudioError(Exception):
 
 
 async def frames(argv: Sequence[str]) -> AsyncGenerator[bytes, None]:
-    """30 ms frames of 16 kHz mono PCM from a recorder program (``pw-record … -``)."""
-    process = await asyncio.create_subprocess_exec(
-        *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL
+    """30 ms frames of 16 kHz mono PCM from a recorder program (``pw-record … -``).
+
+    The pipe is SONU's own and is closed when the recording stops — found on CI (Python 3.13): a pipe
+    left to the garbage collector after the recorder was stopped surfaced as an "unclosed transport".
+    """
+    loop = asyncio.get_running_loop()
+    read_fd, write_fd = os.pipe()
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *argv, stdout=write_fd, stderr=asyncio.subprocess.DEVNULL
+        )
+    finally:
+        os.close(write_fd)  # only the recorder writes
+    reader = asyncio.StreamReader()
+    transport, _ = await loop.connect_read_pipe(
+        lambda: asyncio.StreamReaderProtocol(reader), os.fdopen(read_fd, "rb", buffering=0)
     )
-    if process.stdout is None:
-        raise AudioError("the recorder has no output")
     try:
         while True:
             try:
-                frame = await process.stdout.readexactly(FRAME_BYTES)
+                frame = await reader.readexactly(FRAME_BYTES)
             except asyncio.IncompleteReadError:
                 return
             yield frame
     finally:
+        transport.close()
         with contextlib.suppress(ProcessLookupError):
             process.terminate()
         await process.wait()
@@ -168,10 +181,12 @@ class Speaker:
         )
         if self._process.stdin is None:
             raise AudioError("the player takes no input")
-        with contextlib.suppress(BrokenPipeError, ConnectionResetError):
-            self._process.stdin.write(samples)
-            await self._process.stdin.drain()
-            self._process.stdin.close()
+        try:
+            with contextlib.suppress(BrokenPipeError, ConnectionResetError):
+                self._process.stdin.write(samples)
+                await self._process.stdin.drain()
+        finally:
+            self._process.stdin.close()  # also when SONU was talked over: no pipe left behind
         code = await self._process.wait()
         stopped = self._stopped
         self._process, self._stopped = None, False
