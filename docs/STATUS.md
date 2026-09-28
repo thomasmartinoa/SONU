@@ -168,12 +168,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #18 | 2026-09-27 | M2 part 1: `sonud` (model kept loaded and warmed, private socket, questions relayed to the client, Ctrl+C cancels), `sonu` as a thin client with a fallback, `sonu daemon install/status/uninstall` |
 | #19 | 2026-09-27 | M2 part 2: natural replies after every request (checked in code), small talk, one conversation ("it", "again"); `[assistant]` settings |
 | #20 | 2026-09-27 | M2 part 3: "remember …" (app aliases, name, notes), "forget …", "what do you remember?"; reminder text must be the user's words; a site given as the browser is ignored; "go to <site>" isn't the browser app |
-| #21 | open | M3 part 1: push-to-talk voice — `sonu listen`, Whisper (GPU) + Silero VAD + Kokoro, spoken replies, medium risk by a spoken yes (high never), `sonu voice setup/test/status`, `[voice]` settings |
+| #21 | 2026-09-28 | M3 part 1: push-to-talk voice — `sonu listen`, Whisper (GPU) + Silero VAD + Kokoro, spoken replies, medium risk by a spoken yes (high never), `sonu voice setup/test/status`, `[voice]` settings |
+| #22 | open | Voice: SONU greets you when the key is pressed ("How can I help?", taking turns, prepared in advance) and a desktop notification shows listening → what it heard → the result; `[voice] greet` |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | Pressed the SONU key after #21 merged: nothing happened. The everyday copy wasn't reinstalled yet (it planned "listen" as a request), and from the key there's no terminal, so nothing showed that SONU was listening | reinstalled with the voice extra; SONU says a greeting and a notification shows each stage (#22) |
 | 09-28 | (voice) `pw-record` wrote an AU header and `pw-play` rejected raw samples ("Format not recognised"); a failing player looked like success | `--raw` for both; the speaker raises when the player fails (#21) |
 | 09-28 | (voice) Ending the recording on loudness cut sentences short — the built-in mic's noise floor is ~450 RMS | Silero VAD decides the end of speech; loudness is only the fallback (#21) |
 | 09-28 | (voice) "open kitty" was heard as "open KIDDI" | the installed apps' names go to Whisper as a hint (#21) |

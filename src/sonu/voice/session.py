@@ -25,6 +25,10 @@ _NO = re.compile(r"\b(no|nope|don't|do not|stop|cancel|wait|never)\b", re.I)
 
 Recorder = Callable[[Endpointing | None, SpeechDetector | None], Awaitable[Utterance]]
 
+# Said when the SONU key is pressed, before listening — taking turns, so it doesn't sound canned.
+# "{name}": the user's name, when SONU knows it (lines with it are skipped otherwise).
+GREETINGS = ("How can I help?", "Yes, {name}?", "What can I do for you?", "I'm listening.", "Yes?")
+
 
 async def _microphone(endpointing: Endpointing | None, detector: SpeechDetector | None) -> Utterance:
     return await record(endpointing, detector=detector)
@@ -44,6 +48,8 @@ class VoiceSession:
     hint: str = "Sonu, workspace"  # words likely to be said: set from the installed apps
     speaker_argv: tuple[str, ...] = ("pw-play",)
     _speaker: Speaker | None = field(default=None, init=False)
+    _spoken: dict[str, bytes] = field(default_factory=dict, init=False)  # greetings, ready to play
+    _greeted: int = field(default=0, init=False)
 
     async def hear(self, endpointing: Endpointing | None = None) -> str:
         """Record until the user stops talking; their words ("" if nothing was said)."""
@@ -52,10 +58,26 @@ class VoiceSession:
             return ""
         return await asyncio.to_thread(self.ears.transcribe, utterance.audio(), self.hint)
 
-    async def say(self, text: str) -> None:
+    def greeting(self, name: str | None = None) -> str:
+        """The next greeting, in turn."""
+        lines = [line.format(name=name) for line in GREETINGS if name or "{name}" not in line]
+        line = lines[self._greeted % len(lines)]
+        self._greeted += 1
+        return line
+
+    async def greet(self, name: str | None = None) -> None:
+        """Say hello when the key is pressed — the cue to start talking (listening starts after it)."""
+        await self.say(self.greeting(name), keep=True)
+
+    async def say(self, text: str, *, keep: bool = False) -> None:
+        """Say ``text``; ``keep``: remember the sound, so saying it again starts at once."""
         if not text.strip():
             return
-        samples = await asyncio.to_thread(self.voice.speak, text)
+        samples = self._spoken.get(text)
+        if samples is None:
+            samples = await asyncio.to_thread(self.voice.speak, text)
+            if keep:
+                self._spoken[text] = samples
         self._speaker = Speaker(self.voice.rate, self.speaker_argv)
         try:
             await self._speaker.play(samples)
@@ -75,7 +97,11 @@ class VoiceSession:
         answer = await self.hear(Endpointing(start_timeout_s=6.0, silence_s=0.7, max_s=6.0))
         return said_yes(answer)
 
-    async def warm_up(self) -> None:
-        """Load both models now, so the first press of the key doesn't wait for them."""
+    async def warm_up(self, name: str | None = None) -> None:
+        """Load both models and prepare the greetings now, so pressing the key answers at once."""
         await asyncio.to_thread(self.ears.load)
         await asyncio.to_thread(self.voice.load)
+        for line in GREETINGS:
+            if name or "{name}" not in line:
+                text = line.format(name=name)
+                self._spoken[text] = await asyncio.to_thread(self.voice.speak, text)

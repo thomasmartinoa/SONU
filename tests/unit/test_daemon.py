@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 
 from sonu.config.paths import SonuPaths
-from sonu.config.settings import AppsSettings, Settings, VerifySettings
-from sonu.daemon.client import parse, try_run
+from sonu.config.settings import AppsSettings, Settings, VerifySettings, VoiceSettings
+from sonu.daemon.client import Notice, parse, try_run
 from sonu.daemon.protocol import decode, encode
 from sonu.daemon.server import KEEP_LOADED, Daemon
 from sonu.testing.fake_apps import write_desktop_files
@@ -86,6 +86,18 @@ class Rig:
     ollama: FakeOllama
     run: Callable[..., Any]
     daemon: Daemon
+    notices: list[tuple[str, str]]
+
+
+class NoticeLog(Notice):
+    """Records what would be shown on the desktop."""
+
+    def __init__(self, shown: list[tuple[str, str]]) -> None:
+        super().__init__(program="")
+        self.shown = shown
+
+    def show(self, title: str, body: str = "", *, seconds: float = 8.0) -> None:
+        self.shown.append((title, body))
 
 
 @pytest.fixture
@@ -121,10 +133,11 @@ async def rig(
         replies = iter(answers or [])
         monkeypatch.setattr(builtins, "input", lambda prompt="": next(replies))
         out = io.StringIO()
-        code = await asyncio.to_thread(try_run, list(argv), out)
+        code = await asyncio.to_thread(try_run, list(argv), out, NoticeLog(notices))
         return code, out.getvalue()
 
-    yield Rig(fake_hypr, ollama, run, daemon)
+    notices: list[tuple[str, str]] = []
+    yield Rig(fake_hypr, ollama, run, daemon, notices)
     serving.cancel()
     await daemon.stop()
 
@@ -224,7 +237,41 @@ async def test_listen_hears_acts_and_says_the_reply(rig: Rig) -> None:
     assert code == 0
     assert out.splitlines()[:2] == ["🎙 Listening…", "You: open kitty on 2"]
     assert "✔ Opened kitty on workspace 2" in out
-    assert voice.said == ["Done, kitty's on 2."]  # the reply, out loud
+    assert voice.said == ["How can I help?", "Done, kitty's on 2."]  # a greeting, then the reply
+    # Found on the laptop: from the SONU key there's no terminal, so the desktop shows each stage.
+    assert rig.notices == [
+        ("🎙 Listening…", "Say what you need"),
+        ("You: open kitty on 2", "Working on it…"),
+        ("SONU", "✔ Opened kitty on workspace 2\n» Done, kitty's on 2.\nDone — every step verified"),
+    ]
+
+
+@pytest.mark.anyio
+async def test_greetings_take_turns_are_kept_and_use_the_name(rig: Rig) -> None:
+    voice = voice_rig(rig, "open kitty on 2")
+    session = rig.daemon._voice
+    assert session is not None
+    await session.warm_up("Martin")
+    assert "Yes, Martin?" in voice.said
+    voice.said.clear()
+    await session.greet("Martin")
+    await session.greet("Martin")
+    assert voice.said == []  # prepared at warm-up: nothing to render when the key is pressed
+    assert [session.greeting(None) for _ in range(5)] == [
+        "I'm listening.",
+        "Yes?",
+        "How can I help?",
+        "What can I do for you?",
+        "I'm listening.",
+    ]
+
+
+@pytest.mark.anyio
+async def test_no_greeting_when_turned_off(rig: Rig) -> None:
+    voice = voice_rig(rig, "open kitty on 2")
+    rig.daemon.settings = rig.daemon.settings.model_copy(update={"voice": VoiceSettings(greet=False)})
+    await rig.run("listen")
+    assert voice.said == ["Done, kitty's on 2."]
 
 
 @pytest.mark.anyio
@@ -232,7 +279,7 @@ async def test_nothing_heard_ends_quietly(rig: Rig) -> None:
     voice = voice_rig(rig)
     _, out = await rig.run("listen")
     assert out.splitlines() == ["🎙 Listening…", "You: (nothing)", "✖ I didn't hear anything"]
-    assert voice.said == []
+    assert voice.said == ["How can I help?"]
 
 
 @pytest.mark.anyio
@@ -240,7 +287,7 @@ async def test_a_medium_risk_step_takes_a_spoken_yes(rig: Rig) -> None:
     voice = voice_rig(rig, "close zen", "yes, go ahead")
     _, out = await rig.run("--confirm", "never", "listen")
     assert "✔ Closed zen" in out
-    assert voice.said[0] == "Should I close zen (workspace 1)? Say yes or no."
+    assert voice.said[1] == "Should I close zen (workspace 1)? Say yes or no."
     assert not rig.fake.windows_of_class("zen")
 
 
@@ -250,3 +297,16 @@ async def test_an_unclear_answer_is_a_no(rig: Rig) -> None:
     _, out = await rig.run("--confirm", "never", "listen")
     assert "Nothing changed — not approved" in out
     assert rig.fake.windows_of_class("zen")
+
+
+def test_notice_updates_one_notification(tmp_path: Path) -> None:
+    program = tmp_path / "notify-send"
+    log = tmp_path / "calls"
+    program.write_text(f'#!/bin/sh\necho "$@" >> {log}\necho 42\n')
+    program.chmod(0o755)
+    notice = Notice(str(program))
+    notice.show("🎙 Listening…", "Say what you need")
+    notice.show("You: --help", "")
+    first, second = log.read_text().splitlines()
+    assert "--replace-id" not in first
+    assert "--replace-id=42" in second and "-- You: --help" in second
