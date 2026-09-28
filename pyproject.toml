@@ -113,6 +113,11 @@ follow_imports = "skip"
 module = ["numpy", "numpy.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# gi (PyGObject) is only in the system Python, which runs SONU's accessibility helper.
+module = ["gi", "gi.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true

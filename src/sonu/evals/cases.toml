@@ -924,3 +924,12 @@ expect_status = ["done"]
 require_tools = ["screen.read"]
 expect_shown = 3
 
+[[case]]
+id = "press-a-button-sonu-doesnt-know"
+request = "press the frobnicate button in kitty"
+notes = "Found on the laptop: an unknown button name went to unsupported instead of letting SONU look."
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+expect_status = ["failed"]
+require_tools = ["screen.press"]
+expect_unsupported = false
+

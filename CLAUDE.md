@@ -69,7 +69,7 @@ src/sonu/
   voice/          audio.py (pw-record/pw-play, end of speech), engines.py (Whisper, Kokoro, Silero), session.py,
                   wake.py ("Hey Sonu")
   verify/ policy/ audit/ llm/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS,
-                  kitty = SONU-owned terminals, claude_code = reading its screen)
+                  kitty = SONU-owned terminals, claude_code = reading its screen, a11y + a11y_helper = AT-SPI)
   testing/        FakeHyprland (simulates dispatch, apps, browsers), FakeOllama, sample apps, scripted planner
   evals/          cases.toml + runner
 tests/unit, tests/integration

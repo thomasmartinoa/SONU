@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 import secrets
+from difflib import SequenceMatcher
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,10 +17,22 @@ from pydantic import BaseModel, ConfigDict, Field
 from sonu.core.screen_reader import ScreenReaderError
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.models import Window
+from sonu.integrations.a11y import Accessibility, AccessibilityError, Control
 from sonu.integrations.kitty import runtime_folder
 from sonu.system.commands import CommandError, ProgramMissing
-from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
+from sonu.tools.base import (
+    Choice,
+    Choices,
+    Effect,
+    Prepared,
+    Risk,
+    StepStatus,
+    Tool,
+    ToolOutcome,
+    outcome_from_checks,
+)
 from sonu.tools.context import ToolContext
+from sonu.tools.grounding import ungrounded_words
 from sonu.tools.targets import WindowTarget, find_windows
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
@@ -124,4 +138,153 @@ class ReadScreen(Tool):
         )
 
 
-SCREEN_TOOLS: tuple[Tool, ...] = (ReadScreen(),)
+# ---------------------------------------------------------------------------- screen.press
+# Buttons whose press can't be taken back: asked like other high-risk steps (by voice: on screen).
+_RISKY = re.compile(
+    r"\b(delete|remove|erase|format|send|submit|post|publish|buy|pay|purchase|order|checkout|confirm|"
+    r"merge|uninstall|install|sign out|log ?out|shut ?down|restart|discard|overwrite|transfer)\b",
+    re.I,
+)
+
+
+# What people add to a button's name ("the home button"); found on the laptop: "home button" didn't
+# match Thunar's "Home".
+_KIND_WORDS = {
+    "the",
+    "a",
+    "button",
+    "buttons",
+    "icon",
+    "tab",
+    "menu",
+    "link",
+    "item",
+    "toggle",
+    "switch",
+    "key",
+    "option",
+}
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in re.split(r"[^a-z0-9]+", text.lower()) if w]
+
+
+def _score(control: Control, wanted: str) -> int:
+    name = control.name.lower().strip()
+    words = [w for w in _words(wanted) if w not in _KIND_WORDS] or _words(wanted)
+    wanted = " ".join(words)
+    if name == wanted or _words(name) == words:
+        return 100
+    if words and _words(name)[: len(words)] == words:
+        return 60
+    if words and all(w in _words(name) for w in words):
+        return 40
+    if SequenceMatcher(None, name, wanted.lower()).ratio() >= 0.8:
+        return 30
+    return 0
+
+
+class PressArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    control: str = Field(min_length=1, max_length=80, description="the button's name, in the user's words")
+    window: WindowTarget | None = Field(default=None, description="the app's window; none: the focused one")
+
+
+class PressControl(Tool):
+    name = "screen.press"
+    description = (
+        "Press a button (or menu, tab, toggle) in an app by its name, through accessibility — no mouse. "
+        "For apps SONU has no other tool for."
+    )
+    risk = Risk.MEDIUM
+    effects = frozenset({Effect.UI_INPUT})
+    Args = PressArgs
+    grounded = ("control",)
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(PressArgs, args)
+        if missing := ungrounded_words(a.control, ctx.user_words or ctx.request_text):
+            return ToolOutcome(
+                StepStatus.FAILED, f"The button must be your words ({', '.join(missing)} isn't)"
+            )
+        target = a.window or WindowTarget(focused=True)
+        match = find_windows(target, snapshot, ctx)
+        if match.problem or not match.windows:
+            return ToolOutcome(StepStatus.FAILED, f"Can't press it: {match.problem or 'no such window'}")
+        window = match.windows[0]
+        if not window.pid:
+            return ToolOutcome(StepStatus.FAILED, f"Can't reach {window.window_class}'s buttons")
+        try:
+            controls = await Accessibility(ctx.system.runner).controls(window.pid)
+        except AccessibilityError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"{window.window_class} {exc}")
+        usable = [c for c in controls if c.enabled and c.action]
+        if choice:
+            picked = [c for c in usable if c.path == choice]
+        else:
+            scored = sorted(
+                ((_score(c, a.control), c) for c in usable), key=lambda i: (-i[0], not i[1].showing)
+            )
+            best = scored[0][0] if scored else 0
+            picked = [c for s, c in scored if s == best and best > 0]
+            showing = [c for c in picked if c.showing]
+            picked = showing or picked
+            # The same button twice (a toolbar and a menu): one is enough if they're alike.
+            if len({(c.name, c.role) for c in picked}) == 1:
+                picked = picked[:1]
+        if not picked:
+            names = ", ".join(dict.fromkeys(c.name for c in usable if c.showing))[:300]
+            # The names come from the app: shown to the user only.
+            return ToolOutcome(
+                StepStatus.FAILED,
+                f"No “{a.control}” in {window.window_class} — it has: {names or 'no buttons it can press'}",
+                private=True,
+            )
+        if len(picked) > 1:
+            options = tuple(Choice(c.label, c.path) for c in picked[:8])
+            question = f"Which “{a.control}” in {window.window_class}?"
+            return ToolOutcome(
+                StepStatus.NEEDS_INPUT, question, question=question, choices=Choices(question, options)
+            )
+        control = picked[0]
+        risky = bool(_RISKY.search(control.name))
+        return Prepared(
+            f"Press {control.label} in {window.window_class}",
+            (window, control),
+            risk=Risk.HIGH if risky else None,
+            spoken=f"press {control.name} in {window.window_class}",
+        )
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        window, control = cast("tuple[Window, Control]", prepared.payload)
+        before = await ctx.desktop.snapshot()
+        try:
+            pressed, was, now = await Accessibility(ctx.system.runner).press(window.pid, control)
+        except AccessibilityError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't press {control.label}: {exc}")
+        after = await ctx.desktop.snapshot()
+        title_then = next((w.title for w in before.windows if w.address == window.address), None)
+        title_now = next((w.title for w in after.windows if w.address == window.address), None)
+        changed = was != now or title_then != title_now or before.active_address != after.active_address
+        checks = [
+            Check(f"{window.window_class} took the press", pressed),
+            Check("something changed", changed, {"window_title_changed": title_then != title_now}),
+        ]
+        if pressed and not changed:
+            return ToolOutcome(
+                StepStatus.UNVERIFIED,
+                f"Pressed {control.label} in {window.window_class}, but couldn't see anything change",
+                tuple(checks),
+            )
+        return outcome_from_checks(
+            checks,
+            f"Pressed {control.label} in {window.window_class}",
+            f"{window.window_class} didn't take the press on {control.label}",
+        )
+
+
+SCREEN_TOOLS: tuple[Tool, ...] = (ReadScreen(), PressControl())

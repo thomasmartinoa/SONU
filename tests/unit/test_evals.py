@@ -147,6 +147,9 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "read-a-window-on-another-workspace": steps(
         ("screen.read", {"question": "what is open in zen?", "window": {"app": "zen"}})
     ),
+    "press-a-button-sonu-doesnt-know": steps(
+        ("screen.press", {"control": "frobnicate", "window": {"app": "kitty"}})
+    ),
     "install-an-app": steps(("packages.install", {"name": "vlc"})),
     "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
     "install-already-there": steps(("packages.install", {"name": "kitty"})),

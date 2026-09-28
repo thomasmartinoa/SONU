@@ -49,6 +49,7 @@ ALL_PROGRAMS = frozenset(
         "pacman",
         "yay",
         "pkexec",
+        "python3",
     }
 )
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -172,6 +173,10 @@ class FakeSystem:
     )
     installed_packages: dict[str, str] = field(default_factory=lambda: {"kitty": "0.49.1-1"})
     polkit_answer: str = "allow"  # "dismiss": the user cancels the system's password prompt
+    # Accessibility (AT-SPI through SONU's helper): pid → the app's controls, as the helper reports
+    # them; "then" (optional) is the control's name after a press (Play → Pause).
+    a11y_apps: dict[int, list[dict[str, object]]] = field(default_factory=dict)
+    presses: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.kitty.on_run = self.run_in_terminal
@@ -256,16 +261,41 @@ class FakeSystem:
     ) -> CommandResult:
         args = tuple(argv)
         self.last_input = input_bytes
-        if args[0] not in self.installed:
+        program = Path(args[0]).name  # "/usr/bin/python3" → python3
+        if program not in self.installed:
             raise ProgramMissing(args[0])
         if args[0] == "bluetoothctl" and not self.bluetooth_service:
             raise CommandError(f"bluetoothctl didn't finish within {timeout_s:.0f}s")
         self.calls.append(args)
-        handler = getattr(self, "_" + args[0].replace("-", "_"))
+        handler = getattr(self, "_" + program.replace("-", "_"))
         code, out, err = handler(list(args[1:]))
         return CommandResult(args, code, out, err)
 
     # ------------------------------------------------------------------ programs
+    def _python3(self, args: list[str]) -> tuple[int, str, str]:
+        """SONU's accessibility helper (a11y_helper.py) on the fake apps."""
+        command, rest = args[1], args[2:]
+        controls = self.a11y_apps.get(int(rest[0])) if rest else None
+        if controls is None:
+            return 0, json.dumps({"error": "not-exposed"}), ""
+        if command == "controls":
+            shown = [{k: v for k, v in c.items() if k != "then"} for c in controls]
+            return 0, json.dumps({"app": "fake", "controls": shown}), ""
+        path, name, action = rest[1], rest[2], rest[3]
+        control = next((c for c in controls if c["path"] == path), None)
+        if control is None or control["name"] != name:
+            return 0, json.dumps({"error": "moved"}), ""
+        before = {"name": name, "pressed": bool(control.get("pressed"))}
+        self.presses.append(f"{name}:{action}")
+        control["name"] = control.get("then", name)
+        return (
+            0,
+            json.dumps(
+                {"pressed": True, "before": before, "after": {"name": control["name"], "pressed": False}}
+            ),
+            "",
+        )
+
     def _pacman(self, args: list[str]) -> tuple[int, str, str]:
         if args[0] == "-Q":
             version = self.installed_packages.get(args[1])

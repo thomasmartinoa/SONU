@@ -19,7 +19,7 @@ _Last update: 2026-09-28_
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
 | M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)) |
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
-| M6 Screen control | 🚧 part 1 🧪 **reading the screen** with the local vision model (#33, [D55](DECISIONS.md)); next: pressing buttons through accessibility, then vision + input |
+| M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); next: vision + input where nothing else works |
 | M5 Connect | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -44,7 +44,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **110 / 110** twice on the v19 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
+`qwen3.5:4b`: **111 / 111** twice on the v20 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
 complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -146,7 +146,12 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    described; "what is open in zen?" (Zen on another workspace) → shown, then read; 1.2 s per look (9 s the first
    time); the picture deleted after. Next: **part 2, pressing buttons by name through accessibility (AT-SPI)** — the
    accessibility bus is off on the laptop (`org.a11y.Status IsEnabled = false`), so browsers and Electron apps don't
-   expose their buttons yet; turning it on is the owner's call. Then part 3: vision + input where nothing else works.
+   expose their buttons yet; turning it on is the owner's call. ~~Part 2, pressing buttons~~ (#34) — the owner said
+   yes to accessibility (2026-09-28): `org.a11y.Status IsEnabled` → true, saved as gsettings
+   `org.gnome.desktop.interface toolkit-accessibility true` (off again: `gsettings set org.gnome.desktop.interface
+   toolkit-accessibility false`); apps pick it up when they start. On the laptop: Thunar exposed 60 named controls in
+   0.05 s; "press the home button in thunar" → asked, pressed, verified (its title /tmp → home); "press the frobnicate
+   button" → "No “frobnicate button” in thunar — it has: Open Parent, Home, …". Next: part 3, vision + input.
 5. **M5 — connect** (cloud models opt-in, MCP) and **M6 — screen control** (vision model + input, opt-in, high risk).
 
 Waiting on music in `~/Music`: local music with `mpv`.
@@ -217,12 +222,16 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #30 | 2026-09-28 | CI green again: mypy knows numpy is optional (the voice extra); main's CI had failed since #16 (an OBS test that read the host, fixed in #21) and #21 (numpy) — every CI step reproduced locally on 3.12–3.14 |
 | #31 | 2026-09-28 | M4 part 3: GitHub through `gh` — "what are my open pull requests?" (with checks), "merge the pull request" (SONU finds it; never when a draft, conflicting, failing or still running; high risk; done only when GitHub says merged); eval suite v17 (104) |
 | #32 | 2026-09-28 | M4.5: "install <app>" — official repos first, then the AUR (with a warning); SONU picks or asks (installed ones marked); high risk; installed in a SONU window with the system's own password prompt (pkexec); done when `pacman -Q` shows it; eval suite v18 (107) |
-| #33 | open | M6 part 1: reading the screen — "what's on my screen?", "read the error in this window", "what is open in zen?" (shown first if hidden) with the local vision model only; the answer private, read out as-is by voice; replies never promise after a failure; eval suite v19 (110) |
+| #33 | 2026-09-28 | M6 part 1: reading the screen — "what's on my screen?", "read the error in this window", "what is open in zen?" (shown first if hidden) with the local vision model only; the answer private, read out as-is by voice; replies never promise after a failure; eval suite v19 (110) |
+| #34 | open | M6 part 2: "press <button> in <app>" through accessibility (AT-SPI, the system Python's bindings; no mouse) — asked (high risk for delete/send/buy …), checked by what changed; invented app names sent back; eval suite v20 (111) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (M6) "press the home button in thunar" → control "home button"; Thunar's is "Home" | words like button/icon/tab/menu are ignored when matching (#34) |
+| 09-28 | (M6) "press the frobnicate button in thunar" → listed as unsupported, and the reply said "I pressed Back in Thunar" (the request before) | a press/click part in unsupported is sent back to screen.press; replies may not claim pressed/clicked/typed without a result line (#34) |
+| 09-28 | (evals, main too) "…the browser on 2…" planned as "firefox" (not installed, not said) — 3/3 after weeks of passing | an app name that isn't the user's word (roles like browser/terminal aside) is sent back (#34) |
 | 09-28 | (M6) "what is open in zen?" with Zen on another workspace: planned as only a read (refused: not on screen) or only a focus (never answered); the reply promised "I'll get it onto your screen" | screen.read shows the window itself, then reads it; after a failure a reply may not promise to act (#33) |
 | 09-28 | (M4.5) `pacman -Ss spotify` lists alphabetically — gst-plugin-spotify before spotify-launcher | SONU ranks: the name said, names starting with it, all words, descriptions; the AUR by votes (#32) |
 | 09-28 | (M4.5) `pacman -Q code` answers "visual-studio-code-bin" — the package providing it | "code is already there — visual-studio-code-bin provides it"; installed options are marked in the list (#32) |

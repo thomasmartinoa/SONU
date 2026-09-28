@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v19, 110 cases)
+## The cases (v20, 111 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -113,6 +113,8 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-28 | `qwen3.5:4b` | v18: three install cases (an app; "obs studio" in the user's words; already installed); `complex-with-an-unsupported-part` now orders a pizza (installing is possible) | **107 / 107** twice | — |
 | 2026-09-28 | `qwen3.5:4b` | v19: reading the screen (the screen; this window; Zen on another workspace — found on the laptop) with a stand-in vision model; a rule "focus it first, then read" | **108 / 110** | the rule broke `three-step-setup` (partial), and the model still planned only the read; the rule was dropped and `screen.read` now shows the window itself |
 | 2026-09-28 | `qwen3.5:4b` | v19 without the rule | **110 / 110** twice | — |
+| 2026-09-28 | `qwen3.5:4b` | v20: + `press-a-button-sonu-doesnt-know`; a rule for screen.press | **109 / 111** | `three-step-setup` ("the browser" → "firefox") and `maximize-this-window` — then `three-step-setup` failed on **main** too, 3/3: the model had drifted; the rule was dropped, and an app name that isn't the user's word is now sent back in code |
+| 2026-09-28 | `qwen3.5:4b` | v20 with that check (and a sent-back unsupported "press …") | **111 / 111** twice | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

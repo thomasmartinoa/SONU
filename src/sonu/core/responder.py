@@ -106,7 +106,8 @@ def _plain(report: TaskReport) -> str:
 # Actions that matter too much to claim unless SONU's own results say so. Found on real hardware: "merge
 # the pull request in SONU" was planned as only listing it, and the reply said "I merged PR #31".
 _CLAIMS = re.compile(
-    r"\b(merged|deleted|removed|installed|uninstalled|sent|closed|shut (?:it )?down|restarted|rebooted|"
+    r"\b(merged|deleted|removed|installed|uninstalled|sent|closed|pressed|clicked|typed|shut (?:it )?down|"
+    r"restarted|rebooted|"
     r"locked|suspended|logged out|bought|paid|published|pushed|went live)\b",
     re.I,
 )
