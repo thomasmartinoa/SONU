@@ -198,12 +198,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #26 | 2026-09-28 | Complex requests: nine multi-step eval cases (suite v14, 95 cases); a "play …" part listed as unsupported is sent back to the model; "his sonu" is the name |
 | #27 | 2026-09-28 | Voice: talk over SONU to stop it — its own PipeWire echo canceller (WebRTC) while sonud runs; `[voice] barge_in` |
 | #28 | 2026-09-28 | M4 part 1: make folders; Claude Code in SONU-owned terminals (kitty remote control over a private socket) — open (asks to trust a folder), type the user's words (asks), `/model` for this session, what it's doing; eval suite v15 (100) |
-| #29 | open | M4 part 2: the prompt writer — an idea → a clear prompt (the local model), shown in full, asked (by voice: shown on screen, a short question), sent as one paste; the user's longer app name wins in aliases; eval suite v16 (101) |
+| #29 | 2026-09-28 | M4 part 2: the prompt writer — an idea → a clear prompt (the local model), shown in full, asked (by voice: shown on screen, a short question), sent as one paste; the user's longer app name wins in aliases; eval suite v16 (101) |
+| #30 | open | CI green again: mypy knows numpy is optional (the voice extra); main's CI had failed since #16 (an OBS test that read the host, fixed in #21) and #21 (numpy) — every CI step reproduced locally on 3.12–3.14 |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (CI) GitHub's CI had failed on every PR since #16 — first the host-dependent OBS test (fixed in #21), then mypy without numpy (CI doesn't install the voice extra); checks were only run on the laptop, where both passed | a mypy override for numpy; then, on CI's 3.13/3.14 only, a recorder pipe left to the garbage collector ("unclosed transport") — SONU's audio pipes are now closed explicitly; CI's steps reproduced in a clean env on 3.12–3.14 (with ResourceWarnings as errors); each PR's CI is checked before it's reported ready (#30) |
 | 09-28 | (M4) the prompt writer added things never said (prices, a checkout, backups) | its instructions: Requirements are only the user's words; anything missing becomes a question for Claude Code — and the full prompt is always shown before it's sent (#29) |
 | 09-28 | (M4) a multi-line prompt shows in Claude Code as "[Pasted text #1 +4 lines]", not its text | typed = the text or that marker in the input box; sent = it left the input box (#29) |
 | 09-28 | (eval, after a prompt change) "…I mean code oss" was planned with app "code" → "Code - OSS or VSCodium?" | the longer installed app name in the user's words wins (#29) |

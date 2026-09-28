@@ -340,7 +340,7 @@ async def test_hey_sonu_turned_on_hears_acts_and_is_remembered(rig: Rig, tmp_pat
     rig.daemon.wake.argv = (
         "sh",
         "-c",
-        f"head -c 960 /dev/zero; while [ ! -e {go} ]; do sleep 0.05; done; cat {mic}; sleep 30",
+        f"head -c 960 /dev/zero; while [ ! -e {go} ]; do sleep 0.05; done; cat {mic}; exec sleep 30",
     )
 
     code, out = await rig.run(

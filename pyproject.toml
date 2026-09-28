@@ -107,6 +107,12 @@ module = ["faster_whisper", "faster_whisper.*", "kokoro_onnx", "kokoro_onnx.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
+[[tool.mypy.overrides]]
+# numpy comes only with the optional voice extra; CI installs without it (found on CI: every run since
+# #21 failed here). With the extra installed, its own types are used.
+module = ["numpy", "numpy.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
