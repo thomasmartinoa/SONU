@@ -701,3 +701,11 @@ notes = "It wasn't on in the eval: nothing to change, and it must not be read as
 expect_status = ["done"]
 require_tools = ["voice.wake"]
 forbid_tools = ["obs.record", "media.control"]
+
+[[case]]
+id = "wake-word-misheard"
+request = "Listen for his own."
+notes = "Found on the laptop: the owner's 'listen for Hey Sonu' was heard as this; the model asked 'did you mean…?'."
+expect_status = ["done"]
+require_tools = ["voice.wake"]
+expect_confirmed = ["voice.wake"]

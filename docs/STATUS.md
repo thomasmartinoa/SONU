@@ -16,7 +16,7 @@ _Last update: 2026-09-28_
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
 | M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
-| M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)); next: talk over SONU to stop it |
+| M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); next: talk over SONU to stop it |
 | M4 Developer operator · M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -41,8 +41,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **85 / 85** on the v12 suite (2026-09-28, the laptop's GPU, ~1 s mean planning; one earlier run
-84 / 85). Pass/fail only. History, including the runs that failed while the prompt wording
+`qwen3.5:4b`: **86 / 86** twice on the v13 suite (2026-09-28, the laptop's GPU, ~1.2 s mean planning). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
@@ -110,7 +109,10 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    first); "Hey Sonu, what's my battery?" → answered (~2 s after the sentence ended); "I told Sonny the song was
    great" → ignored; "Hey Sonu." → greeting, then "How is my laptop doing?" → answered; "Hey Sonu, stop listening
    for Hey Sonu" → off, reply spoken. The owner's first try (the key): the name was misheard every time → #24.
-   Next: the owner tries again; talk over SONU to stop it; the activity journal.
+   After #24 the owner: "it's working perfectly" — asked for a conversation flow (no "Hey Sonu" before every
+   request) and better accuracy → #25: SONU keeps listening ~6 s after each reply (tried through the virtual mic:
+   battery → laptop health → "thank you" → "You're welcome.", one key press); `sonu voice check` measures the
+   speech models on the owner's own voice. Next: the owner runs `sonu voice check`; talk over SONU to stop it.
 3. **M4 — developer operator**: folders and files, SONU-owned kitty windows (Claude Code: open, type, `/model`,
    read back), the prompt writer, GitHub via `gh` (merge after approval).
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
@@ -175,12 +177,16 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #21 | 2026-09-28 | M3 part 1: push-to-talk voice — `sonu listen`, Whisper (GPU) + Silero VAD + Kokoro, spoken replies, medium risk by a spoken yes (high never), `sonu voice setup/test/status`, `[voice]` settings |
 | #22 | 2026-09-28 | Voice: SONU greets you when the key is pressed ("How can I help?", taking turns, prepared in advance) and a desktop notification shows listening → what it heard → the result; `[voice] greet` |
 | #23 | 2026-09-28 | M3 part 2: "Hey Sonu", opt-in (`voice.wake`, asked first, remembered): the name at the start wakes SONU, the rest is the request; `state.json` for a bar; `sonu voice status` shows it; eval suite v12 |
-| #24 | open | Voice accuracy from the owner's first real use: a misheard name after a greeting ("Hey Soin", "He Sonu") is SONU's name; "yes"/"no" in Whisper's hint; beam size 5; a question isn't shown twice |
+| #24 | 2026-09-28 | Voice accuracy from the owner's first real use: a misheard name after a greeting ("Hey Soin", "He Sonu") is SONU's name; "yes"/"no" in Whisper's hint; beam size 5; a question isn't shown twice |
+| #25 | open | Voice: a conversation (SONU keeps listening ~6 s after each reply; `[voice] follow_up_s`); `sonu voice check` (the owner's voice through each speech model, scored); "HeySanu" as one word; eval suite v13 (86) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (voice) after one request the owner had to say "Hey Sonu" again for the next | SONU keeps listening ~6 s after each reply; "thanks" / "that's all" / silence ends it (#25) |
+| 09-28 | (voice) "listen for Hey Sonu" was heard as "Listen for his own" (twice) | the model now plans it as the wake word (eval `wake-word-misheard`); a `sonu voice check` to measure models on the owner's voice (#25) |
+| 09-28 | (eval, after a prompt change) "what do you remember about me?" → reminders.list | "…, not reminders.list" in the rule (#25) |
 | 09-28 | (voice, the owner's own voice) "listen for Hey Sonu" was heard as "…Hey Sovenue", "…Hey Soinu", "…He Sonu", "…Hey Soenu", "…Hey Soin"; the model asked "did you mean Hey Sonu?" each time | after a greeting, a word close to "Sonu" is the name ("Sonny", "son", "sunny" aren't) — for the key and for "Hey Sonu"; Whisper beam size 5 (+15 ms) (#24) |
 | 09-28 | (voice) the answer "yes" was heard as "Peace" | "Yes. No." in Whisper's hint (#24) |
 | 09-28 | A question ("Did you mean …?") was shown twice, in the terminal and the notification | the planner's line is left out when the reply is the same (#24) |

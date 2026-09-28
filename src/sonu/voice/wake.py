@@ -51,9 +51,14 @@ def sounds_like_sonu(word: str) -> bool:
     return SequenceMatcher(None, w, "sonu").ratio() >= CLOSE
 
 
+# Whisper sometimes writes the two words as one: "HeySanu", "HiSonu".
+_JOINED = re.compile(r"\b(?:Hey|Hi|Hay)(S[a-z']+)\b")
+
+
 def fix_name(text: str) -> str:
     """SONU's name as Whisper misheard it, after a greeting, written right: "Listen for Hey Soin" →
     "Listen for Hey Sonu". Other words are left alone."""
+    text = _JOINED.sub(lambda m: "Hey Sonu" if sounds_like_sonu(m.group(1)) else m.group(0), text)
     return _CALLED.sub(lambda m: f"Hey{m.group(1)}Sonu" if sounds_like_sonu(m.group(2)) else m.group(0), text)
 
 

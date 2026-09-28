@@ -30,7 +30,7 @@ def voice_setup(ctx: typer.Context) -> None:
     if not voice_installed():
         typer.echo(
             "✖ The voice extra isn't installed. Install SONU with it:\n"
-            "  uv tool install --reinstall --from ~/dev_works/SONU 'sonu[voice]'",
+            '  uv tool install --reinstall "sonu[voice] @ $HOME/dev_works/SONU"',
             err=True,
         )
         raise typer.Exit(code=1)
@@ -99,3 +99,95 @@ def voice_status(ctx: typer.Context) -> None:
     if not all(ok for _, ok in rows):
         typer.echo("→ sonu voice setup")
         raise typer.Exit(code=1)
+
+
+@app.command("check")
+def voice_check(
+    ctx: typer.Context,
+    model: list[str] = typer.Option(  # noqa: B008
+        ["large-v3-turbo", "large-v3"], "--model", "-m", help="Speech models to compare (repeatable)."
+    ),
+) -> None:
+    """Read ten short requests aloud; SONU shows how well each speech model hears you. Nothing is kept."""
+    import gc
+    import os
+    import time
+
+    from sonu.daemon.server import speech_hint
+    from sonu.desktop.apps.catalog import AppCatalog
+    from sonu.voice.accuracy import SENTENCES, Score, word_errors
+    from sonu.voice.audio import Endpointing, record
+    from sonu.voice.engines import WhisperEars, silero_detector
+
+    state = get_state(ctx)
+    if not voice_installed():
+        typer.echo("✖ The voice extra isn't installed — see `sonu voice setup`", err=True)
+        raise typer.Exit(code=1)
+    if (voice_dir(state.paths.data_dir) / "wake-word").exists():
+        typer.echo(
+            "✖ 'Hey Sonu' is on, so SONU would act on what you read. Say “stop listening for Hey Sonu” "
+            "first (and turn it on again after).",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    hint = speech_hint(AppCatalog.load(os.environ))
+    detector = silero_detector()
+    typer.echo("Read each line aloud, the way you talk to SONU. Recording stops when you stop talking.\n")
+    recordings: list[tuple[str, bytes]] = []
+    for number, sentence in enumerate(SENTENCES, 1):
+        typer.echo(f"{number:>2}/{len(SENTENCES)}  🎙 Say: “{sentence}”")
+        utterance = asyncio.run(record(Endpointing(start_timeout_s=8.0), detector=detector))
+        if utterance.spoke:
+            recordings.append((sentence, utterance.audio()))
+        else:
+            typer.echo("        (nothing heard — skipped)")
+    if not recordings:
+        typer.echo("✖ Nothing was heard — is the right microphone selected?", err=True)
+        raise typer.Exit(code=1)
+
+    scores: list[Score] = []
+    for name in model:
+        typer.echo(f"\n… listening back with {name} (the first time, it downloads the model)")
+        ears = WhisperEars(name, state.settings.voice.device)
+        try:
+            ears.load()
+        except VoiceUnavailable as exc:
+            typer.echo(f"✖ {exc}", err=True)
+            continue
+        score = Score(name)
+        for sentence, audio in recordings:
+            started = time.perf_counter()
+            heard = ears.transcribe(audio, hint)
+            score.add(sentence, heard, time.perf_counter() - started)
+        scores.append(score)
+        del ears
+        gc.collect()  # one model on the GPU at a time
+
+    typer.echo("")
+    for index, (sentence, _) in enumerate(recordings):
+        typer.echo(f"“{sentence}”")
+        for score in scores:
+            heard = score.heard[index]
+            mark = "✔" if word_errors(sentence, heard) == 0 else "✖"
+            typer.echo(f"   {mark} {score.model:<16} {heard}")
+    typer.echo("")
+    for score in scores:
+        typer.echo(
+            f"{score.model:<16} {score.accuracy:.0%} of words right ({score.errors} wrong of {score.total}), "
+            f"{score.mean_seconds:.2f} s per request"
+        )
+    best = max(scores, key=lambda s: (s.accuracy, -s.mean_seconds), default=None)
+    current = state.settings.voice.stt_model
+    if (
+        best is not None
+        and best.model != current
+        and best.accuracy > next((s.accuracy for s in scores if s.model == current), 0.0)
+    ):
+        typer.echo(
+            f"\n→ {best.model} hears you best. To use it, put this in {state.paths.config_file}:\n"
+            f'    [voice]\n    stt_model = "{best.model}"\n'
+            "  then: systemctl --user restart sonud"
+        )
+    elif best is not None:
+        typer.echo(f"\n→ {current} (in use now) hears you as well as any of these.")
+    typer.echo("The recordings were only in memory and are gone now.")

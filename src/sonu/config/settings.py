@@ -109,6 +109,8 @@ class VoiceSettings(_Section):
     speak_replies: bool = True
     # Say "How can I help?" (or similar) when the SONU key is pressed, then listen.
     greet: bool = True
+    # After answering, keep listening this many seconds for a follow-up (no key, no "Hey Sonu"); 0: off.
+    follow_up_s: float = Field(default=6.0, ge=0, le=30)
 
 
 class AssistantSettings(_Section):
@@ -244,4 +246,5 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # speed = 1.0
 # speak_replies = true
 # greet = true                   # "How can I help?" when the key is pressed
+# follow_up_s = 6.0              # keep listening after a reply for the next request (0: off)
 """
