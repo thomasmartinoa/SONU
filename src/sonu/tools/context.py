@@ -10,6 +10,7 @@ from typing import Protocol
 from sonu.config.settings import Settings
 from sonu.core.memory import Memory
 from sonu.core.prompt_writer import PromptWriter
+from sonu.core.screen_reader import ScreenReader
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
@@ -78,6 +79,8 @@ class ToolContext:
     task_folder: Path | None = None
     # Writes a prompt for Claude Code from the user's idea (the local model); None: not available.
     writer: PromptWriter | None = None
+    # Reads the screen with the local vision model (M6); None: not available.
+    reader: ScreenReader | None = None
 
     def sonu_terminals(self) -> SonuTerminals:
         if self.terminals is None:

@@ -1,0 +1,154 @@
+"""Reading the screen (M6 part 1): the local vision model only, visible windows only, the picture
+deleted after, the answer shown to the user but kept away from SONU's models."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from sonu.config.settings import Settings, VerifySettings
+from sonu.core.conversation import results_of
+from sonu.core.engine import Engine
+from sonu.core.report import TaskReport
+from sonu.core.screen_reader import ScreenReader, is_local
+from sonu.daemon.server import spoken_reply
+from sonu.desktop.apps import AppCatalog, AppResolver
+from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.llm.chat import ChatMessage, ChatResult
+from sonu.policy import Policy
+from sonu.system import SystemControl
+from sonu.testing.fake_apps import write_desktop_files
+from sonu.testing.fake_hyprland import FakeHyprland, make_window
+from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
+from sonu.testing.fake_system import FakeSystem
+from sonu.tools.context import ToolContext
+from sonu.tools.registry import ToolRegistry
+
+
+class Sees:
+    """A vision model that answers one thing and records what it was shown."""
+
+    name = "fake-vision"
+
+    def __init__(self, answer: str = "The error says: permission denied for /etc/hosts.") -> None:
+        self.answer, self.shown = answer, []  # type: ignore[var-annotated]
+
+    async def complete_text(
+        self, messages: list[ChatMessage], *, temperature: float, max_tokens: int
+    ) -> ChatResult:
+        self.shown.append(messages)
+        return ChatResult(self.answer, self.name, 0.1)
+
+
+@dataclass
+class Rig:
+    fake: FakeHyprland
+    system: FakeSystem
+    ctx: ToolContext
+    model: Sees
+
+    async def run(self, request: str, *steps: tuple[str, dict[str, Any]]) -> TaskReport:
+        engine = Engine(
+            planner=ScriptedPlanner({request: steps_plan(*steps)}),
+            registry=ToolRegistry(),
+            ctx=self.ctx,
+            policy=Policy("confirm-risky"),
+        )
+
+        async def refuse(request: object) -> bool:
+            raise AssertionError("reading the screen never asks")
+
+        return await engine.run(request, confirm=refuse)
+
+
+@pytest.fixture
+async def rig(fake_hypr: FakeHyprland, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Rig]:
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "run"))
+    kitty = make_window("0xa1", "kitty", "zsh", workspace_id=1)
+    kitty["at"], kitty["size"] = [10, 40], [800, 600]
+    fake_hypr.windows += [kitty, make_window("0xb2", "zen", "Zen Browser", workspace_id=2)]
+    fake_hypr.active_address = "0xa1"
+    write_desktop_files(tmp_path / "share" / "applications")
+    env = {
+        "HOME": str(tmp_path),
+        "XDG_DATA_HOME": str(tmp_path / "share"),
+        "XDG_DATA_DIRS": str(tmp_path / "x"),
+    }
+    system = FakeSystem()
+    model = Sees()
+    ctx = ToolContext(
+        await HyprlandDesktop.connect(fake_hypr.instance),
+        AppResolver(AppCatalog.load(env, which=lambda name: f"/usr/bin/{name}")),
+        Settings(verify=VerifySettings(timeout_s=0.5)),
+        which=lambda name: f"/usr/bin/{name}",
+        system=SystemControl(system, home=tmp_path),
+        reader=ScreenReader(model, "http://127.0.0.1:11434"),
+    )
+    yield Rig(fake_hypr, system, ctx, model)
+
+
+def lines(report: TaskReport) -> list[str]:
+    return [record.outcome.summary for record in report.steps]
+
+
+@pytest.mark.anyio
+async def test_read_this_window(rig: Rig) -> None:
+    request = "what does the error in this window say?"
+    report = await rig.run(request, ("screen.read", {"question": request, "window": {"focused": True}}))
+    assert report.status == "done"
+    assert lines(report) == ["The error says: permission denied for /etc/hosts."]
+    [call] = rig.system.calls
+    assert call[:3] == ("grim", "-g", "10,40 800x600")  # just that window
+    [messages] = rig.model.shown
+    assert messages[-1].images and messages[-1].content == f"This is the kitty window. {request}"
+    assert not await asyncio.to_thread(Path(call[-1]).exists)  # the picture is gone once it's read
+    # From the screen: private — never in what SONU's reply writer or planner gets.
+    assert report.steps[0].outcome.private and "permission denied" not in " ".join(results_of(report))
+
+
+@pytest.mark.anyio
+async def test_the_whole_screen(rig: Rig) -> None:
+    report = await rig.run("what's on my screen?", ("screen.read", {"question": "what's on my screen?"}))
+    assert report.status == "done" and rig.system.calls[0][:2] == ("grim", str(rig.system.calls[0][1]))
+    assert rig.model.shown[0][-1].content == "This is the user's screen. what's on my screen?"
+
+
+@pytest.mark.anyio
+async def test_a_window_on_another_workspace_is_shown_then_read(rig: Rig) -> None:
+    # Found on real hardware: "what is open in zen?" (Zen on another workspace) was planned as only a
+    # read, which failed, or only a focus, which never answered.
+    report = await rig.run(
+        "what does zen show?", ("screen.read", {"question": "what does zen show?", "window": {"app": "zen"}})
+    )
+    assert report.status == "done", lines(report)
+    assert report.steps[0].description == "Show zen (workspace 2) and look at it"
+    assert rig.fake.active_workspace == 2 and rig.model.shown[0][-1].content.startswith(
+        "This is the zen window."
+    )
+
+
+@pytest.mark.anyio
+async def test_only_a_model_on_this_laptop_sees_the_screen(rig: Rig) -> None:
+    rig.ctx.reader = ScreenReader(rig.model, "http://192.168.1.20:11434")
+    report = await rig.run("what's on my screen?", ("screen.read", {"question": "what's on my screen?"}))
+    assert report.status == "failed" and "only read by a model on this laptop" in lines(report)[0]
+    assert rig.model.shown == []
+
+
+def test_is_local() -> None:
+    assert (
+        is_local("http://127.0.0.1:11434") and is_local("http://localhost:11434") and is_local("[::1]:11434")
+    )
+    assert not is_local("http://192.168.1.20:11434") and not is_local("https://ollama.example.com")
+
+
+@pytest.mark.anyio
+async def test_by_voice_the_screen_answer_is_read_out_as_is(rig: Rig) -> None:
+    report = await rig.run("what's on my screen?", ("screen.read", {"question": "what's on my screen?"}))
+    assert report.reply == ""  # no model rewrote it
+    assert spoken_reply(report) == "The error says: permission denied for /etc/hosts."

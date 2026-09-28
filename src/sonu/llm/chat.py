@@ -19,8 +19,11 @@ Role = Literal["system", "user", "assistant"]
 class ChatMessage:
     role: Role
     content: str
+    images: tuple[str, ...] = ()  # base64 pictures (a screenshot for the vision model)
 
-    def as_dict(self) -> dict[str, str]:
+    def as_dict(self) -> dict[str, Any]:
+        if self.images:
+            return {"role": self.role, "content": self.content, "images": list(self.images)}
         return {"role": self.role, "content": self.content}
 
 

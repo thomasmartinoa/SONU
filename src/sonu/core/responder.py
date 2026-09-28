@@ -113,6 +113,11 @@ _CLAIMS = re.compile(
 _NEGATED = re.compile(r"(?:\bnot|n't|\bnever|\bno)\W+(?:\w+\W+){0,2}$", re.I)
 
 
+# After a failure, a reply that promises to act ("I'll get it onto your screen") promises what SONU
+# won't do on its own — it only acts on the user's next request.
+_PROMISE = re.compile(r"\b(I'll|I will|let me|I'm going to|I am going to)\b(?! need)", re.I)
+
+
 def claims_unbacked(reply: str, results: str) -> bool:
     """The reply says SONU did something (merged, deleted, sent, …) that no result line shows."""
     for match in _CLAIMS.finditer(reply):
@@ -134,6 +139,8 @@ def acceptable(reply: str, report: TaskReport, allowed_text: str) -> bool:
         return False  # and success not turned into failure
     if claims_unbacked(reply, "\n".join(results_of(report))):
         return False
+    if report.status in _BAD_STATUSES and _PROMISE.search(reply):
+        return False  # found on the laptop: "Zen isn't showing yet; I'll get it onto your screen" — it didn't
     return _numbers(reply) <= _numbers(allowed_text) | {"1"}  # "one" in "one moment" is fine
 
 

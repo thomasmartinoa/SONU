@@ -36,6 +36,7 @@ from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_obs import FakeObs, FakeObsState
 from sonu.testing.fake_system import FakeSystem
+from sonu.testing.fake_vision import FakeScreenReader
 from sonu.testing.fake_wake import FakeWake
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
@@ -353,6 +354,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 wake=FakeWake(),
                 terminals=SonuTerminals(workdir / "run" / "terminals", system),
                 writer=PromptWriter(cast(TextModel, model)) if hasattr(model, "complete_text") else None,
+                reader=FakeScreenReader(),
             )
             engine = Engine(
                 planner=LLMPlanner(model),

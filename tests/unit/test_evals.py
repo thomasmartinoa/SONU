@@ -140,6 +140,13 @@ GOLDEN: dict[str, dict[str, Any]] = {
         ("files.make_folder", {"name": "sonu-m4-test", "inside": "dev_works"}),
         ("dev.claude_open", {"workspace": 9}),
     ),
+    "whats-on-my-screen": steps(("screen.read", {"question": "what's on my screen right now?"})),
+    "read-the-error-in-this-window": steps(
+        ("screen.read", {"question": "read the error in this window", "window": {"focused": True}})
+    ),
+    "read-a-window-on-another-workspace": steps(
+        ("screen.read", {"question": "what is open in zen?", "window": {"app": "zen"}})
+    ),
     "install-an-app": steps(("packages.install", {"name": "vlc"})),
     "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
     "install-already-there": steps(("packages.install", {"name": "kitty"})),
