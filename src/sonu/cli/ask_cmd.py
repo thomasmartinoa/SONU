@@ -35,6 +35,8 @@ class ConfirmMode(StrEnum):
 def terminal_confirmer(console: Console) -> Confirmer:
     async def confirm(request: ConfirmRequest) -> bool:
         colour = "red" if request.risk in (Risk.HIGH, Risk.FORBIDDEN) else "yellow"
+        if request.details:
+            console.print(f"[dim]┌─[/]\n{escape(request.details)}\n[dim]└─[/]")
         console.print(
             f"[{colour}]⚠ SONU wants to:[/] {escape(request.description)}\n"
             f"  [dim]risk: {request.risk.value} — {escape(request.reason)}[/]"
@@ -46,8 +48,9 @@ def terminal_confirmer(console: Console) -> Confirmer:
 
 def gui_confirmer(picker: Picker) -> Confirmer:
     async def confirm(request: ConfirmRequest) -> bool:
+        details = f" — {request.details[:400]}" if request.details else ""
         return await picker.confirm(
-            f"SONU wants to: {request.description} ({request.risk.value} risk). Allow?"
+            f"SONU wants to: {request.description}{details} ({request.risk.value} risk). Allow?"
         )
 
     return confirm

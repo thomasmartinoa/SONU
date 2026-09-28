@@ -35,6 +35,8 @@ class ConfirmRequest:
     tool: str
     risk: Risk
     reason: str
+    details: str | None = None  # shown in full before asking (e.g. a prompt SONU wrote)
+    spoken: str | None = None  # what voice asks instead of the whole description
 
 
 Confirmer = Callable[[ConfirmRequest], Awaitable[bool]]
@@ -276,7 +278,11 @@ class Engine:
             )
             return record(outcome, prepared.description, decision)
         if decision.verdict == "confirm":
-            approved = await confirm(ConfirmRequest(prepared.description, tool.name, risk, decision.reason))
+            approved = await confirm(
+                ConfirmRequest(
+                    prepared.description, tool.name, risk, decision.reason, prepared.details, prepared.spoken
+                )
+            )
             if not approved:
                 outcome = ToolOutcome(StepStatus.DENIED, f"Skipped (not approved): {prepared.description}")
                 return record(outcome, prepared.description, decision)

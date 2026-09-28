@@ -115,7 +115,7 @@ works:
 | Voice: talk over SONU to stop it — it goes quiet and listens | 🧪 M3 | its own PipeWire echo canceller (WebRTC) removes SONU's voice from the mic; ≥ 0.4 s of speech that isn't SONU's own words ([D50](DECISIONS.md)) | faster-whisper (GPU) speech-to-text, Kokoro/Piper voice, wake word; high risk never approved by voice alone |
 | Make a folder ("make a folder called shop-app in dev_works") | 🧪 M4 | `files.make_folder`: inside home only, the user's own name for it |
 | Claude Code by voice: open it in a folder, type your words into it, `/model sonnet`, "is it done?" | 🧪 M4 part 1 | SONU-owned kitty windows (remote control over a private socket, those windows only), screen read back to confirm ([D51](DECISIONS.md)) |
-| Claude Code: write the best prompt from an idea | 🗺 M4 | SONU-owned kitty windows with remote control (only those), screen text read back to confirm |
+| Claude Code: write the best prompt from an idea ("write the best prompt for my idea: …") | 🧪 M4 part 2 | the local model writes it; shown in full, asked, then pasted into Claude Code ([D52](DECISIONS.md)) |
 | GitHub: list pull requests and checks, merge after approval | 🗺 M4 | `gh` (already signed in) — merging is high risk |
 | Install software by name ("install Spotify") | 🗺 M4.5 | `pacman -Ss` then AUR (`yay`); install through polkit — the password prompt appears only then |
 | Operate any app by looking at the screen | 🗺 M6 | vision model (local `qwen3.5`/`gemma4` or opt-in cloud) + input; high risk, confirmed |

@@ -24,6 +24,7 @@ class FakeClaude:
     trust_choice: int = 0  # 0: "No, exit", 1: "Yes, I trust this folder"
     menu_at: int = 4
     typed: str = ""
+    pasted: str = ""  # a multi-line paste: shown as "[Pasted text #1 +N lines]", sent whole
     sent: list[str] = field(default_factory=list)  # what reached Claude Code (after Enter)
     lines: list[str] = field(default_factory=list)
     working: bool = False
@@ -53,7 +54,8 @@ class FakeClaude:
             menu_help = "   Enter to set as default · s to use this session only · Esc to cancel\n"
             return f"{head}{body}   Select model\n{rows}{menu_help}"
         status = "  esc to interrupt\n" if self.working else "  ⏸ manual mode on · ? for shortcuts\n"
-        return f"{head}{body}────\n{PROMPT} {self.typed}\n────\n{status}"
+        shown = f"[Pasted text #1 +{self.pasted.count(chr(10))} lines]" if self.pasted else self.typed
+        return f"{head}{body}────\n{PROMPT} {shown}\n────\n{status}"
 
     def key(self, name: str) -> None:
         if self.state == "trust":
@@ -84,8 +86,10 @@ class FakeClaude:
                 self.lines.append(f"  ⎿  Kept model as {self.model}")
                 self.state = "ready"
         elif self.state == "ready" and name == "Enter":
-            text, self.typed = self.typed.strip(), ""
-            self.lines.append(f"{PROMPT} {text}")
+            text, self.typed = (self.pasted or self.typed).strip(), ""
+            shown = f"[Pasted text #1 +{self.pasted.count(chr(10))} lines]" if self.pasted else text
+            self.pasted = ""
+            self.lines.append(f"{PROMPT} {shown}")
             if text == "/model":
                 self.state = "menu"
                 self.menu_at = MENU.index(self.model) if self.model in MENU else 0
@@ -95,7 +99,9 @@ class FakeClaude:
                 self.working = True
 
     def type(self, text: str) -> None:
-        if self.state == "ready":
+        if self.state == "ready" and "\n" in text:
+            self.pasted = text
+        elif self.state == "ready":
             self.typed += text
 
 

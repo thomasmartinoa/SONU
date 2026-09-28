@@ -43,6 +43,23 @@ def _not_the_users(ctx: ToolContext, *texts: str | None) -> ToolOutcome | None:
     return None
 
 
+def _users_app(ctx: ToolContext, app: str) -> str:
+    """The app name as the user said it, when the model shortened it. Found in an eval: "when I say vs
+    code I mean code oss" was planned with app "code" (several apps match) instead of "code oss"."""
+    said = f" {normalize(ctx.request_text)} "
+    wanted = normalize(app)
+    longer = {
+        name
+        for entry in ctx.resolver.catalog.entries
+        if not entry.no_display
+        and (name := normalize(entry.name.replace(" - ", " ")))
+        and name != wanted
+        and f" {wanted} " in f" {name} "
+        and f" {name} " in said
+    }
+    return longer.pop() if len(longer) == 1 else app
+
+
 def _stored(ctx: ToolContext, item: MemoryItem) -> bool:
     """Read the memory back (from disk when it has a file): is the item really kept?"""
     memory = Memory.load(ctx.memory.path) if ctx.memory.path is not None else ctx.memory
@@ -93,7 +110,11 @@ class Remember(Tool):
         if a.kind == "note":
             return Prepared(f"Remember: {text}", MemoryItem("note", text))
         words = normalize(text)
-        entry = ctx.resolver.catalog.by_id(choice) if choice else resolve_app(cast(str, a.app), ctx)
+        entry = (
+            ctx.resolver.catalog.by_id(choice)
+            if choice
+            else resolve_app(_users_app(ctx, cast(str, a.app)), ctx)
+        )
         if entry is None:
             return ToolOutcome(StepStatus.FAILED, "That app is no longer installed")
         if isinstance(entry, ToolOutcome):

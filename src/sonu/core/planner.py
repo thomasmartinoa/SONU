@@ -308,8 +308,10 @@ reminders.list.
 - Claude Code: "open Claude Code in <folder>" is dev.claude_open (no folder: the one this request \
 made); "tell it / tell Claude / type: <words>" is dev.type with text = exactly the user's words \
 after that (never rewrite them); "switch it to Sonnet/Opus/Haiku" is dev.claude_model; "what is \
-Claude doing? / is it done?" is dev.read. files.make_folder only when the user asks to make or \
-create a folder; for a folder that exists, dev.claude_open alone.
+Claude doing? / is it done?" is dev.read. "Write (the best) prompt for my idea: …" / "here's my \
+idea …, make a prompt for Claude" is dev.prompt with idea = the user's words for the idea (SONU writes \
+the prompt and shows it). files.make_folder only when the user asks to make or create a folder; for \
+a folder that exists, dev.claude_open alone.
 - "Listen for Hey Sonu" / "turn on the wake word" is voice.wake with on true; "stop listening for \
 Hey Sonu" / "turn off the wake word" is voice.wake with on false.
 - Reminders and timers are reminders.set; "what reminders do I have?" is reminders.list; \

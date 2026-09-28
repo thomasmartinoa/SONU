@@ -114,7 +114,8 @@ class VoiceSession:
         """Medium risk: ask, listen, accept only a clear yes. High risk is never voice-only."""
         if request.risk is Risk.HIGH:
             return False
-        await self.say(f"Should I {request.description[0].lower()}{request.description[1:]}? Say yes or no.")
+        asked = request.spoken or request.description
+        await self.say(f"Should I {asked[0].lower()}{asked[1:]}? Say yes or no.")
         answer = await self.hear(Endpointing(start_timeout_s=6.0, silence_s=0.7, max_s=6.0))
         return said_yes(answer)
 

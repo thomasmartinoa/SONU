@@ -98,7 +98,7 @@ class NoticeLog(Notice):
         super().__init__(program="")
         self.shown = shown
 
-    def show(self, title: str, body: str = "", *, seconds: float = 8.0) -> None:
+    def show(self, title: str, body: str = "", *, seconds: float = 8.0, limit: int = 300) -> None:
         self.shown.append((title, body))
 
 
@@ -493,3 +493,34 @@ async def test_talking_over_the_reply_stops_it_and_sonu_listens(rig: Rig) -> Non
     assert watched == ["Done, kitty's on 2.", "Hey! Not much — what can I do for you?"]  # replies only
     assert "You: hello" in out.splitlines()  # after being talked over, SONU listened
     assert voice.said[0] == "How can I help?"
+
+
+@pytest.mark.anyio
+async def test_by_voice_a_written_prompt_is_shown_then_asked_briefly(rig: Rig) -> None:
+    from sonu.core.engine import ConfirmRequest
+    from sonu.daemon.client import Progress
+    from sonu.daemon.server import _DesktopSession
+    from sonu.tools.base import Risk
+
+    voice = voice_rig(rig, "yes")
+    session = rig.daemon._voice
+    assert session is not None
+
+    async def physical(request: ConfirmRequest) -> bool:
+        raise AssertionError("medium risk is answered by voice")
+
+    shown: list[tuple[str, str]] = []
+    confirm = rig.daemon._voice_confirmer(session, physical, _DesktopSession(Progress(NoticeLog(shown))))
+    request = ConfirmRequest(
+        "Send the prompt I wrote from your idea to Claude Code in todo-app: “Build a small todo app.…”",
+        "dev.prompt",
+        Risk.MEDIUM,
+        "medium-risk action",
+        details="Build a small todo app.\nRequirements:\n- a dark mode",
+        spoken="send the prompt I wrote to Claude Code in todo-app — it's on your screen",
+    )
+    assert await confirm(request) is True
+    assert shown == [("SONU wrote this", "Build a small todo app.\nRequirements:\n- a dark mode")]
+    assert voice.said == [
+        "Should I send the prompt I wrote to Claude Code in todo-app — it's on your screen? Say yes or no."
+    ]

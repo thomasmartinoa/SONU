@@ -837,3 +837,12 @@ expect_windows = [{ class = "kitty", workspace = 9, title_contains = "Claude Cod
 expect_absent = ["code-oss"]
 expect_claude = { folder = "sonu-m4-test" }
 
+[[case]]
+id = "claude-code-prompt-from-an-idea"
+request = "open claude code in the SONU folder and write the best prompt for my idea: a todo app with a dark mode"
+notes = "The prompt writer: SONU writes it, shows all of it, asks (evals approve), then sends it."
+expect_status = ["done"]
+expect_claude = { folder = "SONU", sent_count = 1 }
+expect_confirmed = ["dev.prompt"]
+require_tools = ["dev.prompt"]
+

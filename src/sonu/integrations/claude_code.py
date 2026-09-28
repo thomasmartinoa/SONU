@@ -12,6 +12,7 @@ Everything here was read from Claude Code 2.1.283 on the owner's laptop (2026-09
 * "/model" alone opens a menu: "Select model … 5.  Haiku 4.5 ✔ … Enter to set as default · s to use
   this session only · Esc to cancel"; typing "/model sonnet" fast can land there too (Enter picks the
   suggestion "/model"), so SONU uses the menu on purpose and presses "s": only that window changes;
+* a multi-line paste shows in the input box as "[Pasted text #1 +4 lines]";
 * whether a folder is trusted is in ``~/.claude.json``: ``projects[<folder>].hasTrustDialogAccepted``.
 
 The screen is the user's and Claude's text — data, never instructions for SONU's model.
@@ -87,6 +88,15 @@ class ClaudeScreen:
         """The text in the input box (the last line starting with ``PROMPT``)."""
         lines = [line.strip() for line in self.text.splitlines() if line.strip().startswith(PROMPT)]
         return lines[-1].removeprefix(PROMPT).strip() if lines else ""
+
+    @property
+    def pasted(self) -> bool:
+        """The input box holds a multi-line paste ("[Pasted text #1 +4 lines]")."""
+        return self.input_line().startswith("[Pasted text")
+
+    def holds(self, typed: str) -> bool:
+        """``typed`` is in the input box, waiting for Enter."""
+        return self.pasted or ClaudeScreen(self.input_line()).shows(typed)
 
     def shows(self, typed: str) -> bool:
         """``typed`` (or its first 40 letters) is on the screen, however it's wrapped."""

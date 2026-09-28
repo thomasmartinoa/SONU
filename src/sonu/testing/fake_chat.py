@@ -28,3 +28,11 @@ class ScriptedChatModel:
             raise ChatModelError(f"no scripted reply for {request!r}") from exc
         content = reply if isinstance(reply, str) else json.dumps(reply)
         return ChatResult(content=content, model=self.name, duration_s=0.01)
+
+    async def complete_text(
+        self, messages: list[ChatMessage], *, temperature: float, max_tokens: int
+    ) -> ChatResult:
+        """Free text (a prompt SONU writes): a fixed, plausible one."""
+        self.calls.append(list(messages))
+        text = "Build what I described.\nRequirements:\n- as I described it\nDone when: it runs."
+        return ChatResult(content=text, model=self.name, duration_s=0.01)
