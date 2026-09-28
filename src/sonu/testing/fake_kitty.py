@@ -7,6 +7,7 @@ line, "/model" opening the model menu ("s" = this session only, Enter = the defa
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -105,12 +106,26 @@ class FakeClaude:
             self.typed += text
 
 
+@dataclass
+class FakeProgram:
+    """Any other program in a SONU terminal (an install): its output, all at once."""
+
+    argv: list[str]
+    output: str
+    state: str = "ready"  # closed after close-window
+
+    def screen(self) -> str:
+        return self.output
+
+
 class FakeKitty:
     """``kitty @ --to unix:<socket> …`` for the terminals launched through the fake desktop."""
 
     def __init__(self, trusted: set[str] | None = None) -> None:
         self.trusted = trusted or set()
         self.terminals: dict[str, FakeClaude] = {}  # socket → Claude Code in it
+        self.programs: dict[str, FakeProgram] = {}  # socket → another program
+        self.on_run: Callable[[list[str]], str] | None = None  # runs a program, returns its output
 
     def launched(self, argv: list[str]) -> None:
         """FakeHyprland started ``argv``: a SONU terminal if it listens on a socket."""
@@ -120,6 +135,11 @@ class FakeKitty:
         folder = argv[argv.index("--directory") + 1] if "--directory" in argv else "~"
         if argv[-1] == "claude":
             self.terminals[socket] = FakeClaude(folder, trusted=folder in self.trusted)
+            return
+        start = argv.index("--hold") + 1 if "--hold" in argv else argv.index("--title") + 2
+        program = argv[start:]
+        output = self.on_run(program) if self.on_run is not None else ""
+        self.programs[socket] = FakeProgram(program, output)
 
     def claude(self, folder_name: str) -> FakeClaude | None:
         return next((c for c in self.terminals.values() if Path(c.folder).name == folder_name), None)
@@ -129,10 +149,15 @@ class FakeKitty:
         if len(args) < 4 or args[0] != "@" or args[1] != "--to":
             return 1, "", "unsupported kitty call"
         socket = args[2].removeprefix("unix:")
+        command, rest = args[3], args[4:]
+        other = self.programs.get(socket)
+        if other is not None and other.state != "closed":
+            if command == "close-window":
+                other.state = "closed"
+            return 0, other.screen() if command == "get-text" else "[]" if command == "ls" else "", ""
         claude = self.terminals.get(socket)
         if claude is None or claude.state == "closed":
             return 1, "", f"Error: Failed to connect to {socket}"
-        command, rest = args[3], args[4:]
         if command == "ls":
             return 0, "[]", ""
         if command == "get-text":

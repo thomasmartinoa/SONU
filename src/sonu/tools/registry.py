@@ -20,6 +20,7 @@ from sonu.tools.github_tools import GITHUB_TOOLS
 from sonu.tools.media_tools import MEDIA_TOOLS
 from sonu.tools.memory_tools import MEMORY_TOOLS
 from sonu.tools.obs_tools import OBS_TOOLS
+from sonu.tools.package_tools import PACKAGE_TOOLS
 from sonu.tools.power_tools import POWER_TOOLS
 from sonu.tools.rice_tools import RICE_TOOLS
 from sonu.tools.settings_tools import SETTINGS_TOOLS
@@ -67,6 +68,7 @@ class ToolRegistry:
             *VOICE_TOOLS,
             *DEV_TOOLS,
             *GITHUB_TOOLS,
+            *PACKAGE_TOOLS,
         ),
     ) -> None:
         self._tools = {tool.name: tool for tool in tools}

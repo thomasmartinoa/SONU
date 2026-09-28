@@ -46,6 +46,9 @@ ALL_PROGRAMS = frozenset(
         "nvidia-smi",
         "kitty",
         "gh",
+        "pacman",
+        "yay",
+        "pkexec",
     }
 )
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -135,6 +138,57 @@ class FakeSystem:
     shots: list[str] = field(default_factory=list)  # screenshot files written by grim
     kitty: FakeKitty = field(default_factory=FakeKitty)  # SONU's terminals (kitty @ remote control)
     github: FakeGitHub = field(default_factory=FakeGitHub)  # gh: pull requests
+    # Packages: official repos (name → repo, version, description, size), the AUR (name → version,
+    # description, votes), what's installed, and how the password prompt is answered.
+    repo_packages: dict[str, tuple[str, str, str, str]] = field(
+        default_factory=lambda: {
+            "vlc": ("extra", "3.0.21-1", "Multi-platform MPEG, VCD/DVD, and DivX player", "2.10 MiB"),
+            "obs-studio": (
+                "extra",
+                "32.2.2-1",
+                "Free, open source software for live streaming and recording",
+                "6.69 MiB",
+            ),
+            "spotify-launcher": (
+                "extra",
+                "0.6.6-2",
+                "Client for spotify's apt repository in Rust for Arch Linux",
+                "1.20 MiB",
+            ),
+            "spotify-player": ("extra", "0.25.1-1", "A command driven spotify player", "4.00 MiB"),
+            "spotifyd": (
+                "extra",
+                "0.4.2-1",
+                "Lightweight spotify streaming daemon with spotify connect support",
+                "3.00 MiB",
+            ),
+        }
+    )
+    aur_packages: dict[str, tuple[str, str, int]] = field(
+        default_factory=lambda: {
+            "spotify": ("1:1.2.96.518-2", "A proprietary music streaming service", 276),
+            "visual-studio-code-bin": ("1.106.0-1", "Visual Studio Code (vscode)", 1710),
+        }
+    )
+    installed_packages: dict[str, str] = field(default_factory=lambda: {"kitty": "0.49.1-1"})
+    polkit_answer: str = "allow"  # "dismiss": the user cancels the system's password prompt
+
+    def __post_init__(self) -> None:
+        self.kitty.on_run = self.run_in_terminal
+
+    def run_in_terminal(self, argv: list[str]) -> str:
+        """A program started in a SONU terminal (an install): its output."""
+        name = argv[-1]
+        if argv[:2] == ["pkexec", "pacman"] or argv[0] == "yay":
+            if self.polkit_answer == "dismiss":
+                return "Error executing command as another user: Request dismissed\n"
+            known = self.repo_packages.get(name) if argv[0] == "pkexec" else None
+            aur = self.aur_packages.get(name) if argv[0] == "yay" else None
+            if known is None and aur is None:
+                return f"error: target not found: {name}\n"
+            self.installed_packages[name] = known[1] if known else aur[0] if aur else ""
+            return f"resolving dependencies...\ninstalling {name}...\n"
+        return ""
 
     @property
     def night_light(self) -> str:
@@ -212,6 +266,63 @@ class FakeSystem:
         return CommandResult(args, code, out, err)
 
     # ------------------------------------------------------------------ programs
+    def _pacman(self, args: list[str]) -> tuple[int, str, str]:
+        if args[0] == "-Q":
+            version = self.installed_packages.get(args[1])
+            return (
+                (0, f"{args[1]} {version}\n", "")
+                if version
+                else (1, "", f"error: package '{args[1]}' was not found\n")
+            )
+        if args[0] == "-Si":
+            found = self.repo_packages.get(args[1])
+            if found is None:
+                return 1, "", f"error: package '{args[1]}' was not found\n"
+            repo, version, description, size = found
+            return (
+                0,
+                (
+                    f"Repository      : {repo}\nName            : {args[1]}\nVersion         : {version}\n"
+                    f"Description     : {description}\nDownload Size   : {size}\n"
+                ),
+                "",
+            )
+        if args[0] == "-Ss":
+            terms = [t.lower() for t in args[1:]]
+            lines = [
+                f"{repo}/{name} {version}\n    {description}\n"
+                for name, (repo, version, description, _) in sorted(self.repo_packages.items())
+                if all(t in f"{name} {description}".lower() for t in terms)
+            ]
+            return (0, "".join(lines), "") if lines else (1, "", "")
+        return 1, "", f"unsupported pacman call {args}"
+
+    def _yay(self, args: list[str]) -> tuple[int, str, str]:
+        if args[0] == "-Sia":
+            found = self.aur_packages.get(args[1])
+            if found is None:
+                return 1, "", ""
+            version, description, votes = found
+            return (
+                0,
+                (
+                    f"Repository                    : aur\nName                          : {args[1]}\n"
+                    f"Version                       : {version}\n"
+                    f"Description                   : {description}\n"
+                    f"Votes                         : {votes}\n"
+                ),
+                "",
+            )
+        if args[0] == "-Ssa":
+            terms = [t.lower() for t in args[1:] if not t.startswith("-") and t != "votes"]
+            lines = [
+                f"aur/{name} {version} (+{votes} 1.00)\n    {description}\n"
+                for name, (version, description, votes) in self.aur_packages.items()
+                if all(t in f"{name} {description}".lower() for t in terms)
+            ]
+            return (0, "".join(lines), "") if lines else (1, "", "")
+        return 1, "", f"unsupported yay call {args}"
+
     def _gh(self, args: list[str]) -> tuple[int, str, str]:
         return self.github.handle(args)
 

@@ -86,9 +86,11 @@ What you can do on this computer: open, move, arrange, fullscreen and close apps
 the web and open sites; play songs on YouTube or Spotify, pause and skip; volume, brightness, Wi-Fi, \
 Bluetooth and power mode; reminders and timers; screenshots, and recording with OBS; open folders \
 and the newest download; the desktop's theme, wallpaper and night light; the clipboard; the laptop's \
-battery and health; suspend or shut down (after asking). Coming soon: talking by voice, and working \
-with Claude Code and GitHub for the user. You can't run arbitrary commands, type into apps, or \
-install software yet — never claim otherwise."""
+battery and health; suspend or shut down (after asking); talk by voice ("Hey Sonu"); make folders, \
+open Claude Code in a folder and type the user's words or a prompt you wrote into it; list and merge \
+the user's GitHub pull requests (after asking); install software (after asking — the system asks for \
+the password). You can't run arbitrary commands, type into other apps, or see the screen yet — never \
+claim otherwise."""
 
 
 def _plain(report: TaskReport) -> str:

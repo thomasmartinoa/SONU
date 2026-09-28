@@ -52,13 +52,23 @@ class SonuTerminals:
         self.folder, self.runner = folder, runner
 
     # ------------------------------------------------------------------ records
-    def new(self, folder: Path, program: str) -> tuple[Terminal, list[str]]:
-        """A new terminal's record and the argv that starts it (kitty running ``program`` in ``folder``)."""
+    def new(
+        self,
+        folder: Path,
+        program: str,
+        args: tuple[str, ...] = (),
+        *,
+        label: str | None = None,
+        hold: bool = False,
+    ) -> tuple[Terminal, list[str]]:
+        """A new terminal's record and the argv that starts it: kitty running ``program args…`` in
+        ``folder``. ``hold``: the window stays open when the program ends, so its output can be read."""
         self.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.folder.chmod(0o700)
         ident = secrets.token_hex(4)
         socket = self.folder / f"kitty-{ident}.sock"
-        title = f"{TITLE_PREFIX}{'Claude Code' if program == 'claude' else program} · {folder.name}"
+        what = label or ("Claude Code" if program == "claude" else program)
+        title = f"{TITLE_PREFIX}{what} · {folder.name}" if label is None else f"{TITLE_PREFIX}{what}"
         terminal = Terminal(ident, str(folder), program, title, str(socket), time.time())
         self._save(terminal)
         argv = [
@@ -71,7 +81,9 @@ class SonuTerminals:
             str(folder),
             "--title",
             title,
+            *(["--hold"] if hold else []),
             program,
+            *args,
         ]
         return terminal, argv
 
@@ -131,3 +143,10 @@ class SonuTerminals:
 
     async def keys(self, terminal: Terminal, *keys: str) -> None:
         await self._kitty(terminal, "send-key", *keys)
+
+    async def close(self, terminal: Terminal) -> None:
+        """Close a SONU terminal (only SONU's own windows are ever closed this way)."""
+        try:
+            await self._kitty(terminal, "close-window")
+        finally:
+            self.forget(terminal)

@@ -140,6 +140,9 @@ GOLDEN: dict[str, dict[str, Any]] = {
         ("files.make_folder", {"name": "sonu-m4-test", "inside": "dev_works"}),
         ("dev.claude_open", {"workspace": 9}),
     ),
+    "install-an-app": steps(("packages.install", {"name": "vlc"})),
+    "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
+    "install-already-there": steps(("packages.install", {"name": "kitty"})),
     "github-open-prs": steps(("github.prs", {})),
     "github-merge-asks": steps(("github.merge", {"repo": "SONU"})),
     "github-failing-checks-not-merged": steps(("github.merge", {"repo": "hypr dotfiles"})),
@@ -173,7 +176,7 @@ GOLDEN: dict[str, dict[str, Any]] = {
     ),
     "complex-with-an-unsupported-part": {
         **steps(("apps.launch", {"app": "kitty", "workspace": 2}), ("settings.bluetooth", {"on": True})),
-        "unsupported": ["install htop"],
+        "unsupported": ["order me a pizza"],
     },
     "complex-three-questions": steps(
         ("desktop.describe", {}), ("system.status", {"what": ["cpu", "memory", "temperature", "battery"]})

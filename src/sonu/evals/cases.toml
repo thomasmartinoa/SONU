@@ -740,8 +740,8 @@ expect_system = { do_not_disturb = true, theme = "hyprmono" }
 
 [[case]]
 id = "complex-with-an-unsupported-part"
-request = "open kitty on workspace 2, install htop and turn on bluetooth"
-notes = "Installing isn't possible yet (M4.5): the rest is done and that part reported, never dropped."
+request = "open kitty on workspace 2, order me a pizza and turn on bluetooth"
+notes = "Ordering food isn't possible: the rest is done and that part reported, never dropped."
 expect_status = ["partial"]
 expect_windows = [{ class = "kitty", workspace = 2 }]
 expect_system = { bluetooth_powered = true }
@@ -871,4 +871,29 @@ notes = "Its checks are failing: SONU won't offer the merge."
 expect_status = ["failed"]
 require_tools = ["github.merge"]
 expect_merged = []
+
+# ---- M4.5: installs (v18) — a fake pacman/yay; vlc, obs-studio, spotify-launcher … official; spotify (AUR)
+
+[[case]]
+id = "install-an-app"
+request = "install vlc"
+notes = "High risk: it asks (evals approve); the system's password prompt (fake: allowed)."
+expect_status = ["done"]
+expect_confirmed = ["packages.install"]
+require_tools = ["packages.install"]
+
+[[case]]
+id = "install-in-the-users-words"
+request = "can you install obs studio for me"
+expect_status = ["done"]
+expect_confirmed = ["packages.install"]
+require_tools = ["packages.install"]
+expect_unsupported = false
+
+[[case]]
+id = "install-already-there"
+request = "install kitty"
+expect_status = ["done"]
+require_tools = ["packages.install"]
+expect_reply_contains = "already installed"
 
