@@ -116,7 +116,7 @@ works:
 | Make a folder ("make a folder called shop-app in dev_works") | 🧪 M4 | `files.make_folder`: inside home only, the user's own name for it |
 | Claude Code by voice: open it in a folder, type your words into it, `/model sonnet`, "is it done?" | 🧪 M4 part 1 | SONU-owned kitty windows (remote control over a private socket, those windows only), screen read back to confirm ([D51](DECISIONS.md)) |
 | Claude Code: write the best prompt from an idea ("write the best prompt for my idea: …") | 🧪 M4 part 2 | the local model writes it; shown in full, asked, then pasted into Claude Code ([D52](DECISIONS.md)) |
-| GitHub: list pull requests and checks, merge after approval | 🗺 M4 | `gh` (already signed in) — merging is high risk |
+| GitHub: "what are my open pull requests?" (with checks), "merge the pull request in SONU" | 🧪 M4 part 3 | `gh` (already signed in); SONU finds the PR, won't merge a draft/conflicting/failing/running one; merging is high risk ([D53](DECISIONS.md)) |
 | Install software by name ("install Spotify") | 🗺 M4.5 | `pacman -Ss` then AUR (`yay`); install through polkit — the password prompt appears only then |
 | Operate any app by looking at the screen | 🗺 M6 | vision model (local `qwen3.5`/`gemma4` or opt-in cloud) + input; high risk, confirmed |
 | Cloud models (free tiers), Claude Code driving SONU (MCP) | 🗺 M5 | opt-in; an egress guard shows what leaves the laptop |

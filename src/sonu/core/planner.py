@@ -233,6 +233,14 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
             ],
         },
     ),
+    (
+        "merge the pull request in hypr-dotfiles",
+        {
+            "kind": "steps",
+            "message": "Merging the hypr-dotfiles pull request.",
+            "steps": [{"tool": "github.merge", "args": {"repo": "hypr-dotfiles"}}],
+        },
+    ),
     ("open it", {"kind": "ask", "message": "Which app should I open?", "steps": []}),
     ("thanks!", {"kind": "reply", "message": "You're welcome!", "steps": []}),
     (
@@ -312,6 +320,8 @@ Claude doing? / is it done?" is dev.read. "Write (the best) prompt for my idea: 
 idea …, make a prompt for Claude" is dev.prompt with idea = the user's words for the idea (SONU writes \
 the prompt and shows it). files.make_folder only when the user asks to make or create a folder; for \
 a folder that exists, dev.claude_open alone.
+- GitHub: "my pull requests / PRs" is github.prs; "merge the pull request (in <repo>)" is \
+github.merge — give the number only if the user said one; SONU finds the pull request.
 - "Listen for Hey Sonu" / "turn on the wake word" is voice.wake with on true; "stop listening for \
 Hey Sonu" / "turn off the wake word" is voice.wake with on false.
 - Reminders and timers are reminders.set; "what reminders do I have?" is reminders.list; \

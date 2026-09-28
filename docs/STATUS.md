@@ -17,7 +17,7 @@ _Last update: 2026-09-28_
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
 | M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
-| M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); next: GitHub |
+| M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)) |
 | M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -42,7 +42,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **101 / 101** twice on the v16 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
+`qwen3.5:4b`: **104 / 104** twice on the v17 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
 complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -129,8 +129,8 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    folders and windows removed. ~~The prompt writer~~ (#29) — on the laptop: "write the best prompt for my idea: a file
    called hello.txt that says hi" → SONU wrote a structured prompt (Requirements / Before you start / Done when), showed
    all of it, asked; on yes it was pasted (Claude Code shows "[Pasted text #1 +N lines]") and confirmed sent; Claude
-   made the file; "what is claude doing?" → "waiting for you". Next: **GitHub** via `gh` (list, summarise, merge after
-   two confirmations).
+   made the file; "what is claude doing?" → "waiting for you". ~~GitHub~~ (#31): "what are my open pull requests?",
+   "merge the pull request in …" (see #31 for the laptop run). **M4 is complete** with this; next: M4.5 installs.
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
 5. **M5 — connect** (cloud models opt-in, MCP) and **M6 — screen control** (vision model + input, opt-in, high risk).
 
@@ -199,7 +199,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #27 | 2026-09-28 | Voice: talk over SONU to stop it — its own PipeWire echo canceller (WebRTC) while sonud runs; `[voice] barge_in` |
 | #28 | 2026-09-28 | M4 part 1: make folders; Claude Code in SONU-owned terminals (kitty remote control over a private socket) — open (asks to trust a folder), type the user's words (asks), `/model` for this session, what it's doing; eval suite v15 (100) |
 | #29 | 2026-09-28 | M4 part 2: the prompt writer — an idea → a clear prompt (the local model), shown in full, asked (by voice: shown on screen, a short question), sent as one paste; the user's longer app name wins in aliases; eval suite v16 (101) |
-| #30 | open | CI green again: mypy knows numpy is optional (the voice extra); main's CI had failed since #16 (an OBS test that read the host, fixed in #21) and #21 (numpy) — every CI step reproduced locally on 3.12–3.14 |
+| #30 | 2026-09-28 | CI green again: mypy knows numpy is optional (the voice extra); main's CI had failed since #16 (an OBS test that read the host, fixed in #21) and #21 (numpy) — every CI step reproduced locally on 3.12–3.14 |
+| #31 | open | M4 part 3: GitHub through `gh` — "what are my open pull requests?" (with checks), "merge the pull request" (SONU finds it; never when a draft, conflicting, failing or still running; high risk; done only when GitHub says merged); eval suite v17 (104) |
 
 ### Found on real hardware → fixed
 
