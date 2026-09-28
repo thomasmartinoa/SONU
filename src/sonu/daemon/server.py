@@ -55,6 +55,8 @@ from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 from sonu.ui.desktop_ui import Picker
 from sonu.voice.audio import RECORD_ARGV, Endpointing
+from sonu.voice.echo import SINK as ECHO_SINK
+from sonu.voice.echo import EchoCanceller
 from sonu.voice.engines import (
     KokoroVoice,
     VoiceUnavailable,
@@ -64,6 +66,7 @@ from sonu.voice.engines import (
     voice_dir,
     voice_installed,
 )
+from sonu.voice.interrupt import user_talked
 from sonu.voice.session import VoiceSession
 from sonu.voice.wake import WakeListener, after_wake_word, fix_name
 from sonu.world.origin import ancestor_pids
@@ -220,6 +223,7 @@ class Daemon:
         self._warming: asyncio.Task[None] | None = None
         self._voice: VoiceSession | None = None
         self.wake = _WakeWord(self)
+        self.echo = EchoCanceller()
         self.notice: Callable[[], Notice] = Notice  # tests record instead of showing
         self._client_env: dict[str, str] = {}  # the latest client's (for requests nobody typed)
         self._waking = False  # a "Hey Sonu" request is starting
@@ -272,6 +276,7 @@ class Daemon:
         if self._warming is not None:
             self._warming.cancel()
         await self.wake.stop()
+        self.echo.close()
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
@@ -357,9 +362,8 @@ class Daemon:
             follow_up = self.settings.voice.follow_up_s > 0 and not request.get("dry_run")
             await session.send({**final_message(report), "more": follow_up})
             if self.settings.voice.speak_replies:
-                await voice.say(
-                    report.reply or (report.headline() if report.plan is not None else report.error or "")
-                )
+                said = report.reply or (report.headline() if report.plan is not None else report.error or "")
+                await voice.say(said, interruptible=follow_up)  # talked over: it stops and listens
             if not follow_up:
                 return
             follow = await self._follow_up(session, voice)
@@ -430,11 +434,13 @@ class Daemon:
             folder = voice_dir(self.paths.data_dir)
             if missing_files(folder):
                 raise VoiceUnavailable("the voice's model files aren't downloaded — run `sonu voice setup`")
+            ears, detector = WhisperEars(settings.stt_model, settings.device), silero_detector()
             self._voice = VoiceSession(
-                WhisperEars(settings.stt_model, settings.device),
-                KokoroVoice(folder, settings.voice, settings.speed),
-                detector=silero_detector(),
+                ears, KokoroVoice(folder, settings.voice, settings.speed), detector=detector
             )
+            if settings.barge_in and self.echo.ensure():  # D50: SONU's voice through its echo canceller
+                self._voice.speaker_argv = ("pw-play", "--target", ECHO_SINK)
+                self._voice.interruptions = lambda spoken: user_talked(spoken, detector, ears.transcribe)
         return self._voice
 
     # -------------------------------------------------------------- "Hey Sonu"

@@ -9,9 +9,11 @@ or the keyboard) — a TV or another person in the room can't approve it.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
+from typing import Any
 
 from sonu.core.engine import ConfirmRequest
 from sonu.tools.base import Risk
@@ -47,6 +49,8 @@ class VoiceSession:
     detector: SpeechDetector | None = None  # None: judge by loudness
     hint: str = "Sonu, workspace"  # words likely to be said: set from the installed apps
     speaker_argv: tuple[str, ...] = ("pw-play",)
+    # While SONU says something: resolves True if the user talks over it (None: no talking over).
+    interruptions: Callable[[str], Coroutine[Any, Any, bool]] | None = None
     _speaker: Speaker | None = field(default=None, init=False)
     _spoken: dict[str, bytes] = field(default_factory=dict, init=False)  # greetings, ready to play
     _greeted: int = field(default=0, init=False)
@@ -69,19 +73,36 @@ class VoiceSession:
         """Say hello when the key is pressed — the cue to start talking (listening starts after it)."""
         await self.say(self.greeting(name), keep=True)
 
-    async def say(self, text: str, *, keep: bool = False) -> None:
-        """Say ``text``; ``keep``: remember the sound, so saying it again starts at once."""
+    async def say(self, text: str, *, keep: bool = False, interruptible: bool = False) -> bool:
+        """Say ``text``; ``keep``: remember the sound, so saying it again starts at once.
+        ``interruptible``: stop if the user talks over it — returns True then."""
         if not text.strip():
-            return
+            return False
         samples = self._spoken.get(text)
         if samples is None:
             samples = await asyncio.to_thread(self.voice.speak, text)
             if keep:
                 self._spoken[text] = samples
-        self._speaker = Speaker(self.voice.rate, self.speaker_argv)
+        speaker = self._speaker = Speaker(self.voice.rate, self.speaker_argv)
+        playing = asyncio.create_task(speaker.play(samples))
+        watching = (
+            asyncio.create_task(self.interruptions(text)) if interruptible and self.interruptions else None
+        )
         try:
-            await self._speaker.play(samples)
+            if watching is not None:
+                await asyncio.wait({playing, watching}, return_when=asyncio.FIRST_COMPLETED)
+                talked = watching.done() and not watching.cancelled() and watching.exception() is None
+                if talked and watching.result():
+                    speaker.stop()
+                    await playing
+                    return True
+            await playing
+            return False
         finally:
+            if watching is not None and not watching.done():
+                watching.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await watching
             self._speaker = None
 
     def stop_talking(self) -> None:
