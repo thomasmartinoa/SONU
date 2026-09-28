@@ -140,6 +140,9 @@ GOLDEN: dict[str, dict[str, Any]] = {
         ("files.make_folder", {"name": "sonu-m4-test", "inside": "dev_works"}),
         ("dev.claude_open", {"workspace": 9}),
     ),
+    "claude-code-prompt-from-an-idea": steps(
+        ("dev.claude_open", {"folder": "SONU"}), ("dev.prompt", {"idea": "a todo app with a dark mode"})
+    ),
     "claude-code-in-a-folder-asks-to-trust": steps(("dev.claude_open", {"folder": "SONU", "workspace": 3})),
     "claude-code-and-a-prompt": steps(
         ("dev.claude_open", {"folder": "SONU"}),

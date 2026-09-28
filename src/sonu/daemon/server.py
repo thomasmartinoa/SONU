@@ -37,6 +37,7 @@ from sonu.config.settings import Settings
 from sonu.core.engine import ConfirmRequest, Engine, Observer
 from sonu.core.planner import LLMPlanner
 from sonu.core.planning import Plan, PlanningError
+from sonu.core.prompt_writer import PromptWriter
 from sonu.core.report import ICONS, StepRecord, TaskReport
 from sonu.daemon.client import Notice, Progress
 from sonu.daemon.protocol import ENV_KEYS, decode, encode, socket_path
@@ -344,7 +345,7 @@ class Daemon:
             await session.send({"type": "error", "message": f"Voice isn't ready: {exc}"})
             return
         voice.hint = speech_hint(engine.ctx.resolver.catalog)
-        confirm = self._voice_confirmer(voice, confirm)
+        confirm = self._voice_confirmer(voice, confirm, session)
         text = str(request.get("heard") or "")  # "Hey Sonu, open kitty": already heard
         if not text:
             if self.settings.voice.greet:
@@ -472,10 +473,15 @@ class Daemon:
     def _user_name(self) -> str | None:
         return load_memory(self.paths).name() or self.settings.assistant.user_name
 
-    def _voice_confirmer(self, voice: VoiceSession, physical: Any) -> Any:
-        """Medium risk: a spoken yes. High risk: said aloud, answered only on the desktop (D42)."""
+    def _voice_confirmer(
+        self, voice: VoiceSession, physical: Any, session: _Session | _DesktopSession
+    ) -> Any:
+        """Medium risk: a spoken yes. High risk: said aloud, answered only on the desktop (D42). Long
+        text (a prompt SONU wrote) is put on the screen first — it's never approved unseen."""
 
         async def confirm(request: ConfirmRequest) -> bool:
+            if request.details:
+                await session.send({"type": "show", "title": "SONU wrote this", "text": request.details})
             if request.risk is Risk.HIGH:
                 await voice.say(f"This one needs your OK on screen: {request.description}.")
                 return bool(await physical(request))
@@ -514,6 +520,7 @@ class Daemon:
                         "description": request.description,
                         "risk": request.risk.value,
                         "reason": request.reason,
+                        "details": request.details,
                     }
                 )
                 return answer is True
@@ -557,6 +564,9 @@ class Daemon:
             ancestors=lambda: ancestor_pids(pid),  # the terminal the request was typed in
             memory=memory,
             wake=self.wake,
+            writer=PromptWriter(
+                OllamaChatModel(self.ollama, self.settings.models.planner, self.ollama_settings)
+            ),
         )
         conversation, responder = assistant_parts(
             self.settings, self.paths, self.ollama, self.ollama_settings, memory

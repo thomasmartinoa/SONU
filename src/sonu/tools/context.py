@@ -9,6 +9,7 @@ from typing import Protocol
 
 from sonu.config.settings import Settings
 from sonu.core.memory import Memory
+from sonu.core.prompt_writer import PromptWriter
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
@@ -75,6 +76,8 @@ class ToolContext:
     terminals: SonuTerminals | None = None
     # The folder an earlier step of this task made ("make a folder … and open Claude Code there").
     task_folder: Path | None = None
+    # Writes a prompt for Claude Code from the user's idea (the local model); None: not available.
+    writer: PromptWriter | None = None
 
     def sonu_terminals(self) -> SonuTerminals:
         if self.terminals is None:

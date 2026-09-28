@@ -19,6 +19,7 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sonu.core.prompt_writer import PromptWriterError
 from sonu.desktop.hyprland.dialect import WorkspaceTarget
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.integrations.claude_code import ClaudeScreen, compact, trusted
@@ -317,35 +318,36 @@ class TypeInto(Tool):
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
         terminal, text, enter = cast("tuple[Terminal, str, bool]", prepared.payload)
-        terminals = ctx.sonu_terminals()
-        try:
-            await terminals.type(terminal, text)
-            typed = await _screen_until(ctx, terminal, lambda s: s.shows(text), SCREEN_TIMEOUT_S)
-            if not typed.shows(text):
-                return ToolOutcome(
-                    StepStatus.FAILED, f"Typed into {terminal.name}, but the text didn't show up there"
-                )
-            if enter:
-                await terminals.keys(terminal, "Enter")
-                sent = await _screen_until(
-                    ctx,
-                    terminal,
-                    lambda s: s.shows(text) and not ClaudeScreen(s.input_line()).shows(text),
-                    SCREEN_TIMEOUT_S,
-                )
-        except CommandError as exc:
-            return ToolOutcome(StepStatus.FAILED, f"Couldn't type into {terminal.name}: {exc}")
-        terminals.touch(terminal)
-        if not enter:
-            return outcome_from_checks(
-                [Check("the text is in the input box", True)], f"Typed it into {terminal.name} (not sent)", ""
+        return await _send(ctx, terminal, text, enter=enter)
+
+
+async def _send(
+    ctx: ToolContext, terminal: Terminal, text: str, *, enter: bool = True, what: str = "it"
+) -> ToolOutcome:
+    """Type ``text`` into a SONU terminal and (``enter``) send it — each confirmed on its screen."""
+    terminals = ctx.sonu_terminals()
+    try:
+        await terminals.type(terminal, text)
+        typed = await _screen_until(ctx, terminal, lambda s: s.holds(text), SCREEN_TIMEOUT_S)
+        if not typed.holds(text):
+            return ToolOutcome(
+                StepStatus.FAILED, f"Typed into {terminal.name}, but the text didn't show up there"
             )
-        left_input = not ClaudeScreen(sent.input_line()).shows(text)
+        if enter:
+            await terminals.keys(terminal, "Enter")
+            sent = await _screen_until(ctx, terminal, lambda s: not s.holds(text), SCREEN_TIMEOUT_S)
+    except CommandError as exc:
+        return ToolOutcome(StepStatus.FAILED, f"Couldn't type into {terminal.name}: {exc}")
+    terminals.touch(terminal)
+    if not enter:
         return outcome_from_checks(
-            [Check("it was sent", left_input and sent.shows(text))],
-            f"Sent it to {terminal.name}",
-            f"Typed it into {terminal.name}, but couldn't see it being sent",
+            [Check("the text is in the input box", True)], f"Typed {what} into {terminal.name} (not sent)", ""
         )
+    return outcome_from_checks(
+        [Check("it left the input box", not sent.holds(text))],
+        f"Sent {what} to {terminal.name}",
+        f"Typed {what} into {terminal.name}, but couldn't see it being sent",
+    )
 
 
 # ---------------------------------------------------------------------------- dev.claude_model
@@ -466,4 +468,59 @@ class ClaudeRead(Tool):
         )
 
 
-DEV_TOOLS: tuple[Tool, ...] = (MakeFolder(), ClaudeOpen(), TypeInto(), ClaudeModel(), ClaudeRead())
+# ---------------------------------------------------------------------------- dev.prompt
+class PromptArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    idea: str = Field(min_length=3, max_length=1500, description="the user's idea, in their own words")
+    terminal: str | None = Field(default=None, max_length=80, description="which Claude Code, by its folder")
+
+
+class WritePrompt(Tool):
+    name = "dev.prompt"
+    description = (
+        "Write a clear prompt for Claude Code from the user's idea, show it to them, and on their yes "
+        "send it to the Claude Code SONU opened."
+    )
+    risk = Risk.MEDIUM  # SONU's own text goes to Anthropic: only after the user saw all of it and said yes
+    effects = frozenset({Effect.TERMINAL_INPUT})
+    Args = PromptArgs
+    grounded = ("idea", "terminal")
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(PromptArgs, args)
+        for field, value in (("idea", a.idea), ("terminal", a.terminal)):
+            if problem := _not_the_users(ctx, field, value):
+                return problem
+        if ctx.writer is None:
+            return ToolOutcome(StepStatus.FAILED, "There's no model to write the prompt with")
+        terminal = await _terminal(ctx, a.terminal)
+        if isinstance(terminal, ToolOutcome):
+            return terminal
+        try:
+            prompt = await ctx.writer.write(a.idea, Path(terminal.folder).name)
+        except PromptWriterError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't write the prompt: {exc}")
+        first = prompt.splitlines()[0][:120]
+        return Prepared(
+            f"Send the prompt I wrote from your idea to {terminal.name}: “{first}…”",
+            (terminal, prompt),
+            details=prompt,
+            spoken=f"send the prompt I wrote to {terminal.name} — it's on your screen",
+        )
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        terminal, prompt = cast("tuple[Terminal, str]", prepared.payload)
+        return await _send(ctx, terminal, prompt, what="the prompt")
+
+
+DEV_TOOLS: tuple[Tool, ...] = (
+    MakeFolder(),
+    ClaudeOpen(),
+    TypeInto(),
+    ClaudeModel(),
+    ClaudeRead(),
+    WritePrompt(),
+)

@@ -82,7 +82,7 @@ class Notice:
         self.program = program if program is not None else shutil.which("notify-send")
         self.id = ""
 
-    def show(self, title: str, body: str = "", *, seconds: float = 8.0) -> None:
+    def show(self, title: str, body: str = "", *, seconds: float = 8.0, limit: int = 300) -> None:
         if not self.program:
             return
         argv = [self.program, "--app-name=SONU", "--transient", "-p", f"--expire-time={int(seconds * 1000)}"]
@@ -90,7 +90,7 @@ class Notice:
             argv.append(f"--replace-id={self.id}")
         try:  # "--": the heard words can never be read as a flag
             done = subprocess.run(
-                [*argv, "--", title, body[:300]], capture_output=True, text=True, timeout=2, check=False
+                [*argv, "--", title, body[:limit]], capture_output=True, text=True, timeout=2, check=False
             )
         except (OSError, subprocess.TimeoutExpired):
             return
@@ -120,6 +120,10 @@ class Progress:
             self.lines.append(str(message.get("line", "")))
         elif kind == "error":
             self.notice.show("SONU", f"✖ {message.get('message')}")
+        elif kind == "show":  # long text to read before answering, kept up longer
+            self.notice.show(
+                str(message.get("title", "SONU")), str(message.get("text", "")), seconds=90, limit=2000
+            )
         elif kind == "final":
             self.lines = [*self.lines, *message.get("before_headline", []), message.get("headline") or ""]
             self.lines = [line for line in self.lines if line]
@@ -131,7 +135,14 @@ def _style(text: str, code: str, out: TextIO) -> str:
     return f"\033[{code}m{text}\033[0m" if out.isatty() else text
 
 
+def _show(message: dict[str, Any], out: TextIO) -> None:
+    out.write(f"{_style('┌─ ' + str(message.get('title', '')), '2', out)}\n{message.get('text', '')}\n")
+    out.write(_style("└─", "2", out) + "\n")
+
+
 def _ask_yes_no(message: dict[str, Any], out: TextIO) -> bool:
+    if message.get("details"):
+        _show({"title": "", "text": message["details"]}, out)
     risk = message.get("risk", "")
     out.write(
         f"{_style('?', '33', out)} {message.get('description')} ({risk} risk: {message.get('reason')})\n"
@@ -208,6 +219,8 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                 out.write(_style(still, "36", out) + "\n")
             elif kind == "heard" and not as_json:
                 out.write(_style(f"You: {message['text'] or '(nothing)'}", "2", out) + "\n")
+            elif kind == "show" and not as_json:
+                _show(message, out)
             elif kind == "step" and not as_json:
                 out.write(message["line"] + "\n")
             elif kind == "confirm":

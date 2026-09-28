@@ -16,6 +16,7 @@ from sonu.core.conversation import Conversation
 from sonu.core.engine import Engine
 from sonu.core.memory import Memory
 from sonu.core.planner import LLMPlanner
+from sonu.core.prompt_writer import PromptWriter
 from sonu.core.responder import Responder
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
@@ -104,6 +105,7 @@ async def build_runtime(
         settings.ollama.host, timeout_s=settings.ollama.timeout_s, transport=ollama_transport
     )
     planner = LLMPlanner(OllamaChatModel(client, role, settings.ollama))
+    ctx.writer = PromptWriter(OllamaChatModel(client, settings.models.planner, settings.ollama))
     audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
     conversation, responder = assistant_parts(settings, paths, client, memory=memory)
     engine = Engine(

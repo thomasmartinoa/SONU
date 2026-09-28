@@ -15,20 +15,21 @@ import tomllib
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from sonu.config.settings import AppsSettings, Settings, VerifySettings
 from sonu.core.engine import ConfirmRequest, Engine
 from sonu.core.planner import LLMPlanner
+from sonu.core.prompt_writer import PromptWriter
 from sonu.core.report import TaskReport
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.integrations.kitty import SonuTerminals
 from sonu.integrations.obs import ObsLink, ObsSettings
-from sonu.llm.chat import ChatModel
+from sonu.llm.chat import ChatModel, TextModel
 from sonu.policy.engine import Policy
 from sonu.system.control import SystemControl
 from sonu.testing.fake_apps import write_desktop_files
@@ -207,6 +208,10 @@ def _claude_failures(case: EvalCase, system: FakeSystem) -> list[str]:
     if claude is None or claude.state == "closed":
         return [f"Claude Code should be open in {wanted['folder']}"]
     failures = [] if claude.state == "ready" else [f"Claude Code is in state {claude.state!r}, not ready"]
+    if "sent_count" in wanted and len(claude.sent) != wanted["sent_count"]:
+        failures.append(
+            f"Claude Code should have got {wanted['sent_count']} message(s), got {len(claude.sent)}"
+        )
     if "sent" in wanted and claude.sent != wanted["sent"]:
         failures.append(f"Claude Code should have got {wanted['sent']}, got {claude.sent}")
     if "model" in wanted and claude.model != wanted["model"]:
@@ -344,6 +349,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 obs=ObsLink(settings=ObsSettings(enabled=True, port=obs.port, password=obs.password)),
                 wake=FakeWake(),
                 terminals=SonuTerminals(workdir / "run" / "terminals", system),
+                writer=PromptWriter(cast(TextModel, model)) if hasattr(model, "complete_text") else None,
             )
             engine = Engine(
                 planner=LLMPlanner(model),

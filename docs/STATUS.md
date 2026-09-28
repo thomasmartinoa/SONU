@@ -17,7 +17,7 @@ _Last update: 2026-09-28_
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
 | M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
-| M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); next: the prompt writer, GitHub |
+| M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); next: GitHub |
 | M4.5 Installs · M5 Connect · M6 Screen control | toward the goal in [PROPOSAL §8.1](PROPOSAL.md#81-the-goal-a-voice-operator-for-the-whole-pc) ([D42](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
@@ -42,7 +42,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **100 / 100** twice on the v15 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
+`qwen3.5:4b`: **101 / 101** twice on the v16 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
 complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -126,8 +126,11 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    just the word ready" → folder made, Claude Code opened (the new folder trusted without asking), the exact text
    shown and asked, sent — Claude answered "ready"; "what is claude doing?" → "waiting for you"; "switch it to
    sonnet" → "Set model to Sonnet 5 for this session only", and back to Haiku (the default untouched). Test
-   folders and windows removed. Next: **the prompt writer** (an idea → a strong prompt, read back, approved, typed),
-   then **GitHub** via `gh` (list, summarise, merge after two confirmations).
+   folders and windows removed. ~~The prompt writer~~ (#29) — on the laptop: "write the best prompt for my idea: a file
+   called hello.txt that says hi" → SONU wrote a structured prompt (Requirements / Before you start / Done when), showed
+   all of it, asked; on yes it was pasted (Claude Code shows "[Pasted text #1 +N lines]") and confirmed sent; Claude
+   made the file; "what is claude doing?" → "waiting for you". Next: **GitHub** via `gh` (list, summarise, merge after
+   two confirmations).
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
 5. **M5 — connect** (cloud models opt-in, MCP) and **M6 — screen control** (vision model + input, opt-in, high risk).
 
@@ -194,12 +197,16 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #25 | 2026-09-28 | Voice: a conversation (SONU keeps listening ~6 s after each reply; `[voice] follow_up_s`); `sonu voice check` (the owner's voice through each speech model, scored); "HeySanu" as one word; eval suite v13 (86) |
 | #26 | 2026-09-28 | Complex requests: nine multi-step eval cases (suite v14, 95 cases); a "play …" part listed as unsupported is sent back to the model; "his sonu" is the name |
 | #27 | 2026-09-28 | Voice: talk over SONU to stop it — its own PipeWire echo canceller (WebRTC) while sonud runs; `[voice] barge_in` |
-| #28 | open | M4 part 1: make folders; Claude Code in SONU-owned terminals (kitty remote control over a private socket) — open (asks to trust a folder), type the user's words (asks), `/model` for this session, what it's doing; eval suite v15 (100) |
+| #28 | 2026-09-28 | M4 part 1: make folders; Claude Code in SONU-owned terminals (kitty remote control over a private socket) — open (asks to trust a folder), type the user's words (asks), `/model` for this session, what it's doing; eval suite v15 (100) |
+| #29 | open | M4 part 2: the prompt writer — an idea → a clear prompt (the local model), shown in full, asked (by voice: shown on screen, a short question), sent as one paste; the user's longer app name wins in aliases; eval suite v16 (101) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (M4) the prompt writer added things never said (prices, a checkout, backups) | its instructions: Requirements are only the user's words; anything missing becomes a question for Claude Code — and the full prompt is always shown before it's sent (#29) |
+| 09-28 | (M4) a multi-line prompt shows in Claude Code as "[Pasted text #1 +4 lines]", not its text | typed = the text or that marker in the input box; sent = it left the input box (#29) |
+| 09-28 | (eval, after a prompt change) "…I mean code oss" was planned with app "code" → "Code - OSS or VSCodium?" | the longer installed app name in the user's words wins (#29) |
 | 09-28 | (M4) "/model sonnet" + Enter also **saved Sonnet as the user's default** for new Claude Code sessions (set back to Haiku at once); typed fast, Enter could open Claude Code's model menu instead | SONU drives the menu on purpose and presses "s" (this session only); the user's default stays (#28) |
 | 09-28 | (M4) "…open claude code there on workspace 9 and tell it …" was planned without the workspace — Claude Code opened on the focused one | the one workspace the user's words name is used (#28) |
 | 09-28 | (M4) "make a folder … and open claude code there on workspace 9" was planned as launching the app "code": **Visual Studio Code** opened and restored the owner's last project (left open, on 9) | a plan that launches "code"/"claude" when the user said "Claude Code" is sent back; eval `claude-code-is-not-the-code-app` (#28) |

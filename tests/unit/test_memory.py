@@ -106,6 +106,14 @@ async def test_remember_what_an_app_name_means(rig: Rig) -> None:
 
 
 @pytest.mark.anyio
+async def test_the_users_full_app_name_wins_over_a_shortened_one(rig: Rig) -> None:
+    # Found in an eval: "…I mean code oss" was planned with app "code" — several apps match that.
+    request = "remember that when I say vs code I mean code oss"
+    report = await rig.run(request, ("memory.remember", {"kind": "alias", "text": "vs code", "app": "code"}))
+    assert report.lines() == ["✔ I'll remember that “vs code” means Code - OSS"]
+
+
+@pytest.mark.anyio
 async def test_an_app_that_isnt_installed_isnt_remembered(rig: Rig) -> None:
     report = await rig.run(
         "remember when I say music I mean tidal",

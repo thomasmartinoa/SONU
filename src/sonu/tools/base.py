@@ -110,6 +110,9 @@ class Prepared:
     payload: Any = None
     # Raises the risk of this particular step above the tool's own (e.g. turning Wi-Fi *off*).
     risk: Risk | None = None
+    # Long text the user must see before approving (a prompt SONU wrote), and a short form to say aloud.
+    details: str | None = None
+    spoken: str | None = None
 
 
 class Tool(ABC):

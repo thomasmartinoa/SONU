@@ -282,3 +282,72 @@ async def test_the_workspace_the_user_named_is_used_if_the_plan_leaves_it_out(ri
     assert report.status == "done", lines(report)
     assert lines(report)[1] == "Opened Claude Code (Haiku 4.5) in ~/dev_works/shop-app on workspace 9"
     assert rig.fake.windows_of_class("kitty")[0]["workspace"]["id"] == 9
+
+
+# ---------------------------------------------------------------------------- the prompt writer
+PROMPT_TEXT = (
+    "Build a small todo app.\nRequirements:\n- add and remove tasks\n- a dark mode\n"
+    "Approach:\n- look at what's in the folder first\nDone when: it runs and you show me how to start it."
+)
+
+
+class Writes:
+    """A text model that writes a fixed prompt (or something unusable)."""
+
+    name = "fake"
+
+    def __init__(self, text: str = PROMPT_TEXT) -> None:
+        self.text, self.asked = text, []  # type: ignore[var-annotated]
+
+    async def complete_text(self, messages: list[Any], *, temperature: float, max_tokens: int) -> Any:
+        from sonu.llm.chat import ChatResult
+
+        self.asked.append(messages[-1].content)
+        return ChatResult(self.text, "fake", 0.1)
+
+
+@pytest.mark.anyio
+async def test_a_prompt_from_the_idea_is_shown_in_full_asked_and_sent(rig: Rig) -> None:
+    from sonu.core.prompt_writer import PromptWriter
+
+    await open_in(rig, "todo-app")
+    model = Writes()
+    rig.ctx.writer = PromptWriter(model)
+    request = "write the best prompt for my idea: a todo app with a dark mode"
+    report = await rig.run(request, ("dev.prompt", {"idea": "a todo app with a dark mode"}))
+    assert report.status == "done", lines(report)
+    [asked] = rig.confirmations
+    assert asked.risk is Risk.MEDIUM and asked.details == PROMPT_TEXT  # all of it, before asking
+    assert asked.spoken == "send the prompt I wrote to Claude Code in todo-app — it's on your screen"
+    assert "Project folder: todo-app\nMy idea: a todo app with a dark mode" in model.asked[0]
+    assert rig.claude("todo-app").sent == [PROMPT_TEXT]  # a multi-line paste, sent whole
+    assert lines(report) == ["Sent the prompt to Claude Code in todo-app"]
+
+
+@pytest.mark.anyio
+async def test_a_prompt_not_approved_is_not_sent(rig: Rig) -> None:
+    from sonu.core.prompt_writer import PromptWriter
+
+    await open_in(rig, "todo-app")
+    rig.ctx.writer = PromptWriter(Writes())
+    report = await rig.run(
+        "write a prompt for a todo app", ("dev.prompt", {"idea": "a todo app"}), approve=False
+    )
+    assert report.status == "declined" and rig.claude("todo-app").sent == []
+
+
+@pytest.mark.parametrize(("written", "problem"), [('{"prompt": 1}', "usable"), ("ok", "usable")])
+@pytest.mark.anyio
+async def test_an_unusable_prompt_is_never_offered(rig: Rig, written: str, problem: str) -> None:
+    from sonu.core.prompt_writer import PromptWriter
+
+    await open_in(rig, "todo-app")
+    rig.ctx.writer = PromptWriter(Writes(written))
+    report = await rig.run("write a prompt for a todo app", ("dev.prompt", {"idea": "a todo app"}))
+    assert report.status == "failed" and problem in lines(report)[0] and rig.confirmations == []
+
+
+def test_the_written_prompt_is_tidied() -> None:
+    from sonu.core.prompt_writer import tidy
+
+    assert tidy("```\n## Goal\n**Build** a todo app.\n```") == "Goal\nBuild a todo app."
