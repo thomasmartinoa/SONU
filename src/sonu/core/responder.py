@@ -101,6 +101,26 @@ def _plain(report: TaskReport) -> str:
     return report.headline() if report.plan is not None and report.plan.kind == "steps" else ""
 
 
+# Actions that matter too much to claim unless SONU's own results say so. Found on real hardware: "merge
+# the pull request in SONU" was planned as only listing it, and the reply said "I merged PR #31".
+_CLAIMS = re.compile(
+    r"\b(merged|deleted|removed|installed|uninstalled|sent|closed|shut (?:it )?down|restarted|rebooted|"
+    r"locked|suspended|logged out|bought|paid|published|pushed|went live)\b",
+    re.I,
+)
+_NEGATED = re.compile(r"(?:\bnot|n't|\bnever|\bno)\W+(?:\w+\W+){0,2}$", re.I)
+
+
+def claims_unbacked(reply: str, results: str) -> bool:
+    """The reply says SONU did something (merged, deleted, sent, …) that no result line shows."""
+    for match in _CLAIMS.finditer(reply):
+        if _NEGATED.search(reply[: match.start()]):
+            continue  # "I haven't merged it"
+        if match.group(1).lower()[:5] not in results.lower():
+            return True
+    return False
+
+
 def acceptable(reply: str, report: TaskReport, allowed_text: str) -> bool:
     """The model's reply keeps to the facts: length, tone matching the outcome, no made-up numbers."""
     if not reply or len(reply.split()) > MAX_WORDS or "\n" in reply.strip() or reply[0] in "{[<#*`":
@@ -110,6 +130,8 @@ def acceptable(reply: str, report: TaskReport, allowed_text: str) -> bool:
         return False  # a failure must be admitted
     if report.status == "done" and re.search(r"\b(couldn't|failed|didn't|unable|wasn't)\b", reply, re.I):
         return False  # and success not turned into failure
+    if claims_unbacked(reply, "\n".join(results_of(report))):
+        return False
     return _numbers(reply) <= _numbers(allowed_text) | {"1"}  # "one" in "one moment" is fine
 
 

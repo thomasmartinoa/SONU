@@ -288,3 +288,17 @@ def test_claude_code_is_never_the_code_app() -> None:
     assert (
         _problems(plan, REGISTRY, "make a folder called sonu-m4-test in dev_works and open code on 9") == []
     )
+
+
+def test_merging_a_pull_request_is_never_only_listing_them() -> None:
+    # Found on real hardware: "merge the pull request in SONU" was planned as github.prs.
+    listing = _PlanModel.model_validate(
+        {"kind": "steps", "steps": [{"tool": "github.prs", "args": {"repo": "SONU"}}]}
+    )
+    assert _problems(listing, REGISTRY, "merge the pull request in SONU") == [
+        'the user asked to merge a pull request — plan exactly this step: {"tool": "github.merge", "args": '
+        '{"repo": "SONU"}} (even if they said no before: SONU checks it and asks them on screen before '
+        "anything happens)"
+    ]
+    any_repo = _PlanModel.model_validate({"kind": "steps", "steps": [{"tool": "github.prs", "args": {}}]})
+    assert _problems(any_repo, REGISTRY, "what are my pull requests?") == []

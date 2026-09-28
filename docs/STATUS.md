@@ -130,7 +130,10 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    called hello.txt that says hi" → SONU wrote a structured prompt (Requirements / Before you start / Done when), showed
    all of it, asked; on yes it was pasted (Claude Code shows "[Pasted text #1 +N lines]") and confirmed sent; Claude
    made the file; "what is claude doing?" → "waiting for you". ~~GitHub~~ (#31): "what are my open pull requests?",
-   "merge the pull request in …" (see #31 for the laptop run). **M4 is complete** with this; next: M4.5 installs.
+   "merge the pull request in …" — on the laptop against the owner's real GitHub: the list found SONU #31 and
+   angelpsalu/smartchefai #4 with their checks; while #31's CI ran, "merge …" was refused ("checks are still running");
+   once green, SONU offered it (17 files, +600 −10, checks passing) and asked — declined, #31 stayed open.
+   **M4 is complete** with this; next: M4.5 installs.
 4. **M4.5 — installs**: official repos then AUR (`yay`), explained, password through polkit only at that moment.
 5. **M5 — connect** (cloud models opt-in, MCP) and **M6 — screen control** (vision model + input, opt-in, high risk).
 
@@ -206,6 +209,7 @@ Waiting on music in `~/Music`: local music with `mpv`.
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 09-28 | (M4) "merge the pull request in SONU" was planned as only listing it, and the **reply said "I merged PR #31"** — nothing was merged | replies may not claim a consequential action (merged, deleted, installed, sent, closed, shut down, …) that no result line shows — SONU says the plain result instead; a merge request without a merge step is sent back with the exact step (after a declined merge the model kept listing: 3/3 right after the change) (#31) |
 | 09-28 | (CI) GitHub's CI had failed on every PR since #16 — first the host-dependent OBS test (fixed in #21), then mypy without numpy (CI doesn't install the voice extra); checks were only run on the laptop, where both passed | a mypy override for numpy; then, on CI's 3.13/3.14 only, a recorder pipe left to the garbage collector ("unclosed transport") — SONU's audio pipes are now closed explicitly; CI's steps reproduced in a clean env on 3.12–3.14 (with ResourceWarnings as errors); each PR's CI is checked before it's reported ready (#30) |
 | 09-28 | (M4) the prompt writer added things never said (prices, a checkout, backups) | its instructions: Requirements are only the user's words; anything missing becomes a question for Claude Code — and the full prompt is always shown before it's sent (#29) |
 | 09-28 | (M4) a multi-line prompt shows in Claude Code as "[Pasted text #1 +4 lines]", not its text | typed = the text or that marker in the input box; sent = it left the input box (#29) |

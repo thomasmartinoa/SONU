@@ -460,6 +460,19 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                     f"step {index + 1} (apps.launch): Claude Code is not an app to launch — use "
                     "dev.claude_open (with the folder) instead"
                 )
+    # Found on real hardware: "merge the pull request in SONU" (after an earlier "checks still running")
+    # was planned as only listing the pull requests.
+    said = normalize(request)
+    asked_to_merge = re.search(r"\bmerge\b", said) and re.search(r"\b(pull requests?|prs?|pull)\b", said)
+    if asked_to_merge and not any(step.tool == "github.merge" for step in plan.steps):
+        # Found on the laptop: after a declined merge, the model kept planning only a list — a concrete
+        # step works better on a small model than an explanation.
+        repo = next((str(step.args["repo"]) for step in plan.steps if step.args.get("repo")), "")
+        wanted = json.dumps({"tool": "github.merge", "args": {"repo": repo} if repo else {}})
+        problems.append(
+            f"the user asked to merge a pull request — plan exactly this step: {wanted} (even if they said "
+            "no before: SONU checks it and asks them on screen before anything happens)"
+        )
     # Found on real hardware (by voice): "…and play me alone music there" was listed as unsupported —
     # once, not the next time — although media.play plays any song or video by name.
     if not any(step.tool == "media.play" for step in plan.steps):
