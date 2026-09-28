@@ -12,7 +12,7 @@ from sonu.testing.fake_wake import FakeWake
 from sonu.tools.base import Prepared, Risk, StepStatus, ToolOutcome
 from sonu.tools.voice_tools import Wake, WakeArgs
 from sonu.voice.audio import RATE
-from sonu.voice.wake import HEAD_FRAMES, WAKE_HINT, WakeListener, after_wake_word
+from sonu.voice.wake import HEAD_FRAMES, WAKE_HINT, WakeListener, after_wake_word, fix_name
 from sonu.world.snapshot import WorldSnapshot
 
 
@@ -35,6 +35,34 @@ from sonu.world.snapshot import WorldSnapshot
 )
 def test_after_wake_word(heard: str, words: str | None) -> None:
     assert after_wake_word(heard) == words
+
+
+# Found on real hardware: the owner's voice through the laptop's mic, 2026-09-28.
+@pytest.mark.parametrize(
+    "heard",
+    [
+        "Listen for Hey Sovenue",
+        "Listen for Hey Soinu",
+        "Listen for He Sonu",
+        "Listen for Hey Soenu",
+        "Listen for Hey Soin",
+    ],
+)
+def test_a_misheard_name_after_a_greeting_is_sonu(heard: str) -> None:
+    assert fix_name(heard) == "Listen for Hey Sonu"
+
+
+@pytest.mark.parametrize(
+    "heard",
+    ["hey son, come here", "Hey Siri", "I told Sonny", "hi sunny", "he said so", "hey sony", "okay so"],
+)
+def test_other_words_are_left_alone(heard: str) -> None:
+    assert fix_name(heard) == heard
+
+
+def test_a_misheard_name_still_wakes() -> None:
+    assert after_wake_word("Hey Soin, open kitty") == "open kitty"
+    assert after_wake_word("He Soenu") == ""
 
 
 def speech(seconds: float) -> bytes:

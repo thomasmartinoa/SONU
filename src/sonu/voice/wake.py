@@ -22,6 +22,7 @@ import contextlib
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 from sonu.voice.audio import DETECT_EVERY, FRAME_BYTES, FRAME_MS, RATE, RECORD_ARGV, SpeechDetector, frames
 
@@ -33,13 +34,36 @@ HEAD_FRAMES = 1800 // FRAME_MS  # the first 1.8 s of speech are checked for the 
 PRE_ROLL_FRAMES = 500 // FRAME_MS  # audio kept from just before speech was noticed
 
 
+# Found on the laptop, the owner's voice through the built-in mic: "Hey Sovenue", "Hey Soinu",
+# "He Sonu", "Hey Soenu", "Hey Soin". After a greeting, a word close enough to "Sonu" is the name.
+_CALLED = re.compile(r"\b(?:hey|hay|he|hi|hello|ok(?:ay)?|yo)([\s,.!]+)([a-z']+)", re.I)
+_EXACT = {"sonu", "sanu", "sonoo", "sonnu"}
+_WORDS = {"son", "sons", "soon", "sun", "song", "sonny", "sunny", "some", "soul", "sound", "sure", "sony"}
+CLOSE = 0.7  # "Soin" 0.75, "Sovenue" 0.73, "Soenu" 0.89 — "Sonny" 0.67, "Sunny" 0.44
+
+
+def sounds_like_sonu(word: str) -> bool:
+    w = word.lower().removesuffix("'s")
+    if w in _EXACT:
+        return True
+    if w in _WORDS or not w.startswith("s") or not 3 <= len(w) <= 8:
+        return False
+    return SequenceMatcher(None, w, "sonu").ratio() >= CLOSE
+
+
+def fix_name(text: str) -> str:
+    """SONU's name as Whisper misheard it, after a greeting, written right: "Listen for Hey Soin" →
+    "Listen for Hey Sonu". Other words are left alone."""
+    return _CALLED.sub(lambda m: f"Hey{m.group(1)}Sonu" if sounds_like_sonu(m.group(2)) else m.group(0), text)
+
+
 def after_wake_word(text: str) -> str | None:
     """The words after SONU's name if ``text`` starts with it ("Hey Sonu, open kitty" → "open kitty");
     None if it doesn't start with the name."""
-    match = _WAKE.match(text)
+    match = _WAKE.match(fix_name(text))
     if match is None:
         return None
-    return text[match.end() :].strip()
+    return fix_name(text)[match.end() :].strip()
 
 
 @dataclass(frozen=True, slots=True)

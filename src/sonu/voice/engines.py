@@ -125,6 +125,11 @@ def silero_detector() -> Callable[[bytes], list[tuple[int, int]]]:
     return detect
 
 
+# Whisper's own default; measured on the laptop's GPU: 0.21 s for a sentence, ~15 ms more than 1 —
+# worth it after the owner's voice was misheard ("Hey Sonu" → "Hey Soin", "yes" → "Peace").
+BEAM_SIZE = 5
+
+
 class WhisperEars:
     """Speech → text. The model loads on first use and stays on the GPU."""
 
@@ -154,7 +159,7 @@ class WhisperEars:
 
         audio = np.frombuffer(pcm16, dtype=np.int16).astype(np.float32) / 32768.0
         segments, _ = self._model.transcribe(
-            audio, language="en", beam_size=1, vad_filter=True, initial_prompt=hint or None
+            audio, language="en", beam_size=BEAM_SIZE, vad_filter=True, initial_prompt=hint or None
         )
         return " ".join(segment.text.strip() for segment in segments).strip()
 
