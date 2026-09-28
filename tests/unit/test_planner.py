@@ -226,3 +226,44 @@ def test_schema_asks_for_unsupported_first() -> None:
     assert next(iter(schema["properties"])) == "unsupported"
     assert "unsupported" in schema["required"]
     assert "Do the parts you can and list the rest here" in build_system_prompt(REGISTRY, SNAPSHOT)
+
+
+@pytest.mark.anyio
+async def test_a_song_listed_as_unsupported_is_sent_back() -> None:
+    # Found on real hardware: "…and browser open in workspace 4 and play me alone music there" was
+    # planned with the song in unsupported — once; the same words planned right the next time.
+    gave_up = {
+        "unsupported": ["play me alone music there"],
+        "kind": "steps",
+        "message": "",
+        "steps": [{"tool": "apps.launch", "args": {"app": "kitty", "workspace": 4}}],
+    }
+    fixed = {
+        "unsupported": [],
+        "kind": "steps",
+        "message": "",
+        "steps": [
+            {"tool": "apps.launch", "args": {"app": "kitty", "workspace": 4}},
+            {"tool": "media.play", "args": {"query": "alone music"}},
+        ],
+    }
+    fake = fake_with(gave_up, fixed)
+    request = "open me a kitty terminal on workspace 4 and play me alone music there"
+    plan = await make_planner(fake).plan(request, SNAPSHOT, REGISTRY)
+    assert plan.attempts == 2 and plan.unsupported == ()
+    assert [step.tool for step in plan.steps] == ["apps.launch", "media.play"]
+    assert (
+        "'play me alone music there' is possible: media.play"
+        in fake.chat_requests[1]["messages"][-1]["content"]
+    )
+
+
+def test_other_unsupported_parts_are_kept() -> None:
+    plan = _PlanModel.model_validate(
+        {
+            "kind": "steps",
+            "steps": [{"tool": "apps.launch", "args": {"app": "kitty"}}],
+            "unsupported": ["install htop"],
+        }
+    )
+    assert _problems(plan, REGISTRY, "open kitty and install htop") == []

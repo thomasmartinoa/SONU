@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v13, 86 cases)
+## The cases (v14, 95 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -104,6 +104,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-28 | `qwen3.5:4b` | v13 (86): + `wake-word-misheard` ("Listen for his own." — found on the laptop), and a rule "listen for his own … also means Hey Sonu" | **84 / 86** | the new case turned the wake word *off*; "what do you remember about me?" → reminders.list |
 | 2026-09-28 | `qwen3.5:4b` | the rule reworded, then shortened | **85 / 86** | both fixed, but `close-one` ("close kitty") now closed the *focused* window, every time — the rule itself (any wording) changed that plan; with no misheard-name rule the model already plans `wake-word-misheard` right |
 | 2026-09-28 | `qwen3.5:4b` | v13 with no misheard-name rule; "what do you remember (about me)? is memory.list, not reminders.list" | **86 / 86** twice | — |
+| 2026-09-28 | `qwen3.5:4b` | v14 (95): nine complex multi-step requests (apps + search + volume; night light + brightness + pause + reminder; side by side + DND + dark; an unsupported install; three questions; move + show + maximize; a dev setup; two spoken, rambling requests from real use); a "play …" in unsupported is sent back | **9 / 9** of the new ones, then **95 / 95** twice | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

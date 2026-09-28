@@ -374,6 +374,7 @@ def build_system_prompt(
 
 # web.search turns a "site:github.com" operator into its site itself, so it isn't the model's words.
 _SITE_OPERATOR = re.compile(r"\bsite:\S+", re.IGNORECASE)
+_PLAY = re.compile(r"^\W*(?:play|put on)\b", re.IGNORECASE)
 
 
 def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[str]:
@@ -418,6 +419,15 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                     f"step {index + 1} ({step.tool}): {name} must use only the user's own words; "
                     f"{', '.join(repr(word) for word in missing)} are not in the request "
                     "(keep the other arguments)"
+                )
+    # Found on real hardware (by voice): "…and play me alone music there" was listed as unsupported —
+    # once, not the next time — although media.play plays any song or video by name.
+    if not any(step.tool == "media.play" for step in plan.steps):
+        for part in plan.unsupported:
+            if _PLAY.match(part):
+                problems.append(
+                    f"'{part}' is possible: media.play plays any song or video by name — add a media.play "
+                    "step (query: the user's words for what to play) and remove it from unsupported"
                 )
     return problems
 
