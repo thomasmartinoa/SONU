@@ -34,6 +34,7 @@ from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_obs import FakeObs, FakeObsState
 from sonu.testing.fake_system import FakeSystem
+from sonu.testing.fake_wake import FakeWake
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 
@@ -321,6 +322,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 ancestors=frozenset,
                 system=SystemControl(system, power_supply=power_supply, sys=workdir / "sys", home=workdir),
                 obs=ObsLink(settings=ObsSettings(enabled=True, port=obs.port, password=obs.password)),
+                wake=FakeWake(),
             )
             engine = Engine(
                 planner=LLMPlanner(model),

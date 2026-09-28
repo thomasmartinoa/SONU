@@ -1,0 +1,132 @@
+""" "Hey Sonu": listening for SONU's name, when the user turns it on (D47).
+
+Off by default. While it's on, the microphone stays open in ``sonud`` and:
+
+* a speech detector (Silero VAD) looks at the last 1.5 s of audio every 300 ms — nothing else runs
+  while nobody talks;
+* once someone has talked for ~1.8 s (or stopped sooner), only that beginning is transcribed, with
+  "Hey Sonu" as the hint. If it doesn't **start** with SONU's name, the rest of what they say is
+  ignored: never transcribed, never kept;
+* if it does, SONU keeps recording until they stop, and the words after the name are the request
+  ("Hey Sonu, open kitty on 2"). The name alone ("Hey Sonu") → SONU greets and listens, like the key.
+
+Measured on the laptop: with the hint, Whisper wrote "Hey Sonu" / "Sonu, …" for three voices; the
+hint also turned "I told Sonny about it" into "I told Sonu about it" — which is why the name only
+counts at the start. Audio lives in memory and is dropped after each check.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import re
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
+
+from sonu.voice.audio import DETECT_EVERY, FRAME_BYTES, FRAME_MS, RATE, RECORD_ARGV, SpeechDetector, frames
+
+WAKE_HINT = "Hey Sonu"
+_WAKE = re.compile(r"^\W*(?:(?:hey|hi|hello|ok(?:ay)?|yo)\W+)?(?:sonu|sanu|sonoo|sonnu)\b\W*", re.I)
+
+WINDOW_FRAMES = 1500 // FRAME_MS  # the detector looks at the last 1.5 s
+HEAD_FRAMES = 1800 // FRAME_MS  # the first 1.8 s of speech are checked for the name
+PRE_ROLL_FRAMES = 500 // FRAME_MS  # audio kept from just before speech was noticed
+
+
+def after_wake_word(text: str) -> str | None:
+    """The words after SONU's name if ``text`` starts with it ("Hey Sonu, open kitty" → "open kitty");
+    None if it doesn't start with the name."""
+    match = _WAKE.match(text)
+    if match is None:
+        return None
+    return text[match.end() :].strip()
+
+
+@dataclass(frozen=True, slots=True)
+class WakeTiming:
+    silence_s: float = 0.8  # quiet this long: they're done
+    max_s: float = 20.0  # never record longer
+
+
+class _Segment:
+    """One stretch of speech: collected until the name is checked, then kept only if it was said."""
+
+    def __init__(self, pre_roll: list[bytes]) -> None:
+        self.frames = list(pre_roll)
+        self.length = len(pre_roll)  # frames so far, kept or not
+        self.head: str | None = None  # what the beginning said, once checked
+        self.head_length = 0  # frames the beginning had
+        self.spoken_until = self.length  # frames up to the latest speech
+        self.woke = False  # it started with SONU's name
+
+    def add(self, frame: bytes) -> None:
+        self.length += 1
+        if self.head is None or self.woke:  # not for SONU: nothing more is kept
+            self.frames.append(frame)
+
+    def audio(self) -> bytes:
+        return b"".join(self.frames)
+
+
+class WakeListener:
+    """Runs until cancelled; calls ``on_wake(words after the name)`` each time SONU is called."""
+
+    def __init__(
+        self,
+        transcribe: Callable[[bytes, str], str],  # 16 kHz 16-bit audio, hint → text
+        detector: SpeechDetector,
+        on_wake: Callable[[str], Awaitable[None]],
+        busy: Callable[[], bool] = lambda: False,  # SONU is working or talking: don't listen
+        hint: Callable[[], str] = lambda: WAKE_HINT,  # for the whole request (app names)
+        argv: Sequence[str] = RECORD_ARGV,
+        timing: WakeTiming | None = None,
+    ) -> None:
+        self.transcribe, self.detector, self.on_wake = transcribe, detector, on_wake
+        self.busy, self.hint, self.argv = busy, hint, argv
+        self.timing = timing or WakeTiming()
+        self.heard_frames = 0  # frames read from the microphone (the check that it's really listening)
+
+    async def run(self) -> None:
+        window: list[bytes] = []
+        segment: _Segment | None = None
+        async with contextlib.aclosing(frames(self.argv)) as stream:
+            async for frame in stream:
+                self.heard_frames += 1
+                if self.busy():
+                    window, segment = [], None  # SONU's own voice, or a request being heard
+                    continue
+                window = [*window[-(WINDOW_FRAMES - 1) :], frame]
+                if segment is not None:
+                    segment.add(frame)
+                if self.heard_frames % DETECT_EVERY:
+                    continue
+                speech = await asyncio.to_thread(self.detector, b"".join(window))
+                segment = await self._step(segment, window, speech)
+
+    async def _step(
+        self, segment: _Segment | None, window: list[bytes], speech: list[tuple[int, int]]
+    ) -> _Segment | None:
+        """Every 300 ms: start, check, or finish a stretch of speech."""
+        samples = len(window) * FRAME_BYTES // 2
+        quiet_s = (samples - speech[-1][1]) / RATE if speech else samples / RATE
+        if segment is None:  # only speech that is still going starts one (not the end of the last)
+            fresh = speech and quiet_s < 2 * DETECT_EVERY * FRAME_MS / 1000
+            return _Segment(window[-(PRE_ROLL_FRAMES + DETECT_EVERY) :]) if fresh else None
+        if speech:
+            segment.spoken_until = max(segment.spoken_until, segment.length - int(quiet_s * 1000) // FRAME_MS)
+        ended = quiet_s >= self.timing.silence_s or segment.length * FRAME_MS >= self.timing.max_s * 1000
+        if segment.head is None and (ended or segment.length >= HEAD_FRAMES):
+            segment.head = await asyncio.to_thread(self.transcribe, segment.audio(), WAKE_HINT)
+            segment.head_length = segment.length
+            segment.woke = after_wake_word(segment.head) is not None
+            if not segment.woke:
+                segment.frames.clear()
+        if not ended:
+            return segment
+        if segment.woke:
+            text = segment.head or ""
+            if segment.spoken_until > segment.head_length:  # more was said after the part already heard
+                text = await asyncio.to_thread(self.transcribe, segment.audio(), self.hint())
+            words = after_wake_word(text)
+            await self.on_wake(words if words is not None else after_wake_word(segment.head or "") or "")
+        return None

@@ -21,6 +21,7 @@ from sonu.tools.obs_tools import OBS_TOOLS
 from sonu.tools.power_tools import POWER_TOOLS
 from sonu.tools.rice_tools import RICE_TOOLS
 from sonu.tools.settings_tools import SETTINGS_TOOLS
+from sonu.tools.voice_tools import VOICE_TOOLS
 from sonu.tools.web_tools import WEB_TOOLS
 from sonu.tools.window_tools import WINDOW_TOOLS
 
@@ -61,6 +62,7 @@ class ToolRegistry:
             *POWER_TOOLS,
             *OBS_TOOLS,
             *MEMORY_TOOLS,
+            *VOICE_TOOLS,
         ),
     ) -> None:
         self._tools = {tool.name: tool for tool in tools}

@@ -90,6 +90,12 @@ def voice_status(ctx: typer.Context) -> None:
     ]
     for name, ok in rows:
         typer.echo(f"{'✔' if ok else '✖'} {name}")
+    wake_on = (voice_dir(state.paths.data_dir) / "wake-word").exists()
+    typer.echo(
+        "· 'Hey Sonu': on — say “stop listening for Hey Sonu” to turn it off"
+        if wake_on
+        else "· 'Hey Sonu': off — say or type “listen for Hey Sonu” to turn it on"
+    )
     if not all(ok for _, ok in rows):
         typer.echo("→ sonu voice setup")
         raise typer.Exit(code=1)
