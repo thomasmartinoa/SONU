@@ -173,6 +173,7 @@ class FakeSystem:
     )
     installed_packages: dict[str, str] = field(default_factory=lambda: {"kitty": "0.49.1-1"})
     polkit_answer: str = "allow"  # "dismiss": the user cancels the system's password prompt
+    root_secret: str = "Hunter2!"  # noqa: S105 — the (fake) password polkit's text agent accepts
     # Accessibility (AT-SPI through SONU's helper): pid → the app's controls, as the helper reports
     # them; "then" (optional) is the control's name after a press (Play → Pause).
     a11y_apps: dict[int, list[dict[str, object]]] = field(default_factory=dict)
@@ -180,6 +181,15 @@ class FakeSystem:
 
     def __post_init__(self) -> None:
         self.kitty.on_run = self.run_in_terminal
+        self.kitty.on_password = self.password_typed
+
+    def password_typed(self, argv: list[str], typed: str) -> str:
+        if typed != self.root_secret:
+            return (
+                "polkit-agent-helper-1: pam_authenticate failed: Authentication failure\n"
+                "==== AUTHENTICATION FAILED ====\n[sonu] finished (exit 127)"
+            )
+        return self.run_in_terminal(argv) + "[sonu] finished (exit 0)\n"
 
     def run_in_terminal(self, argv: list[str]) -> str:
         """A program started in a SONU terminal (an install): its output."""

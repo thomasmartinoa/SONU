@@ -360,6 +360,8 @@ class Daemon:
             return
         voice.hint = speech_hint(engine.ctx.resolver.catalog)
         confirm = self._voice_confirmer(voice, confirm, session)
+        if self.settings.voice.password_by_voice:  # D57: this spoken request's install may ask
+            engine.ctx.ask_secret = voice.hear_secret
         text = str(request.get("heard") or "")  # "Hey Sonu, open kitty": already heard
         if not text:
             if self.settings.voice.greet:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import shutil
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -81,6 +81,9 @@ class ToolContext:
     writer: PromptWriter | None = None
     # Reads the screen with the local vision model (M6); None: not available.
     reader: ScreenReader | None = None
+    # A spoken request with "password by voice" on: says the prompt, returns what was said (never
+    # shown, logged or kept). None: not available — the user types it.
+    ask_secret: Callable[[str], Awaitable[str | None]] | None = None
 
     def sonu_terminals(self) -> SonuTerminals:
         if self.terminals is None:

@@ -113,9 +113,22 @@ class FakeProgram:
     argv: list[str]
     output: str
     state: str = "ready"  # closed after close-window
+    # polkit's text agent in the window (polkit_tty.py): typed text + Enter answers it.
+    answer: Callable[[str], str] | None = None
+    typed: str = ""
+    sent_as: list[str] = field(default_factory=list)  # how text was sent ("--bracketed-paste=…")
 
     def screen(self) -> str:
         return self.output
+
+    def type(self, text: str, mode: str) -> None:
+        self.typed += text
+        self.sent_as.append(mode)
+
+    def key(self, name: str) -> None:
+        if name == "Enter" and self.answer is not None:
+            self.output += "\n" + self.answer(self.typed)
+            self.typed, self.answer = "", None
 
 
 class FakeKitty:
@@ -126,6 +139,7 @@ class FakeKitty:
         self.terminals: dict[str, FakeClaude] = {}  # socket → Claude Code in it
         self.programs: dict[str, FakeProgram] = {}  # socket → another program
         self.on_run: Callable[[list[str]], str] | None = None  # runs a program, returns its output
+        self.on_password: Callable[[list[str], str], str] | None = None  # the command, the typed password
 
     def launched(self, argv: list[str]) -> None:
         """FakeHyprland started ``argv``: a SONU terminal if it listens on a socket."""
@@ -138,6 +152,18 @@ class FakeKitty:
             return
         start = argv.index("--hold") + 1 if "--hold" in argv else argv.index("--title") + 2
         program = argv[start:]
+        if len(program) > 2 and program[1].endswith("polkit_tty.py"):  # the password asked in the window
+            inner = program[2:]
+            prompt = (
+                "==== AUTHENTICATING FOR org.freedesktop.policykit.exec ====\n"
+                "Authenticating as: martin\nPassword: "
+            )
+            self.programs[socket] = FakeProgram(
+                program,
+                prompt,
+                answer=lambda typed: self.on_password(inner, typed) if self.on_password else "",
+            )
+            return
         output = self.on_run(program) if self.on_run is not None else ""
         self.programs[socket] = FakeProgram(program, output)
 
@@ -154,6 +180,13 @@ class FakeKitty:
         if other is not None and other.state != "closed":
             if command == "close-window":
                 other.state = "closed"
+            elif command == "send-text":
+                other.type(
+                    (stdin or b"").decode(), next((a for a in rest if a.startswith("--bracketed")), "")
+                )
+            elif command == "send-key":
+                for key in rest:
+                    other.key(key)
             return 0, other.screen() if command == "get-text" else "[]" if command == "ls" else "", ""
         claude = self.terminals.get(socket)
         if claude is None or claude.state == "closed":

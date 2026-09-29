@@ -138,8 +138,10 @@ class SonuTerminals:
     async def screen(self, terminal: Terminal) -> str:
         return await self._kitty(terminal, "get-text")
 
-    async def type(self, terminal: Terminal, text: str) -> None:
-        await self._kitty(terminal, "send-text", "--stdin", "--bracketed-paste=enable", stdin=text.encode())
+    async def type(self, terminal: Terminal, text: str, *, paste: bool = True) -> None:
+        """``paste``: as one bracketed paste (a prompt for Claude Code); off: plain keys (a password)."""
+        mode = "--bracketed-paste=enable" if paste else "--bracketed-paste=disable"
+        await self._kitty(terminal, "send-text", "--stdin", mode, stdin=text.encode())
 
     async def keys(self, terminal: Terminal, *keys: str) -> None:
         await self._kitty(terminal, "send-key", *keys)

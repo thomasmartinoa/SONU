@@ -113,6 +113,9 @@ class VoiceSettings(_Section):
     follow_up_s: float = Field(default=6.0, ge=0, le=30)
     # Talk over SONU to stop it (adds a "SONU (echo cancel)" speaker and mic to PipeWire while sonud runs).
     barge_in: bool = True
+    # Installing by voice: say the password as well as type it (off: only type it). SONU enters it into its
+    # own install window and never shows, logs or keeps it — but anyone nearby hears it.
+    password_by_voice: bool = False
 
 
 class AssistantSettings(_Section):
@@ -250,4 +253,5 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # greet = true                   # "How can I help?" when the key is pressed
 # follow_up_s = 6.0              # keep listening after a reply for the next request (0: off)
 # barge_in = true                # talk over SONU to stop it (a PipeWire echo canceller)
+# password_by_voice = false      # installs by voice: say the password too (anyone nearby hears it)
 """
