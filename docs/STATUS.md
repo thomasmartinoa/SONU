@@ -140,7 +140,11 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    obs studio" → already installed; "install cowsay" → "Install cowsay 3.8.4-1 from the official extra repo (…, 19.40 KiB
    to download). Your password is asked by the system itself."; "install spotify" → a list (official first,
    spotify-launcher marked installed, the AUR's spotify last). A real install needs the owner's password — the
-   owner's first try is the check.
+   owner's first try is the check. **The owner installed `wtype` (extra) and `wlrctl` (AUR) by voice** (2026-09-28,
+   typing the password in the system dialog) — both verified by SONU. The owner then asked to also **say** the
+   password: #35 ([D57](DECISIONS.md), opt-in, risks explained and accepted). On the laptop, without the owner's
+   password: "install cowsay" with it on → the prompt in SONU's window ("Authenticating as: martin / Password:"),
+   cancelled with Ctrl+C → "it stopped before installing (cancelled?)". The spoken path is the owner's to try.
 5. **M6 — screen control** (the owner's choice over M5): ~~part 1, reading the screen~~ (#33) — on the laptop:
    "what does this window say at the bottom?" → the terminal's status line quoted exactly; "what's on my screen?" →
    described; "what is open in zen?" (Zen on another workspace) → shown, then read; 1.2 s per look (9 s the first
@@ -223,7 +227,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #31 | 2026-09-28 | M4 part 3: GitHub through `gh` — "what are my open pull requests?" (with checks), "merge the pull request" (SONU finds it; never when a draft, conflicting, failing or still running; high risk; done only when GitHub says merged); eval suite v17 (104) |
 | #32 | 2026-09-28 | M4.5: "install <app>" — official repos first, then the AUR (with a warning); SONU picks or asks (installed ones marked); high risk; installed in a SONU window with the system's own password prompt (pkexec); done when `pacman -Q` shows it; eval suite v18 (107) |
 | #33 | 2026-09-28 | M6 part 1: reading the screen — "what's on my screen?", "read the error in this window", "what is open in zen?" (shown first if hidden) with the local vision model only; the answer private, read out as-is by voice; replies never promise after a failure; eval suite v19 (110) |
-| #34 | open | M6 part 2: "press <button> in <app>" through accessibility (AT-SPI, the system Python's bindings; no mouse) — asked (high risk for delete/send/buy …), checked by what changed; invented app names sent back; eval suite v20 (111) |
+| #34 | 2026-09-28 | M6 part 2: "press <button> in <app>" through accessibility (AT-SPI, the system Python's bindings; no mouse) — asked (high risk for delete/send/buy …), checked by what changed; invented app names sent back; eval suite v20 (111) |
+| #35 | open | The install password by voice (opt-in, `[voice] password_by_voice`): the prompt in SONU's install window (polkit's text agent) — typed there, or said and entered by SONU into its own window; never shown, logged or kept |
 
 ### Found on real hardware → fixed
 

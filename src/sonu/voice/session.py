@@ -55,12 +55,26 @@ class VoiceSession:
     _spoken: dict[str, bytes] = field(default_factory=dict, init=False)  # greetings, ready to play
     _greeted: int = field(default=0, init=False)
 
-    async def hear(self, endpointing: Endpointing | None = None) -> str:
-        """Record until the user stops talking; their words ("" if nothing was said)."""
+    async def hear(self, endpointing: Endpointing | None = None, *, hint: str | None = None) -> str:
+        """Record until the user stops talking; their words ("" if nothing was said). ``hint``: instead
+        of the usual one ("" for a password, so app names can't bend it)."""
         utterance = await self.recorder(endpointing, self.detector)
         if not utterance.spoke:
             return ""
-        return await asyncio.to_thread(self.ears.transcribe, utterance.audio(), self.hint)
+        return await asyncio.to_thread(
+            self.ears.transcribe, utterance.audio(), self.hint if hint is None else hint
+        )
+
+    async def hear_secret(self, prompt: str) -> str | None:
+        """Ask for a password and hear it (D57): nothing but the caller ever gets the words — not the
+        screen, the audit log, the conversation or a model. The period Whisper ends a sentence with and the
+        spaces between spoken parts are dropped."""
+        await self.say(prompt)
+        heard = await self.hear(Endpointing(start_timeout_s=10.0, silence_s=1.0, max_s=15.0), hint="")
+        secret = (
+            heard.strip().removesuffix(".").replace(" ", "")
+        )  # Whisper's sentence period; "!" may be real
+        return secret or None
 
     def greeting(self, name: str | None = None) -> str:
         """The next greeting, in turn."""

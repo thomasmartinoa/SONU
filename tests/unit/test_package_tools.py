@@ -191,3 +191,96 @@ def test_ranking() -> None:
         "extra/spotifyd 0.4.2-1\n    Lightweight spotify streaming daemon\n"
     )
     assert [p.name for p in rank(found, "spotify")] == ["spotify-launcher", "spotifyd", "gst-plugin-spotify"]
+
+
+# ---------------------------------------------------------------------------- the password by voice (D57)
+def by_voice(rig: Rig, spoken: str | None) -> list[str]:
+    """Turn "password by voice" on; a spoken request whose user says ``spoken``."""
+    rig.ctx.settings = rig.ctx.settings.model_copy(
+        update={"voice": rig.ctx.settings.voice.model_copy(update={"password_by_voice": True})}
+    )
+    prompts: list[str] = []
+
+    async def ask_secret(prompt: str) -> str | None:
+        prompts.append(prompt)
+        return spoken
+
+    rig.ctx.ask_secret = ask_secret
+    return prompts
+
+
+@pytest.mark.anyio
+async def test_the_password_said_by_voice_goes_into_sonus_own_window(rig: Rig) -> None:
+    prompts = by_voice(rig, "Hunter2!")
+    report = await rig.run("install vlc", ("packages.install", {"name": "vlc"}))
+    assert report.status == "done", lines(report)
+    assert prompts == ["Say your password, or type it in the window."]
+    [program] = rig.system.kitty.programs.values()
+    assert program.argv[0] == "/usr/bin/python3" and program.argv[1].endswith("polkit_tty.py")
+    assert program.argv[2:4] == ["pkexec", "pacman"]  # the prompt is in SONU's window, not a dialog
+    assert program.sent_as == ["--bracketed-paste=disable"]  # plain keys, not a paste
+    # Never anywhere else: the report, the audit-bound step args, the kitty command lines.
+    shown = " ".join([*lines(report), str(report.as_dict()), str(rig.system.calls)])
+    assert "Hunter2" not in shown
+
+
+@pytest.mark.anyio
+async def test_a_wrong_spoken_password_asks_to_type_it(rig: Rig) -> None:
+    by_voice(rig, "hunter to")
+    report = await rig.run("install vlc", ("packages.install", {"name": "vlc"}))
+    assert report.status == "failed" and "vlc" not in rig.system.installed_packages
+    assert "the spoken password didn't work — install it again and type the password" in lines(report)[0]
+
+
+@pytest.mark.anyio
+async def test_a_typed_request_never_asks_by_voice(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(package_tools, "OFFICIAL_TIMEOUT_S", 0.3)
+    by_voice(rig, "Hunter2!")
+    rig.ctx.ask_secret = None  # typed in a terminal: the user types the password in the window
+    report = await rig.run("install vlc", ("packages.install", {"name": "vlc"}))
+    assert report.status == "failed" and "took too long" in lines(report)[0]  # nobody typed it here
+    [program] = rig.system.kitty.programs.values()
+    assert program.output.endswith("Password: ") and program.sent_as == []
+
+
+@pytest.mark.anyio
+async def test_off_by_default_the_systems_own_dialog_asks(rig: Rig) -> None:
+    async def never(prompt: str) -> str | None:
+        raise AssertionError("never asked by voice")
+
+    rig.ctx.ask_secret = never
+    report = await rig.run("install vlc", ("packages.install", {"name": "vlc"}))
+    assert report.status == "done"
+    [program] = rig.system.kitty.programs.values()
+    assert program.argv[0] == "pkexec"
+
+
+@pytest.mark.anyio
+async def test_hearing_a_password_drops_whisper_punctuation_and_spaces() -> None:
+    from sonu.voice.session import VoiceSession
+
+    class Ears:
+        def __init__(self) -> None:
+            self.hints: list[str] = []
+
+        def transcribe(self, pcm16: bytes, hint: str = "") -> str:
+            self.hints.append(hint)
+            return "Hunter 2!."
+
+    class Voice:
+        rate = 24000
+
+        def speak(self, text: str) -> bytes:
+            return b"\x00" * 8
+
+    async def recorder(endpointing: Any, detector: Any) -> Any:
+        from sonu.voice.audio import Utterance
+
+        utterance = Utterance()
+        utterance.spoke = True
+        return utterance
+
+    ears = Ears()
+    session = VoiceSession(ears, Voice(), recorder=recorder, speaker_argv=("true",))  # type: ignore[arg-type]
+    assert await session.hear_secret("Say your password.") == "Hunter2!"
+    assert ears.hints == [""]  # no app names to bend it

@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from pathlib import Path
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -49,7 +50,17 @@ _FAILED = (
     "error: failed to",
     "==> ERROR",
     "Unable to install",
+    "AUTHENTICATION FAILED",
+    "Authentication failure",
 )
+POLKIT_TTY = Path(__file__).parents[1] / "integrations" / "polkit_tty.py"
+SYSTEM_PYTHON = "/usr/bin/python3"
+
+
+def _asks_password(screen: str) -> bool:
+    """The text agent in SONU's install window waits for the password ("Password: ")."""
+    lines = [line.strip() for line in screen.splitlines() if line.strip()]
+    return bool(lines) and lines[-1].endswith("Password:")
 
 
 def _already(asked: str, name: str, version: str) -> ToolOutcome:
@@ -165,6 +176,9 @@ class Install(Tool):
                     "--answerclean", "None", "--removemake", "--", package.name)  # fmt: skip
         else:
             argv = ("pkexec", "pacman", "-S", "--needed", "--noconfirm", "--", package.name)
+        by_voice = ctx.settings.voice.password_by_voice
+        if by_voice:  # the prompt in SONU's own window: typed there, or said (D57)
+            argv = (SYSTEM_PYTHON, str(POLKIT_TTY), *argv)
         terminals = ctx.sonu_terminals()
         terminal, launch = terminals.new(
             ctx.system.home, argv[0], argv[1:], label=f"Install {package.name}", hold=True
@@ -179,6 +193,7 @@ class Install(Tool):
         version: str | None = None
         problem = ""
         seen_window = False
+        asked = spoken = False
         while time.monotonic() < deadline:
             await asyncio.sleep(POLL_S)
             if found := await packages.installed(package.name):
@@ -192,8 +207,27 @@ class Install(Tool):
                     problem = "the install window was closed before it finished"
                     break
                 continue
+            if by_voice and not asked and ctx.ask_secret is not None and _asks_password(screen):
+                asked = True
+                secret = await ctx.ask_secret("Say your password, or type it in the window.")
+                if secret:
+                    with contextlib.suppress(CommandError):  # never shown, logged or kept
+                        await terminals.type(terminal, secret, paste=False)
+                        await terminals.keys(terminal, "Enter")
+                    spoken = True
+                del secret
+                continue
             if marker := next((m for m in _FAILED if m in screen), None):
+                if spoken and "AUTH" in marker.upper():
+                    problem = "the spoken password didn't work — install it again and type the password"
+                    break
                 problem = "the password prompt was cancelled" if "dismissed" in marker else marker
+                break
+            if by_voice and "[sonu] finished" in screen:  # polkit_tty.py ended, and it isn't installed
+                if found := await packages.installed(package.name):
+                    version = found[1]
+                else:
+                    problem = "it stopped before installing (cancelled?)"
                 break
         if version:
             await asyncio.sleep(POLL_S)  # let pacman finish writing its output
