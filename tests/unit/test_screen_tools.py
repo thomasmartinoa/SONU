@@ -24,7 +24,7 @@ from sonu.llm.chat import ChatMessage, ChatResult
 from sonu.policy import Policy
 from sonu.system import SystemControl
 from sonu.testing.fake_apps import write_desktop_files
-from sonu.testing.fake_hyprland import FakeHyprland, make_window
+from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
 from sonu.testing.fake_system import FakeSystem
 from sonu.tools.context import ToolContext
@@ -353,3 +353,30 @@ async def test_nothing_typed_without_approval_or_in_other_words(rig: Rig) -> Non
     assert report.status == "declined" and rig.system.typed == []
     report, _ = await type_into(rig, "type hello", "rm -rf ~")
     assert report.status == "failed" and rig.system.typed == []
+
+
+@pytest.mark.anyio
+async def test_keys_go_to_the_terminal_this_request_opened(rig: Rig) -> None:
+    # Found on real hardware (by voice): "open a terminal in workspace 3 and type hello" — the keys
+    # belong in the new terminal, not in the window that was focused when the user spoke.
+    request = "open kitty on workspace 3 and type hello"
+    asked: list[Any] = []
+
+    async def confirm(request_: Any) -> bool:
+        asked.append(request_)
+        return True
+
+    plan = steps_plan(("apps.launch", {"app": "kitty", "workspace": 3}), ("screen.type", {"text": "hello"}))
+    engine = Engine(
+        planner=ScriptedPlanner({request: plan}),
+        registry=ToolRegistry(),
+        ctx=rig.ctx,
+        policy=Policy("confirm-risky"),
+    )
+    rig.fake.apps["kitty"] = FakeApp("kitty", "zsh")
+    focused_before = rig.fake.active_address
+    report = await engine.run(request, confirm=confirm)
+    assert report.status == "done", lines(report)
+    new = next(w for w in rig.fake.windows if w["class"] == "kitty" and w["workspace"]["id"] == 3)
+    assert new["address"] != focused_before and rig.fake.active_address == new["address"]
+    assert rig.system.typed == ["hello"]

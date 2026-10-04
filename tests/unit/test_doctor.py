@@ -294,3 +294,13 @@ def test_the_rices_file_manager_comes_from_binds_lua(tmp_path: Path) -> None:
     assert detect_hypr_theme(tmp_path).defaults["files"] == DefaultApp("thunar", "binds")
     binds.write_text('local fileManager = "thunar; rm -rf ~"\n')  # not an app name: ignored
     assert "files" not in detect_hypr_theme(tmp_path).defaults
+
+
+def test_the_rices_default_apps_come_from_orrery(tmp_path: Path) -> None:
+    # Found on real hardware (2026-10-04): the rice moved to ~/.config/orrery; SONU read only
+    # hypr-theme, so "open a terminal" asked "Alacritty or kitty?".
+    (tmp_path / ".config" / "orrery" / "defaults").mkdir(parents=True)
+    (tmp_path / ".config" / "orrery" / "defaults" / "browser").write_text("zen-browser\n")
+    defaults = detect_hypr_theme(tmp_path).defaults
+    assert defaults["browser"] == DefaultApp("zen-browser", "file")
+    assert defaults["terminal"] == DefaultApp("kitty", "rice-fallback")  # no file: the rice's own kitty
