@@ -1,9 +1,9 @@
 """The rice's theme and wallpaper, and the clipboard.
 
-* Theme and wallpaper go through the rice's own commands — ``hypr-theme`` and ``hypr-wall``, the
-  same ones its picker and keys use — and are read back with ``hypr-theme current`` /
-  ``hypr-wall current``. SONU picks the theme or picture from what exists (the model only passes
-  the user's words), so nothing else can be set.
+* Theme and wallpaper go through the rice's own commands — ``orrery-theme`` and ``orrery-wall``
+  (``hypr-theme``/``hypr-wall`` before it was renamed), the same ones its picker and keys use — and
+  are read back with ``orrery-theme current`` / ``orrery-wall current``. SONU picks the theme or
+  picture from what exists (the model only passes the user's words), so nothing else can be set.
 * The clipboard is read only when asked and shown only to the user: it never goes to the model,
   the audit log or anywhere else.
 """
@@ -44,9 +44,7 @@ _PICTURE_FILLERS = {"wallpaper", "background", "the", "my", "to", "picture", "im
 def _missing(ctx: ToolContext, program: str, what: str) -> ToolOutcome | None:
     if ctx.system.available(program):
         return None
-    return ToolOutcome(
-        StepStatus.FAILED, f"{program} isn't installed — {what} comes from the hypr-dotfiles rice"
-    )
+    return ToolOutcome(StepStatus.FAILED, f"{program} isn't installed — {what} comes from the rice (Orrery)")
 
 
 def pick_names(words: str, names: list[str], fillers: set[str]) -> list[str]:
@@ -113,7 +111,7 @@ class DesktopTheme(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(ThemeArgs, args)
-        if problem := _missing(ctx, "hypr-theme", "the theme"):
+        if problem := _missing(ctx, ctx.system.rice_program("theme"), "the theme"):
             return problem
         try:
             themes = await ctx.system.themes()
@@ -216,9 +214,17 @@ class Wallpaper(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(WallpaperArgs, args)
-        if problem := _missing(ctx, "hypr-wall", "the wallpaper"):
+        if problem := _missing(ctx, ctx.system.rice_program("wallpaper"), "the wallpaper"):
             return problem
         if a.action == "next" or not a.name:
+            # Found on real hardware: the Eclipse theme has one picture — "next" changed nothing and
+            # SONU only said "still 1-mountain.png".
+            if len(ours := ctx.system.theme_backgrounds()) == 1:
+                return ToolOutcome(
+                    StepStatus.FAILED,
+                    f"This theme has only one wallpaper ({ours[0].name}) — name a picture from ~/Pictures "
+                    "to use that instead",
+                )
             return Prepared("Switch to the theme's next wallpaper", None)
         pictures = _pictures(ctx)
         by_name = {str(p): p for p in pictures}

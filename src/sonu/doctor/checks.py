@@ -701,12 +701,12 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
                 "Integrations",
                 "Rice",
                 "skip",
-                "no hypr-theme / Quickshell setup detected",
+                "no Orrery (hypr-dotfiles) / Quickshell setup detected",
             )
         ]
     parts = []
     if info.theme_dir_present:
-        parts.append("hypr-theme rice")
+        parts.append("Orrery rice")
     for kind in ("browser", "terminal", "files", "agent"):
         app = info.defaults.get(kind)
         if app:

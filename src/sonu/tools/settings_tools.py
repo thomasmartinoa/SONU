@@ -434,8 +434,8 @@ _ITEM_PROGRAM: dict[StatusItem, str | None] = {
     "media": "playerctl",
     "power_mode": "powerprofilesctl",
     "gpu": "nvidia-smi",
-    "theme": "hypr-theme",
-    "wallpaper": "hypr-wall",
+    "theme": None,  # the rice's own command: ctx.system.rice_program
+    "wallpaper": None,
 }
 _GIB = 1024**3
 
@@ -479,7 +479,7 @@ class SystemStatus(Tool):
 
     @staticmethod
     async def _read(item: StatusItem, ctx: ToolContext) -> str:
-        program = _ITEM_PROGRAM.get(item)
+        program = ctx.system.rice_program(item) if item in ("theme", "wallpaper") else _ITEM_PROGRAM.get(item)
         label = item.replace("_", " ").capitalize()
         if program and not ctx.system.available(program):
             return f"{label}: unknown ({program} isn't installed)"
