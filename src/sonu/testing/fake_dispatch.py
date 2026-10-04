@@ -13,7 +13,7 @@ from typing import Literal
 _LUA_STR = r'"(?:[^"\\]|\\\d{3})*"'
 
 Kind = Literal[
-    "exec", "move", "focus_window", "focus_workspace", "close", "fullscreen", "float", "pin", "exit"
+    "exec", "move", "focus_window", "focus_workspace", "close", "fullscreen", "float", "pin", "exit", "cursor"
 ]
 
 _LUA_PATTERNS: dict[Kind, re.Pattern[str]] = {
@@ -38,6 +38,7 @@ _LUA_PATTERNS: dict[Kind, re.Pattern[str]] = {
         rf"^hl\.dsp\.window\.pin\(\{{ action = (?P<action>{_LUA_STR}), window = (?P<win>{_LUA_STR}) \}}\)$"
     ),
     "exit": re.compile(r"^hl\.dsp\.exit\(\)$"),
+    "cursor": re.compile(r"^hl\.dsp\.cursor\.move\(\{ x = (?P<x>-?\d+), y = (?P<y>-?\d+) \}\)$"),
 }
 
 _LEGACY_PATTERNS: dict[Kind, re.Pattern[str]] = {
@@ -49,6 +50,7 @@ _LEGACY_PATTERNS: dict[Kind, re.Pattern[str]] = {
     "float": re.compile(r"^(?P<action>setfloating|settiled) (?P<win>\S+)$"),
     "pin": re.compile(r"^(?P<action>pin) (?P<win>\S+)$"),
     "exit": re.compile(r"^exit$"),
+    "cursor": re.compile(r"^movecursor (?P<x>-?\d+) (?P<y>-?\d+)$"),
 }
 _LEGACY_ACTIONS = {"setfloating": "enable", "settiled": "disable", "pin": "toggle"}
 
@@ -61,6 +63,8 @@ class FakeCommand:
     window: str | None = None  # selector, e.g. "stableid:abc" or "address:0x1"
     mode: str | None = None  # fullscreen: "fullscreen" or "maximized"
     action: str | None = None  # set/unset (fullscreen), enable/disable/toggle (float, pin)
+    x: int | None = None  # cursor
+    y: int | None = None
 
 
 def decode_lua_string(literal: str) -> str:
@@ -104,5 +108,7 @@ def parse_dispatch(argument: str, provider: Literal["lua", "hyprlang"]) -> FakeC
             window=_group(match, "win", provider),
             mode=_group(match, "mode", provider),
             action=action,
+            x=int(match.group("x")) if kind == "cursor" else None,
+            y=int(match.group("y")) if kind == "cursor" else None,
         )
     return None

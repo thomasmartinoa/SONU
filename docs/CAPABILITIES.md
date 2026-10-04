@@ -121,7 +121,7 @@ works:
 | "What's on my screen?", "read the error in this window", "what is open in zen?" | 🧪 M6 part 1 | grim + the local vision model (`qwen3.5:4b`); a hidden window shown first; the answer private ([D55](DECISIONS.md)) |
 | The install password by voice too (opt-in: `[voice] password_by_voice = true`) | 🧪 | the prompt in SONU's install window: typed, or said ([D57](DECISIONS.md)) |
 | "Press play in Spotify", "click Home in Thunar" — a button by its name | 🧪 M6 part 2 | accessibility (AT-SPI) via the system Python; asked; checked by what changed ([D56](DECISIONS.md)) |
-| Operate any app by looking at the screen | 🗺 M6 | vision model (local `qwen3.5`/`gemma4` or opt-in cloud) + input; high risk, confirmed |
+| Click a button in an app that exposes nothing, by looking; type words into an app | 🧪 M6 part 3 | vision (0–1000 scale) + `wlrctl` pointer; `wtype` keys; high risk, checked by a fresh picture ([D58](DECISIONS.md)) | vision model (local `qwen3.5`/`gemma4` or opt-in cloud) + input; high risk, confirmed |
 | Cloud models (free tiers), Claude Code driving SONU (MCP) | 🗺 M5 | opt-in; an egress guard shows what leaves the laptop |
 
 ## Batches

@@ -933,3 +933,15 @@ expect_status = ["failed"]
 require_tools = ["screen.press"]
 expect_unsupported = false
 
+# ---- M6 part 3: keys and the pointer (v21)
+
+[[case]]
+id = "type-into-this-window"
+request = "type hello world into this window and press enter"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+notes = "High risk: shown and asked (evals approve)."
+expect_status = ["done"]
+require_tools = ["screen.type"]
+forbid_tools = ["dev.type"]
+expect_confirmed = ["screen.type"]
+

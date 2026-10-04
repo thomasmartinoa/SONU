@@ -50,6 +50,8 @@ ALL_PROGRAMS = frozenset(
         "yay",
         "pkexec",
         "python3",
+        "wlrctl",
+        "wtype",
     }
 )
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -177,6 +179,11 @@ class FakeSystem:
     # Accessibility (AT-SPI through SONU's helper): pid → the app's controls, as the helper reports
     # them; "then" (optional) is the control's name after a press (Play → Pause).
     a11y_apps: dict[int, list[dict[str, object]]] = field(default_factory=dict)
+    # The pointer and keyboard (M6 part 3): what was clicked/typed; a click that changes the screen?
+    clicks: list[str] = field(default_factory=list)
+    typed: list[str] = field(default_factory=list)
+    click_changes_screen: bool = True
+    screen_changes: int = 0
     presses: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -605,8 +612,19 @@ class FakeSystem:
     def _grim(self, args: list[str]) -> tuple[int, str, str]:
         from pathlib import Path
 
-        Path(args[-1]).write_bytes(PNG)
+        Path(args[-1]).write_bytes(PNG + str(self.screen_changes).encode())  # changes after a click/keys
         self.shots.append(args[-1])
+        return 0, "", ""
+
+    def _wlrctl(self, args: list[str]) -> tuple[int, str, str]:
+        self.clicks.append(" ".join(args))
+        if self.click_changes_screen:
+            self.screen_changes += 1
+        return 0, "", ""
+
+    def _wtype(self, args: list[str]) -> tuple[int, str, str]:
+        self.typed.append(self.last_input.decode() if args == ["-"] and self.last_input else " ".join(args))
+        self.screen_changes += 1
         return 0, "", ""
 
     def _slurp(self, args: list[str]) -> tuple[int, str, str]:

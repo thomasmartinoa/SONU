@@ -159,6 +159,7 @@ class FakeHyprland:
         # class (e.g. FakeSystem.page_opened).
         self.on_url: Callable[[str, str], None] | None = None
         self.on_exec: Callable[[list[str]], None] | None = None  # e.g. FakeKitty.launched
+        self.cursor: tuple[int, int] = (0, 0)
         self.requests: list[str] = []
         self.dispatch_handler: Callable[[str], str] | None = None
         # Launch simulation: argv[0] basename -> behaviour. Unknown commands open nothing.
@@ -335,6 +336,9 @@ class FakeHyprland:
             return self._exec(parsed)
         if parsed.kind == "exit":
             self.exited = True
+            return "ok"
+        if parsed.kind == "cursor":
+            self.cursor = (parsed.x or 0, parsed.y or 0)
             return "ok"
         if parsed.kind == "focus_workspace":
             self._background(self._focus_workspace(int(parsed.workspace or "1")))

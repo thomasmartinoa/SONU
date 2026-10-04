@@ -120,6 +120,8 @@ class Dialect(Protocol):
 
     def exit_session(self) -> str: ...
 
+    def move_cursor(self, x: int, y: int) -> str: ...
+
 
 class LuaDialect:
     provider: ConfigProvider = "lua"
@@ -170,6 +172,9 @@ class LuaDialect:
     def exit_session(self) -> str:
         return "dispatch hl.dsp.exit()"  # what the rice's power menu sends to log out
 
+    def move_cursor(self, x: int, y: int) -> str:
+        return f"dispatch hl.dsp.cursor.move({{ x = {int(x)}, y = {int(y)} }})"
+
 
 class HyprlangDialect:
     """Classic dispatchers (Hyprland < 0.55, or 0.55/0.56 with a hyprlang config).
@@ -217,6 +222,9 @@ class HyprlangDialect:
 
     def exit_session(self) -> str:
         return "dispatch exit"
+
+    def move_cursor(self, x: int, y: int) -> str:
+        return f"dispatch movecursor {int(x)} {int(y)}"
 
 
 def dialect_for(provider: ConfigProvider) -> Dialect:

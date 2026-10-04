@@ -323,6 +323,8 @@ a folder that exists, dev.claude_open alone.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \
 question = the user's question; window focused for "this window", the app they name, or none for \
 the whole screen.
+- Typing words into another app (not the Claude Code SONU opened) is screen.type, text = the user's \
+exact words; "and press enter" sets enter.
 - "Install <app>" is packages.install with name = the user's words for it (SONU finds the package and \
 asks). Removing software isn't possible yet.
 - GitHub: "my pull requests / PRs" is github.prs; "merge the pull request (in <repo>)" is \

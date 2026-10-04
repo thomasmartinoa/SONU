@@ -4,6 +4,7 @@ deleted after, the answer shown to the user but kept away from SONU's models."""
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,13 @@ class Sees:
     ) -> ChatResult:
         self.shown.append(messages)
         return ChatResult(self.answer, self.name, 0.1)
+
+    async def complete_json(self, messages: list[ChatMessage], schema: dict[str, Any]) -> ChatResult:
+        """Points (0–1000) at whatever it's asked for: the centre-left of the picture, or nowhere."""
+        self.shown.append(messages)
+        return ChatResult(json.dumps(self.points), self.name, 0.1)
+
+    points: dict[str, Any] = {"found": True, "x": 250, "y": 500}  # noqa: RUF012
 
 
 @dataclass
@@ -266,6 +274,7 @@ async def test_nothing_changed_is_unverified(spotify: Rig) -> None:
 async def test_an_app_without_accessibility_says_so(rig: Rig) -> None:
     kitty = next(w for w in rig.fake.windows if w["class"] == "kitty")
     kitty["pid"] = 777
+    rig.ctx.which = lambda name: None if name == "wlrctl" else f"/usr/bin/{name}"  # no pointer: no fallback
     report, _ = await press(rig, "press the menu button", "menu")
     assert report.status == "failed" and "doesn't show its buttons to SONU" in lines(report)[0]
 
@@ -275,3 +284,72 @@ async def test_the_kind_of_control_in_the_words_is_ignored(spotify: Rig) -> None
     # Found on real hardware: "press the home button in thunar" → control "home button"; Thunar has "Home".
     await press(spotify, "press the next button", "next button")
     assert spotify.system.presses == ["Next:click"]
+
+
+# ------------------------------------------------------------------- by looking: pointer + keys (part 3)
+@pytest.mark.anyio
+async def test_no_accessibility_clicks_where_it_looks_to_be(rig: Rig) -> None:
+    kitty = next(w for w in rig.fake.windows if w["class"] == "kitty")
+    kitty["pid"] = 777  # exposes nothing to accessibility
+    report, [asked] = await press(rig, "click the settings icon in kitty", "settings icon", app="kitty")
+    assert asked.risk.value == "high" and "it can miss" in asked.description
+    assert asked.spoken == "click settings icon in kitty, found by looking — it may miss"
+    assert report.status == "done", lines(report)
+    # kitty is at (10, 40), 800×600: 250/1000 across, 500/1000 down → (210, 340).
+    assert rig.fake.cursor == (210, 340) and rig.system.clicks == ["pointer click left"]
+    assert lines(report) == ["Clicked where “settings icon” looked to be in kitty (the window changed)"]
+
+
+@pytest.mark.anyio
+async def test_a_click_that_changes_nothing_is_unverified(rig: Rig) -> None:
+    next(w for w in rig.fake.windows if w["class"] == "kitty")["pid"] = 777
+    rig.system.click_changes_screen = False
+    report, _ = await press(rig, "click the settings icon in kitty", "settings icon", app="kitty")
+    assert report.status == "unverified" and "it may have missed" in lines(report)[0]
+
+
+@pytest.mark.anyio
+async def test_nothing_found_nothing_clicked(rig: Rig) -> None:
+    next(w for w in rig.fake.windows if w["class"] == "kitty")["pid"] = 777
+    rig.model.points = {"found": False, "x": 0, "y": 0}
+    report, _ = await press(rig, "click the settings icon in kitty", "settings icon", app="kitty")
+    assert report.status == "failed" and rig.system.clicks == []
+    assert lines(report) == ["Couldn't find “settings icon” in kitty's window"]
+
+
+async def type_into(
+    rig: Rig, request: str, text: str, *, approve: bool = True, **extra: Any
+) -> tuple[TaskReport, list[Any]]:
+    asked: list[Any] = []
+
+    async def confirm(request_: Any) -> bool:
+        asked.append(request_)
+        return approve
+
+    engine = Engine(
+        planner=ScriptedPlanner({request: steps_plan(("screen.type", {"text": text, **extra}))}),
+        registry=ToolRegistry(),
+        ctx=rig.ctx,
+        policy=Policy("confirm-risky"),
+    )
+    return await engine.run(request, confirm=confirm), asked
+
+
+@pytest.mark.anyio
+async def test_type_the_users_words_into_the_focused_window(rig: Rig) -> None:
+    report, [asked] = await type_into(rig, "type hello world and press enter", "hello world", enter=True)
+    assert (
+        asked.risk.value == "high"
+        and asked.description == "Type “hello world” into kitty as keystrokes and press Enter"
+    )
+    assert report.status == "done", lines(report)
+    assert rig.system.typed == ["hello world", "-k Return"]  # the text through stdin, not the command line
+    assert not any("hello" in " ".join(call) for call in rig.system.calls)
+
+
+@pytest.mark.anyio
+async def test_nothing_typed_without_approval_or_in_other_words(rig: Rig) -> None:
+    report, _ = await type_into(rig, "type hello", "hello", approve=False)
+    assert report.status == "declined" and rig.system.typed == []
+    report, _ = await type_into(rig, "type hello", "rm -rf ~")
+    assert report.status == "failed" and rig.system.typed == []

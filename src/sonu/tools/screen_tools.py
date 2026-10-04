@@ -46,6 +46,41 @@ def _visible(window: Window, snapshot: WorldSnapshot) -> bool:
     return window.workspace.id in shown and window.mapped and not window.hidden
 
 
+async def _show(ctx: ToolContext, window: Window) -> Window | ToolOutcome:
+    """The window, on screen: brought into view (focused) first if it's on a hidden workspace."""
+    if _visible(window, await ctx.desktop.snapshot()):
+        return window
+    try:
+        await ctx.desktop.focus(window)
+    except HyprlandError as exc:
+        return ToolOutcome(StepStatus.FAILED, f"Couldn't show {window.window_class}: {exc}")
+    address = window.address
+    shown, _ = await ctx.desktop.wait_for(
+        lambda s: next((w for w in s.windows if w.address == address and _visible(w, s)), None),
+        timeout_s=ctx.settings.verify.timeout_s,
+    )
+    return shown or ToolOutcome(StepStatus.FAILED, f"Couldn't bring {window.window_class} into view")
+
+
+async def _picture(ctx: ToolContext, window: Window | None) -> bytes:
+    """A picture of the window (or the screen), kept only in memory: the file is deleted at once."""
+    folder = runtime_folder().parent
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+    picture = folder / f"screen-{secrets.token_hex(4)}.png"
+    argv = ["grim"]
+    if window is not None:
+        (x, y), (w, h) = window.at, window.size
+        argv += ["-g", f"{x},{y} {w}x{h}"]
+    try:
+        result = await ctx.system.runner.run((*argv, str(picture)), timeout_s=10.0)
+        if not result.ok:
+            raise CommandError(result.problem())
+        return await asyncio.to_thread(picture.read_bytes)
+    finally:
+        with contextlib.suppress(OSError):
+            await asyncio.to_thread(picture.unlink, missing_ok=True)
+
+
 class ReadArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -95,40 +130,19 @@ class ReadScreen(Tool):
         reader = ctx.reader
         if reader is None:
             return ToolOutcome(StepStatus.FAILED, "There's no vision model to read the screen with")
-        if window is not None and not _visible(window, await ctx.desktop.snapshot()):
-            try:
-                await ctx.desktop.focus(window)
-            except HyprlandError as exc:
-                return ToolOutcome(StepStatus.FAILED, f"Couldn't show {window.window_class}: {exc}")
-            address = window.address
-            shown, _ = await ctx.desktop.wait_for(
-                lambda s: next((w for w in s.windows if w.address == address and _visible(w, s)), None),
-                timeout_s=ctx.settings.verify.timeout_s,
-            )
-            if shown is None:
-                return ToolOutcome(StepStatus.FAILED, f"Couldn't bring {window.window_class} into view")
-            window = shown
-        folder = runtime_folder().parent
-        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-        picture = folder / f"screen-{secrets.token_hex(4)}.png"
-        argv = ["grim"]
         if window is not None:
-            (x, y), (w, h) = window.at, window.size
-            argv += ["-g", f"{x},{y} {w}x{h}"]
+            shown = await _show(ctx, window)
+            if isinstance(shown, ToolOutcome):
+                return shown
+            window = shown
         what = f"the {window.window_class} window" if window else "the user's screen"
         try:
-            result = await ctx.system.runner.run((*argv, str(picture)), timeout_s=10.0)
-            if not result.ok:
-                return ToolOutcome(StepStatus.FAILED, f"Couldn't take the picture: {result.problem()}")
-            png = await asyncio.to_thread(picture.read_bytes)
+            png = await _picture(ctx, window)
             answer = await reader.read(png, question, what)
         except (CommandError, ProgramMissing, OSError) as exc:
             return ToolOutcome(StepStatus.FAILED, f"Couldn't take the picture: {exc}")
         except ScreenReaderError as exc:
             return ToolOutcome(StepStatus.FAILED, f"Couldn't read the screen: {exc}")
-        finally:
-            with contextlib.suppress(OSError):
-                await asyncio.to_thread(picture.unlink, missing_ok=True)
         # From the screen: for the user's eyes (and ears), never for SONU's planner or reply writer.
         return ToolOutcome(
             StepStatus.DONE,
@@ -221,6 +235,15 @@ class PressControl(Tool):
         try:
             controls = await Accessibility(ctx.system.runner).controls(window.pid)
         except AccessibilityError as exc:
+            # The ladder's last rung (M6 part 3, D58): look at the window and click where it is.
+            if ctx.reader is not None and ctx.which("wlrctl") and ctx.which("grim"):
+                return Prepared(
+                    f"Click “{a.control}” in {window.window_class} — it doesn't show its buttons to SONU, so "
+                    "SONU will look for it on screen and click there (it can miss)",
+                    ("pointer", window, a.control),
+                    risk=Risk.HIGH,
+                    spoken=f"click {a.control} in {window.window_class}, found by looking — it may miss",
+                )
             return ToolOutcome(StepStatus.FAILED, f"{window.window_class} {exc}")
         usable = [c for c in controls if c.enabled and c.action]
         if choice:
@@ -254,13 +277,16 @@ class PressControl(Tool):
         risky = bool(_RISKY.search(control.name))
         return Prepared(
             f"Press {control.label} in {window.window_class}",
-            (window, control),
+            ("a11y", window, control),
             risk=Risk.HIGH if risky else None,
             spoken=f"press {control.name} in {window.window_class}",
         )
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
-        window, control = cast("tuple[Window, Control]", prepared.payload)
+        if prepared.payload[0] == "pointer":
+            _, window, target = cast("tuple[str, Window, str]", prepared.payload)
+            return await _click_by_looking(ctx, window, target)
+        _, window, control = cast("tuple[str, Window, Control]", prepared.payload)
         before = await ctx.desktop.snapshot()
         try:
             pressed, was, now = await Accessibility(ctx.system.runner).press(window.pid, control)
@@ -287,4 +313,120 @@ class PressControl(Tool):
         )
 
 
-SCREEN_TOOLS: tuple[Tool, ...] = (ReadScreen(), PressControl())
+async def _click_by_looking(ctx: ToolContext, window: Window, target: str) -> ToolOutcome:
+    """Find ``target`` in a picture of the window, put the pointer there and click; done only if the
+    window changed (M6 part 3, D58)."""
+    if ctx.reader is None:
+        return ToolOutcome(StepStatus.FAILED, "There's no vision model to look with")
+    shown = await _show(ctx, window)
+    if isinstance(shown, ToolOutcome):
+        return shown
+    window = shown
+    try:
+        before = await _picture(ctx, window)
+        spot = await ctx.reader.locate(before, f"the {target}")
+    except (CommandError, ProgramMissing, OSError) as exc:
+        return ToolOutcome(StepStatus.FAILED, f"Couldn't take the picture: {exc}")
+    except ScreenReaderError as exc:
+        return ToolOutcome(StepStatus.FAILED, f"Couldn't look for it: {exc}")
+    if spot is None:
+        return ToolOutcome(StepStatus.FAILED, f"Couldn't find “{target}” in {window.window_class}'s window")
+    (x, y), (w, h) = window.at, window.size
+    point = (round(x + spot[0] * w), round(y + spot[1] * h))
+    try:
+        await ctx.desktop.move_cursor(*point)
+        result = await ctx.system.runner.run(("wlrctl", "pointer", "click", "left"), timeout_s=5.0)
+        if not result.ok:
+            raise CommandError(result.problem())
+        await asyncio.sleep(SETTLE_S)
+        after = await _picture(ctx, window)
+    except (HyprlandError, CommandError, ProgramMissing, OSError) as exc:
+        return ToolOutcome(StepStatus.FAILED, f"Couldn't click: {exc}")
+    changed = after != before
+    checks = [Check("the window changed", changed, {"clicked_at": point})]
+    if not changed:
+        return ToolOutcome(
+            StepStatus.UNVERIFIED,
+            f"Clicked where “{target}” looked to be in {window.window_class}, but nothing changed — "
+            "it may have missed",
+            tuple(checks),
+        )
+    return outcome_from_checks(
+        checks, f"Clicked where “{target}” looked to be in {window.window_class} (the window changed)", ""
+    )
+
+
+# ---------------------------------------------------------------------------- screen.type
+class TypeArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=500, description="exactly what to type, the user's words")
+    window: WindowTarget | None = Field(default=None, description="the app's window; none: the focused one")
+    enter: bool = Field(default=False, description="press Enter after it, only if the user said so")
+
+
+class TypeText(Tool):
+    name = "screen.type"
+    description = (
+        "Type the user's words into an app as keystrokes (wherever its text cursor is). For apps SONU has "
+        "no other tool for; never a password."
+    )
+    risk = Risk.HIGH  # keystrokes go to wherever the focus is: always shown and asked
+    effects = frozenset({Effect.UI_INPUT})
+    Args = TypeArgs
+    grounded = ("text",)
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(TypeArgs, args)
+        if missing := ungrounded_words(a.text, ctx.user_words or ctx.request_text):
+            return ToolOutcome(
+                StepStatus.FAILED, f"What to type must be your words ({', '.join(missing)} isn't)"
+            )
+        if not ctx.which("wtype"):
+            return ToolOutcome(StepStatus.FAILED, "wtype isn't installed (it types the keys)")
+        match = find_windows(a.window or WindowTarget(focused=True), snapshot, ctx)
+        if match.problem or not match.windows:
+            return ToolOutcome(StepStatus.FAILED, f"Can't type there: {match.problem or 'no such window'}")
+        window = match.windows[0]
+        then = " and press Enter" if a.enter else ""
+        return Prepared(
+            f"Type “{a.text}” into {window.window_class} as keystrokes{then}",
+            (window, a.text, a.enter),
+            spoken=f"type {a.text} into {window.window_class}{then}",
+        )
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        window, text, enter = cast("tuple[Window, str, bool]", prepared.payload)
+        shown = await _show(ctx, window)
+        if isinstance(shown, ToolOutcome):
+            return shown
+        try:
+            await ctx.desktop.focus(shown)
+            snapshot = await ctx.desktop.snapshot()
+            # Keystrokes go to the focused window: checked right before typing (D58).
+            if snapshot.active_address != shown.address:
+                return ToolOutcome(StepStatus.FAILED, f"{window.window_class} isn't focused — nothing typed")
+            before = await _picture(ctx, shown)
+            typed = await ctx.system.runner.run(("wtype", "-"), timeout_s=10.0, input_bytes=text.encode())
+            if typed.ok and enter:
+                typed = await ctx.system.runner.run(("wtype", "-k", "Return"), timeout_s=5.0)
+            if not typed.ok:
+                raise CommandError(typed.problem())
+            await asyncio.sleep(SETTLE_S)
+            after = await _picture(ctx, shown)
+        except (HyprlandError, CommandError, ProgramMissing, OSError) as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't type: {exc}")
+        check = Check("the window changed", after != before)
+        if not check.passed:
+            return ToolOutcome(
+                StepStatus.UNVERIFIED,
+                f"Typed it into {window.window_class}, but nothing changed on screen",
+                (check,),
+            )
+        return outcome_from_checks([check], f"Typed it into {window.window_class}", "")
+
+
+SETTLE_S = 0.6  # the app redraws after a click or keystrokes
+SCREEN_TOOLS: tuple[Tool, ...] = (ReadScreen(), PressControl(), TypeText())
