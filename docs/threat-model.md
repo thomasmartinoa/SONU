@@ -77,7 +77,7 @@ a command that runs directly.
 | T14 | Supply-chain compromise | A dependency or CI action is hijacked (as happened to LiteLLM in March 2026) | Four runtime deps; `uv.lock` with hashes; CI actions pinned by commit SHA; Dependabot with a 7-day cooldown; `persist-credentials: false`; trusted publishing when releases start | ✅ M0 (partly) |
 | T15 | Provider ToS violation | Using a subscription token in SONU gets the account banned | No subscription-token extraction (ADR 0003) | ✅ decided |
 | T16 | Privacy leak through diagnostics | A shared `sonu doctor` output reveals window titles | Doctor never prints titles (tested); `sonu desktop … --no-titles` for sharing | ✅ M0 |
-| T17 | GUI input abuse | Synthetic keystrokes typed into the wrong window | Late, high-risk tier; native Wayland protocols (no root `uinput`); confirm every use; Hyprland permission rules documented | M6 |
+| T17 | GUI input abuse | Synthetic clicks or keystrokes into the wrong window or place | Accessibility actions first (no synthetic input); the pointer only when an app exposes nothing — every click high risk, "it can miss", and done only if the window visibly changed; typing only the user's own words (never a password), high risk, the target focused and re-checked right before the keys, text through stdin; Wayland virtual pointer/keyboard only — no root `uinput` | ✅ M6 part 3 |
 
 ## 4. Residual risks (accepted, documented)
 

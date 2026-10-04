@@ -150,6 +150,9 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "press-a-button-sonu-doesnt-know": steps(
         ("screen.press", {"control": "frobnicate", "window": {"app": "kitty"}})
     ),
+    "type-into-this-window": steps(
+        ("screen.type", {"text": "hello world", "window": {"focused": True}, "enter": True})
+    ),
     "install-an-app": steps(("packages.install", {"name": "vlc"})),
     "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
     "install-already-there": steps(("packages.install", {"name": "kitty"})),

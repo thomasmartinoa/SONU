@@ -119,6 +119,10 @@ class HyprlandDesktop:
     async def show_workspace(self, workspace: WorkspaceTarget) -> None:
         await self.client.dispatch(self.dialect.focus_workspace(workspace))
 
+    async def move_cursor(self, x: int, y: int) -> None:
+        """Put the pointer at layout coordinates (logical pixels) — M6 part 3, before a click."""
+        await self.client.dispatch(self.dialect.move_cursor(x, y))
+
     async def close(self, window: Window) -> None:
         """Politely ask the window to close (never SIGKILL)."""
         await self.client.dispatch(self.dialect.close_window(self.selector(window)))
