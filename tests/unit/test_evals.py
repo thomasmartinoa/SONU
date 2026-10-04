@@ -150,6 +150,10 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "press-a-button-sonu-doesnt-know": steps(
         ("screen.press", {"control": "frobnicate", "window": {"app": "kitty"}})
     ),
+    "type-here-no-claude": steps(("screen.type", {"text": "Hello", "window": {"focused": True}})),
+    "open-terminal-and-type": steps(
+        ("apps.launch", {"app": "terminal", "workspace": 3}), ("screen.type", {"text": "hello"})
+    ),
     "type-into-this-window": steps(
         ("screen.type", {"text": "hello world", "window": {"focused": True}, "enter": True})
     ),

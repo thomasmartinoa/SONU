@@ -386,10 +386,16 @@ class TypeText(Tool):
             )
         if not ctx.which("wtype"):
             return ToolOutcome(StepStatus.FAILED, "wtype isn't installed (it types the keys)")
-        match = find_windows(a.window or WindowTarget(focused=True), snapshot, ctx)
-        if match.problem or not match.windows:
-            return ToolOutcome(StepStatus.FAILED, f"Can't type there: {match.problem or 'no such window'}")
-        window = match.windows[0]
+        opened = [w for a_ in reversed(ctx.task_windows) for w in snapshot.windows if w.address == a_]
+        if opened and (a.window is None or (a.window.focused and not a.window.app)):
+            window = opened[0]  # "open a terminal on 3 and type hello": the one this request opened
+        else:
+            match = find_windows(a.window or WindowTarget(focused=True), snapshot, ctx)
+            if match.problem or not match.windows:
+                return ToolOutcome(
+                    StepStatus.FAILED, f"Can't type there: {match.problem or 'no such window'}"
+                )
+            window = match.windows[0]
         then = " and press Enter" if a.enter else ""
         return Prepared(
             f"Type “{a.text}” into {window.window_class} as keystrokes{then}",

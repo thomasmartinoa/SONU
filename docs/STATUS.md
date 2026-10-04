@@ -44,7 +44,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **112 / 112** twice on the v21 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
+`qwen3.5:4b`: **114 / 114** twice on the v22 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
 complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -159,7 +159,9 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    measured: asked for pixels, `qwen3.5:4b` missed 5/5 Thunar controls; on its native 0–1000 scale it hit 4/5 within
    5–12 px (the miss: the look-alike button next to it). On the laptop: the Home button found by looking (3.4 s) and
    clicked with the real pointer (`hl.dsp.cursor.move` + `wlrctl`) — Thunar went /tmp → home; `wtype` typed into a
-   focused test terminal. Test windows closed, view and cursor restored.
+   focused test terminal. Test windows closed, view and cursor restored. By voice the owner's "type hello" went to
+   Claude Code (fixed, see the findings table); on the laptop: "open a terminal in workspace 9 and type hello" typed
+   into the new terminal (closed afterwards).
 5. **M5 — connect** (cloud models opt-in, MCP) and **M6 — screen control** (vision model + input, opt-in, high risk).
 
 Waiting on music in `~/Music`: local music with `mpv`.
@@ -233,12 +235,15 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #33 | 2026-09-28 | M6 part 1: reading the screen — "what's on my screen?", "read the error in this window", "what is open in zen?" (shown first if hidden) with the local vision model only; the answer private, read out as-is by voice; replies never promise after a failure; eval suite v19 (110) |
 | #34 | 2026-09-28 | M6 part 2: "press <button> in <app>" through accessibility (AT-SPI, the system Python's bindings; no mouse) — asked (high risk for delete/send/buy …), checked by what changed; invented app names sent back; eval suite v20 (111) |
 | #35 | 2026-09-29 | The install password by voice (opt-in, `[voice] password_by_voice`): the prompt in SONU's install window (polkit's text agent) — typed there, or said and entered by SONU into its own window; never shown, logged or kept |
-| #37 | open | M6 part 3: the ladder's last rung — an app without accessibility: SONU finds the button by looking (0–1000 scale) and clicks with the pointer (high risk, "it can miss"; done only if the window changed); `screen.type` types the user's words into an app (high risk; focus checked right before; text through stdin); eval suite v21 (112) |
+| #37 | 2026-10-04 | M6 part 3: the ladder's last rung — an app without accessibility: SONU finds the button by looking (0–1000 scale) and clicks with the pointer (high risk, "it can miss"; done only if the window changed); `screen.type` types the user's words into an app (high risk; focus checked right before; text through stdin); eval suite v21 (112) |
+| #38 | open | Found by voice: typing goes to your window, never Claude Code unless asked (plan check); "open a terminal on 3 and type hello" types into that terminal; the rice's default apps read from `~/.config/orrery` (it moved; "open a terminal" asked "Alacritty or kitty?"); eval suite v22 (114) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-04 | (voice) "type hello into this window" / "write hello here in the kitty terminal" → dev.type, "Claude Code isn't open" (5 times) | code check: dev.type without Claude in the request → sent back as screen.type; "open a terminal on 3 and type hello" types into the terminal that request opened (#38) |
+| 10-04 | (voice) "open a terminal" → "Alacritty or kitty?" — the rice moved to `~/.config/orrery`, SONU read only `hypr-theme` | default apps read from `~/.config/orrery/defaults` first (#38). **Still broken:** theme and wallpaper call `hypr-theme`/`hypr-wall`, now `orrery-theme`/`orrery-wall` — next PR |
 | 10-04 | (M6) vision coordinates in pixels missed 5/5 Thunar controls | Qwen's own 0–1000 scale: 4/5 hits; every click asked as high risk, "it can miss" (#37) |
 | 09-28 | (M6) "press the home button in thunar" → control "home button"; Thunar's is "Home" | words like button/icon/tab/menu are ignored when matching (#34) |
 | 09-28 | (M6) "press the frobnicate button in thunar" → listed as unsupported, and the reply said "I pressed Back in Thunar" (the request before) | a press/click part in unsupported is sent back to screen.press; replies may not claim pressed/clicked/typed without a result line (#34) |

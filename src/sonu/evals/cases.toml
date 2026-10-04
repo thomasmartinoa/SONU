@@ -945,3 +945,21 @@ require_tools = ["screen.type"]
 forbid_tools = ["dev.type"]
 expect_confirmed = ["screen.type"]
 
+[[case]]
+id = "type-here-no-claude"
+request = "No, I want you to type in this terminal. Hello."
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+notes = "Found on real hardware (by voice): planned as dev.type (Claude Code, not open) five times."
+expect_status = ["done"]
+require_tools = ["screen.type"]
+forbid_tools = ["dev.type"]
+
+[[case]]
+id = "open-terminal-and-type"
+request = "open a terminal in workspace 3 and type hello"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+notes = "Found on real hardware (by voice). The keys go to the terminal this request opened."
+expect_status = ["done"]
+require_tools = ["apps.launch", "screen.type"]
+forbid_tools = ["dev.type"]
+

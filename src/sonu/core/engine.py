@@ -130,6 +130,7 @@ class Engine:
         self.ctx.recent_windows = self.conversation.last_windows() if self.conversation is not None else ()
         self.ctx.task_browser = None
         self.ctx.task_folder = None
+        self.ctx.task_windows = ()
 
         try:
             snapshot = await self.ctx.desktop.snapshot()
@@ -177,6 +178,7 @@ class Engine:
                     observer=observer,
                 )
                 report.steps.append(record)
+                self.ctx.task_windows += tuple(str(a) for a in record.outcome.data.get("windows", ()))
                 self._audit("step.result", record.audit_data())
                 if observer:
                     observer.on_step(record)
