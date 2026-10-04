@@ -498,6 +498,19 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                     f"'{part}' is possible: media.play plays any song or video by name — add a media.play "
                     "step (query: the user's words for what to play) and remove it from unsupported"
                 )
+    # Found on real hardware (by voice): "type hello into this window" / "write hello here in the kitty
+    # terminal" were planned as dev.type — Claude Code's input, which wasn't open. Typing into any other
+    # app is screen.type.
+    claude = "claude" in said or any(step.tool == "dev.claude_open" for step in plan.steps)
+    for index, step in enumerate(plan.steps):
+        if step.tool == "dev.type" and not claude:
+            text = str(step.args.get("text", ""))
+            wanted = json.dumps({"tool": "screen.type", "args": {"text": text, "window": {"focused": True}}})
+            problems.append(
+                f"step {index + 1} (dev.type) is only for the Claude Code SONU opened, and the user didn't "
+                f"mention Claude — to type into their window plan exactly: {wanted} (or the app they named "
+                "as window.app instead of focused; enter: true only if they said to press enter)"
+            )
     # Found on real hardware: "press the frobnicate button in thunar" was listed as unsupported; SONU
     # looks the button up itself and says what the app has.
     if not any(step.tool == "screen.press" for step in plan.steps):

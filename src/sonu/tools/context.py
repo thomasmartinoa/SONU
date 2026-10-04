@@ -77,6 +77,9 @@ class ToolContext:
     terminals: SonuTerminals | None = None
     # The folder an earlier step of this task made ("make a folder … and open Claude Code there").
     task_folder: Path | None = None
+    # The windows earlier steps of this task opened or acted on ("open a terminal on 3 and type hello":
+    # the keys go to that terminal). Reset by the engine for every task.
+    task_windows: tuple[str, ...] = ()
     # Writes a prompt for Claude Code from the user's idea (the local model); None: not available.
     writer: PromptWriter | None = None
     # Reads the screen with the local vision model (M6); None: not available.

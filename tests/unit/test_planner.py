@@ -329,3 +329,26 @@ def test_a_press_listed_as_unsupported_is_sent_back() -> None:
     )
     problems = _problems(gave_up, REGISTRY, "press the frobnicate button in thunar")
     assert "'press the frobnicate button in thunar' is possible: screen.press" in problems[-1]
+
+
+def test_typing_without_claude_code_is_screen_type() -> None:
+    # Found on real hardware (by voice): "type hello into this window" was planned as dev.type —
+    # "I haven't opened Claude Code anywhere yet" — five times in a row.
+    plan = _PlanModel.model_validate(
+        {"kind": "steps", "steps": [{"tool": "dev.type", "args": {"text": "hello"}}]}
+    )
+    [problem] = _problems(plan, REGISTRY, "type hello into this window")
+    assert problem.startswith("step 1 (dev.type) is only for the Claude Code SONU opened")
+    assert '{"tool": "screen.type", "args": {"text": "hello", "window": {"focused": true}}}' in problem
+    # Claude Code in this request or the one before: dev.type is right.
+    assert _problems(plan, REGISTRY, "open claude code in shop-app tell it hello") == []
+    opened = _PlanModel.model_validate(
+        {
+            "kind": "steps",
+            "steps": [
+                {"tool": "dev.claude_open", "args": {"folder": "shop-app"}},
+                {"tool": "dev.type", "args": {"text": "hello"}},
+            ],
+        }
+    )
+    assert _problems(opened, REGISTRY, "open it in shop-app and type hello") == []

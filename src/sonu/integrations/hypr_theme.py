@@ -4,10 +4,10 @@ SONU only *reads* here. It picks up the user's chosen default apps so "open my b
 the browser the user actually picked, and it detects the Quickshell shell so later milestones
 can offer a menu entry and a bar widget.
 
-The rice stores defaults in ``~/.config/hypr-theme/defaults/{terminal,browser,agent}``; when a
-file is missing, the rice itself falls back to kitty and zen-browser (``binds.lua`` and
-``hypr-default``), and SONU mirrors that so both agree. The file manager (SUPER+E) is set in
-``~/.config/hypr/modules/binds.lua`` as ``local fileManager = "thunar"``.
+The rice stores defaults in ``~/.config/orrery/defaults/{terminal,browser,agent}`` (``orrery-default``;
+before it was renamed Orrery: ``~/.config/hypr-theme/defaults``); when a file is missing, the rice
+itself falls back to kitty and zen-browser (``binds.lua``), and SONU mirrors that so both agree. The
+file manager (SUPER+E) is set in ``~/.config/hypr/modules/binds.lua`` as ``local fileManager = "thunar"``.
 """
 
 from __future__ import annotations
@@ -61,8 +61,16 @@ def _binds_file_manager(home: Path) -> str | None:
     return match.group(1) if match and _APP_NAME.match(match.group(1)) else None
 
 
+# Found on real hardware (2026-10-04): the rice moved to ~/.config/orrery, SONU still read hypr-theme —
+# "open a terminal" asked "Alacritty or kitty?" although the rice's terminal is kitty.
+THEME_DIRS = ("orrery", "hypr-theme")
+
+
 def detect_hypr_theme(home: Path) -> HyprThemeInfo:
-    theme_dir = home / ".config" / "hypr-theme"
+    theme_dir = next(
+        (home / ".config" / n for n in THEME_DIRS if (home / ".config" / n).is_dir()),
+        home / ".config" / THEME_DIRS[0],
+    )
     theme_dir_present = theme_dir.is_dir()
     defaults: dict[str, DefaultApp] = {}
     for kind in DEFAULT_KINDS:
