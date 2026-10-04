@@ -43,7 +43,7 @@ class Rig:
 @pytest.fixture
 async def rig(fake_hypr: FakeHyprland, tmp_path: Path) -> AsyncIterator[Rig]:
     home = tmp_path / "home"
-    backgrounds = home / ".config" / "hypr-theme" / "current" / "theme" / "backgrounds"
+    backgrounds = home / ".config" / "orrery" / "current" / "theme" / "backgrounds"
     backgrounds.mkdir(parents=True)
     for name in ("1-mountain.png", "2-creation-of-adam.png"):
         (backgrounds / name).write_bytes(b"png")
@@ -93,7 +93,7 @@ async def test_an_unknown_theme_lists_the_real_ones(rig: Rig) -> None:
     assert report.lines() == [
         "✖ There's no theme like 'dracula' (themes: catppuccin-mocha, hyprmono, hyprmono-light, tokyo-night)"
     ]
-    assert not any(call[:2] == ("hypr-theme", "set") for call in rig.system.calls)
+    assert not any(call[:2] == ("orrery-theme", "set") for call in rig.system.calls)
 
 
 @pytest.mark.anyio
@@ -101,7 +101,7 @@ async def test_light_and_dark_mode(rig: Rig) -> None:
     # Found in a dry run: "switch to light mode" was planned as "next theme".
     report = await rig.run("dark mode", ("desktop.theme", {"action": "dark"}))
     assert report.lines() == ["✔ Already using a dark theme (hyprmono)"]
-    assert not any(call[:2] == ("hypr-theme", "toggle") for call in rig.system.calls)
+    assert not any(call[:2] == ("orrery-theme", "toggle") for call in rig.system.calls)
     report = await rig.run("light mode", ("desktop.theme", {"action": "light"}))
     assert report.lines() == ["✔ Switched the theme to hyprmono-light"]
     report = await rig.run("dark mode", ("desktop.theme", {"action": "dark"}))
@@ -178,3 +178,34 @@ async def test_clear_the_clipboard(rig: Rig) -> None:
     report = await rig.run("clear my clipboard", ("clipboard.clear", {}))
     assert report.lines() == ["✔ Cleared the clipboard"]
     assert rig.system.clipboard_text is None
+
+
+@pytest.mark.anyio
+async def test_the_rice_renamed_orrery_and_its_old_names(rig: Rig) -> None:
+    # Found on real hardware (2026-10-04): the rice was renamed Orrery; "switch to a light theme" said
+    # "hypr-theme isn't installed". Its commands are orrery-theme / orrery-wall now.
+    await rig.run("switch to tokyo", ("desktop.theme", {"action": "set", "name": "tokyo"}))
+    report = await rig.run("next wallpaper", ("desktop.wallpaper", {"action": "next"}))
+    assert report.status == "done"
+    assert ("orrery-theme", "set", "tokyo-night") in rig.system.calls
+    assert ("orrery-wall", "next") in rig.system.calls
+    # A machine with the rice from before the rename still works.
+    rig.system.installed -= {"orrery-theme", "orrery-wall"}
+    rig.system.installed |= {"hypr-theme", "hypr-wall"}
+    await rig.run("switch to hyprmono", ("desktop.theme", {"action": "set", "name": "hyprmono"}))
+    assert ("hypr-theme", "set", "hyprmono") in rig.system.calls and rig.system.theme == "hyprmono"
+
+
+@pytest.mark.anyio
+async def test_next_wallpaper_when_the_theme_has_one(rig: Rig) -> None:
+    # Found on real hardware: Orrery's Eclipse theme has a single background; "next wallpaper" changed
+    # nothing and the reply only said it was still the same picture.
+    (
+        rig.home / ".config" / "orrery" / "current" / "theme" / "backgrounds" / "2-creation-of-adam.png"
+    ).unlink()
+    report = await rig.run("next wallpaper", ("desktop.wallpaper", {"action": "next"}))
+    assert report.lines() == [
+        "✖ This theme has only one wallpaper (1-mountain.png) — name a picture from ~/Pictures to use that "
+        "instead"
+    ]
+    assert not any(call[:2] == ("orrery-wall", "next") for call in rig.system.calls)

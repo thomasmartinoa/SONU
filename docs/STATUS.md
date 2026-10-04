@@ -236,14 +236,16 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #34 | 2026-09-28 | M6 part 2: "press <button> in <app>" through accessibility (AT-SPI, the system Python's bindings; no mouse) — asked (high risk for delete/send/buy …), checked by what changed; invented app names sent back; eval suite v20 (111) |
 | #35 | 2026-09-29 | The install password by voice (opt-in, `[voice] password_by_voice`): the prompt in SONU's install window (polkit's text agent) — typed there, or said and entered by SONU into its own window; never shown, logged or kept |
 | #37 | 2026-10-04 | M6 part 3: the ladder's last rung — an app without accessibility: SONU finds the button by looking (0–1000 scale) and clicks with the pointer (high risk, "it can miss"; done only if the window changed); `screen.type` types the user's words into an app (high risk; focus checked right before; text through stdin); eval suite v21 (112) |
-| #38 | open | Found by voice: typing goes to your window, never Claude Code unless asked (plan check); "open a terminal on 3 and type hello" types into that terminal; the rice's default apps read from `~/.config/orrery` (it moved; "open a terminal" asked "Alacritty or kitty?"); eval suite v22 (114) |
+| #38 | 2026-10-04 | Found by voice: typing goes to your window, never Claude Code unless asked (plan check); "open a terminal on 3 and type hello" types into that terminal; the rice's default apps read from `~/.config/orrery` (it moved; "open a terminal" asked "Alacritty or kitty?"); eval suite v22 (114) |
+| #39 | open | The rice renamed Orrery: theme and wallpaper through `orrery-theme` / `orrery-wall` (falling back to `hypr-theme` / `hypr-wall`), backgrounds from `~/.config/orrery`; "next wallpaper" in a one-picture theme says so; doctor says "Orrery rice" |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
 | 10-04 | (voice) "type hello into this window" / "write hello here in the kitty terminal" → dev.type, "Claude Code isn't open" (5 times) | code check: dev.type without Claude in the request → sent back as screen.type; "open a terminal on 3 and type hello" types into the terminal that request opened (#38) |
-| 10-04 | (voice) "open a terminal" → "Alacritty or kitty?" — the rice moved to `~/.config/orrery`, SONU read only `hypr-theme` | default apps read from `~/.config/orrery/defaults` first (#38). **Still broken:** theme and wallpaper call `hypr-theme`/`hypr-wall`, now `orrery-theme`/`orrery-wall` — next PR |
+| 10-04 | (voice) "open a terminal" → "Alacritty or kitty?" — the rice moved to `~/.config/orrery`, SONU read only `hypr-theme` | default apps read from `~/.config/orrery/defaults` first (#38). Theme and wallpaper fixed the same way in #39 (`orrery-theme`/`orrery-wall`, falling back to the old names) |
+| 10-04 | "next wallpaper" → "The wallpaper is still 1-mountain.png": Orrery's Eclipse theme has one picture | says "This theme has only one wallpaper — name a picture from ~/Pictures" (#39) |
 | 10-04 | (M6) vision coordinates in pixels missed 5/5 Thunar controls | Qwen's own 0–1000 scale: 4/5 hits; every click asked as high risk, "it can miss" (#37) |
 | 09-28 | (M6) "press the home button in thunar" → control "home button"; Thunar's is "Home" | words like button/icon/tab/menu are ignored when matching (#34) |
 | 09-28 | (M6) "press the frobnicate button in thunar" → listed as unsupported, and the reply said "I pressed Back in Thunar" (the request before) | a press/click part in unsupported is sent back to screen.press; replies may not claim pressed/clicked/typed without a result line (#34) |

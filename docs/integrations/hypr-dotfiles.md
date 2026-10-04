@@ -4,6 +4,11 @@ This guide wires SONU into the [hypr-dotfiles](https://github.com/thomasmartinoa
 laptop that opens a SONU prompt, an "Ask SONU" row in the `SUPER+SPACE` menu, and notifications through the shell.
 SONU only *reads* the rice's files; everything below is a change you make yourself.
 
+> **Renamed Orrery (2026-10).** The rice now lives in `~/Orrery-dotfiles`: its folder is `~/.config/orrery` and its
+> commands are `orrery-theme`, `orrery-wall` and `orrery-default`. SONU uses those, and falls back to the old
+> `~/.config/hypr-theme`, `hypr-theme` and `hypr-wall` on a machine that still has them. Where this guide says
+> `hypr-theme`, read `orrery`.
+
 ## 1. Install `sonu` on your PATH
 
 The rice puts `~/.local/bin` on Hyprland's `PATH`, so installing SONU as a uv tool makes it available to keybinds

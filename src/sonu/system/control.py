@@ -49,6 +49,9 @@ REMINDER_UNIT = re.compile(r"^sonu-reminder-\d{8}-\d{6}-[0-9a-f]{4}$")
 _REMINDER_PREFIX = "SONU reminder: "
 _MIME = re.compile(r"^[\w.+-]+/[\w.+-]+$")
 _DESKTOP_ID = re.compile(r"^[\w.+-]+\.desktop$")
+# Found on real hardware (2026-10-04): the rice was renamed Orrery — hypr-theme/hypr-wall became
+# orrery-theme/orrery-wall and "switch to a light theme" said "hypr-theme isn't installed".
+RICE_PROGRAMS = {"theme": ("orrery-theme", "hypr-theme"), "wallpaper": ("orrery-wall", "hypr-wall")}
 _THEME_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")  # hypr-theme's own rule: no "/" or leading "."
 THEME_TIMEOUT_S = 60.0  # a theme switch re-renders every app's colours
 MAX_CLIPBOARD_CHARS = 2000
@@ -226,6 +229,18 @@ class SystemControl:
 
     def available(self, program: str) -> bool:
         return self.runner.available(program)
+
+    def rice_program(self, kind: Literal["theme", "wallpaper"]) -> str:
+        """The rice's command for it: Orrery's, or the name it had before (hypr-dotfiles)."""
+        names = RICE_PROGRAMS[kind]
+        return next((name for name in names if self.available(name)), names[0])
+
+    def rice_folder(self) -> Path:
+        """``~/.config/orrery`` (``~/.config/hypr-theme`` before the rice was renamed)."""
+        config = self.home / ".config"
+        return next(
+            (config / n for n in ("orrery", "hypr-theme") if (config / n).is_dir()), config / "orrery"
+        )
 
     async def _run(self, *argv: str, timeout_s: float = 5.0) -> CommandResult:
         result = await self.runner.run(argv, timeout_s=timeout_s)
@@ -526,11 +541,11 @@ class SystemControl:
 
     # ------------------------------------------------------------------ the rice's theme and wallpaper
     async def themes(self) -> list[Theme]:
-        """The rice's themes (``hypr-theme json``, what its own picker reads)."""
+        """The rice's themes (``orrery-theme json``, what its own picker reads)."""
         try:
-            items = json.loads((await self._run("hypr-theme", "json")).stdout or "[]")
+            items = json.loads((await self._run(self.rice_program("theme"), "json")).stdout or "[]")
         except json.JSONDecodeError as exc:
-            raise CommandError(f"Unexpected hypr-theme output: {exc}") from None
+            raise CommandError(f"Unexpected {self.rice_program('theme')} output: {exc}") from None
         return [
             Theme(
                 str(item["id"]),
@@ -544,35 +559,35 @@ class SystemControl:
         ]
 
     async def current_theme(self) -> str:
-        return (await self._run("hypr-theme", "current")).stdout.strip()
+        return (await self._run(self.rice_program("theme"), "current")).stdout.strip()
 
     async def switch_theme(self, how: Literal["set", "next", "toggle"], name: str | None = None) -> None:
-        """``hypr-theme set <id>`` / ``next`` / ``toggle`` (toggle prefers the -light/-dark sibling)."""
+        """``orrery-theme set <id>`` / ``next`` / ``toggle`` (toggle prefers the -light/-dark sibling)."""
         if how == "set":
             if name is None or not _THEME_NAME.match(name):
                 raise CommandError(f"Not a theme name: {name!r}")
-            await self._run("hypr-theme", "set", name, timeout_s=THEME_TIMEOUT_S)
+            await self._run(self.rice_program("theme"), "set", name, timeout_s=THEME_TIMEOUT_S)
         else:
-            await self._run("hypr-theme", how, timeout_s=THEME_TIMEOUT_S)
+            await self._run(self.rice_program("theme"), how, timeout_s=THEME_TIMEOUT_S)
 
     def theme_backgrounds(self) -> list[Path]:
-        """The current theme's wallpapers (what ``hypr-wall next`` cycles through)."""
-        folder = self.home / ".config" / "hypr-theme" / "current" / "theme" / "backgrounds"
+        """The current theme's wallpapers (what ``orrery-wall next`` cycles through)."""
+        folder = self.rice_folder() / "current" / "theme" / "backgrounds"
         try:
             return sorted(p for p in folder.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES and p.is_file())
         except OSError:
             return []
 
     async def wallpaper(self) -> Path | None:
-        current = (await self._run("hypr-wall", "current")).stdout.strip()
+        current = (await self._run(self.rice_program("wallpaper"), "current")).stdout.strip()
         return Path(current) if current else None
 
     async def change_wallpaper(self, image: Path | None = None) -> None:
-        """``hypr-wall set <image>`` (an existing picture SONU found), or ``next`` in the theme."""
+        """``orrery-wall set <image>`` (an existing picture SONU found), or ``next`` in the theme."""
         if image is None:
-            await self._run("hypr-wall", "next", timeout_s=THEME_TIMEOUT_S)
+            await self._run(self.rice_program("wallpaper"), "next", timeout_s=THEME_TIMEOUT_S)
         elif image.suffix.lower() in IMAGE_SUFFIXES and await asyncio.to_thread(image.is_file):
-            await self._run("hypr-wall", "set", str(image), timeout_s=THEME_TIMEOUT_S)
+            await self._run(self.rice_program("wallpaper"), "set", str(image), timeout_s=THEME_TIMEOUT_S)
         else:
             raise CommandError(f"Not a picture: {image}")
 

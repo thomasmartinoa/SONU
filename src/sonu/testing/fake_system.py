@@ -26,8 +26,8 @@ ALL_PROGRAMS = frozenset(
         "wpctl",
         "pw-dump",
         "xdg-mime",
-        "hypr-theme",
-        "hypr-wall",
+        "orrery-theme",
+        "orrery-wall",
         "brightnessctl",
         "bluetoothctl",
         "rfkill",
@@ -648,7 +648,7 @@ class FakeSystem:
             return 0, "".join(f"{t}\n" for t in types), ""
         return 0, self.clipboard_text or "", ""
 
-    def _hypr_theme(self, args: list[str]) -> tuple[int, str, str]:
+    def _orrery_theme(self, args: list[str]) -> tuple[int, str, str]:
         if args == ["json"]:
             themes = [
                 {
@@ -664,19 +664,21 @@ class FakeSystem:
             return 0, self.theme + "\n", ""
         if args[0] == "set":
             if args[1] not in self.theme_names:
-                return 1, "", f"hypr-theme: no such theme: {args[1]}\n"
+                return 1, "", f"orrery-theme: no such theme: {args[1]}\n"
             self.theme = args[1]
         elif args[0] == "next":
             index = self.theme_names.index(self.theme)
             self.theme = self.theme_names[(index + 1) % len(self.theme_names)]
-        elif args[0] == "toggle":  # hypr-theme prefers the sibling that differs by -light
+        elif args[0] == "toggle":  # orrery-theme prefers the sibling that differs by -light
             sibling = (
                 self.theme.removesuffix("-light") if self.theme.endswith("-light") else f"{self.theme}-light"
             )
             self.theme = sibling if sibling in self.theme_names else self.theme_names[0]
         return 0, "", ""
 
-    def _hypr_wall(self, args: list[str]) -> tuple[int, str, str]:
+    _hypr_theme = _orrery_theme  # the rice's names before it was renamed Orrery
+
+    def _orrery_wall(self, args: list[str]) -> tuple[int, str, str]:
         if args == ["current"]:
             return 0, (self.wallpaper or "") + "\n", ""
         if args[0] == "set":
@@ -685,6 +687,8 @@ class FakeSystem:
             index = self.backgrounds.index(self.wallpaper) if self.wallpaper in self.backgrounds else -1
             self.wallpaper = self.backgrounds[(index + 1) % len(self.backgrounds)]
         return 0, "", ""
+
+    _hypr_wall = _orrery_wall
 
     def _qs(self, args: list[str]) -> tuple[int, str, str]:
         target, function = args[2], args[3]
