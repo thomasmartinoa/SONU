@@ -42,7 +42,7 @@ voice = [
     "faster-whisper>=1.2,<2",
     "kokoro-onnx>=0.6,<1",
     "nvidia-cublas-cu12>=12.9,<13",   # CTranslate2's CUDA 12 math library (the system has CUDA 13)
-    "nvidia-cudnn-cu12>=9.26,<10",
+    "nvidia-cudnn-cu12>=9.27.0.42,<10",
 ]
 
 [dependency-groups]
@@ -50,11 +50,11 @@ dev = [
     "mypy>=1.17",
     "pytest>=8.4",
     "pytest-cov>=6.2",
-    "ruff>=0.12",
+    "ruff>=0.16.9",
 ]
 
 [build-system]
-requires = ["hatchling>=1.32.3"]
+requires = ["hatchling>=1.32.4"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
