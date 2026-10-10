@@ -174,6 +174,9 @@ class FakeSystem:
         }
     )
     installed_packages: dict[str, str] = field(default_factory=lambda: {"kitty": "0.49.1-1"})
+    # Removing (pacman -Rs): what each installed package alone pulled in, and what needs it.
+    only_needs: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    required_by: dict[str, tuple[str, ...]] = field(default_factory=dict)
     polkit_answer: str = "allow"  # "dismiss": the user cancels the system's password prompt
     root_secret: str = "Hunter2!"  # noqa: S105 — the (fake) password polkit's text agent accepts
     # Accessibility (AT-SPI through SONU's helper): pid → the app's controls, as the helper reports
@@ -201,6 +204,14 @@ class FakeSystem:
     def run_in_terminal(self, argv: list[str]) -> str:
         """A program started in a SONU terminal (an install): its output."""
         name = argv[-1]
+        if argv[:3] == ["pkexec", "pacman", "-Rs"]:
+            if self.polkit_answer == "dismiss":
+                return "Error executing command as another user: Request dismissed\n"
+            if name not in self.installed_packages:
+                return f"error: target not found: {name}\n"
+            for gone in (name, *self.only_needs.get(name, ())):
+                self.installed_packages.pop(gone, None)
+            return f"checking dependencies...\nremoving {name}...\n"
         if argv[:2] == ["pkexec", "pacman"] or argv[0] == "yay":
             if self.polkit_answer == "dismiss":
                 return "Error executing command as another user: Request dismissed\n"
@@ -334,6 +345,27 @@ class FakeSystem:
                 ),
                 "",
             )
+        if args[0] == "-Qs":
+            terms = [t.lower() for t in args[1:] if t != "--"]
+            listed = [
+                f"local/{name} {version}\n    {self.repo_packages.get(name, ('', '', name, ''))[2]}\n"
+                for name, version in sorted(self.installed_packages.items())
+                if all(
+                    t in f"{name} {self.repo_packages.get(name, ('', '', '', ''))[2]}".lower() for t in terms
+                )
+            ]
+            return (0, "".join(listed), "") if listed else (1, "", "")
+        if args[0] == "-Rsp":
+            name = args[-1]
+            if name not in self.installed_packages:
+                return 1, "", f"error: target not found: {name}\n"
+            if needs := self.required_by.get(name):
+                broken = "".join(
+                    f":: removing {name} breaks dependency '{name}' required by {n}\n" for n in needs
+                )
+                return 1, broken, "error: failed to prepare transaction (could not satisfy dependencies)\n"
+            names = (name, *self.only_needs.get(name, ()))
+            return 0, "".join(f"{n} {self.installed_packages.get(n, '1.0-1')}\n" for n in names), ""
         if args[0] == "-Ss":
             terms = [t.lower() for t in args[1:]]
             lines = [

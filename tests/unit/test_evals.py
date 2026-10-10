@@ -158,6 +158,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
         ("screen.type", {"text": "hello world", "window": {"focused": True}, "enter": True})
     ),
     "install-an-app": steps(("packages.install", {"name": "vlc"})),
+    "uninstall-an-app": steps(("packages.remove", {"name": "vlc"})),
+    "get-rid-of-an-app": steps(("packages.remove", {"name": "obs studio"})),
     "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
     "install-already-there": steps(("packages.install", {"name": "kitty"})),
     "github-open-prs": steps(("github.prs", {})),

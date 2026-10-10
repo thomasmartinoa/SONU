@@ -60,6 +60,7 @@ class Effect(StrEnum):
     TERMINAL_INPUT = "terminal.input"  # types into a terminal SONU opened (e.g. a prompt for Claude Code)
     GITHUB_WRITE = "github.write"  # changes something on GitHub (merges a pull request)
     INSTALL = "install"  # installs software (root, through the system's own password prompt)
+    UNINSTALL = "uninstall"  # removes software (root, through the system's own password prompt)
     UI_INPUT = "ui.input"  # presses a control in an app (accessibility; no mouse)
 
 

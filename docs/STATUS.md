@@ -44,7 +44,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **114 / 114** twice on the v22 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
+`qwen3.5:4b`: **116 / 116** twice on the v23 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
 complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -237,7 +237,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #35 | 2026-09-29 | The install password by voice (opt-in, `[voice] password_by_voice`): the prompt in SONU's install window (polkit's text agent) — typed there, or said and entered by SONU into its own window; never shown, logged or kept |
 | #37 | 2026-10-04 | M6 part 3: the ladder's last rung — an app without accessibility: SONU finds the button by looking (0–1000 scale) and clicks with the pointer (high risk, "it can miss"; done only if the window changed); `screen.type` types the user's words into an app (high risk; focus checked right before; text through stdin); eval suite v21 (112) |
 | #38 | 2026-10-04 | Found by voice: typing goes to your window, never Claude Code unless asked (plan check); "open a terminal on 3 and type hello" types into that terminal; the rice's default apps read from `~/.config/orrery` (it moved; "open a terminal" asked "Alacritty or kitty?"); eval suite v22 (114) |
-| #39 | open | The rice renamed Orrery: theme and wallpaper through `orrery-theme` / `orrery-wall` (falling back to `hypr-theme` / `hypr-wall`), backgrounds from `~/.config/orrery`; "next wallpaper" in a one-picture theme says so; doctor says "Orrery rice" |
+| #39 | 2026-10-04 | The rice renamed Orrery: theme and wallpaper through `orrery-theme` / `orrery-wall` (falling back to `hypr-theme` / `hypr-wall`), backgrounds from `~/.config/orrery`; "next wallpaper" in a one-picture theme says so; doctor says "Orrery rice" |
+| #41 | open | Removing software by voice (`packages.remove`, [D59](DECISIONS.md)): the exact package and what only it needed shown and asked; refused when other software or the system needs it; the install window shared (password typed or said); verified with `pacman -Q`; eval suite v23 (116) |
 
 ### Found on real hardware → fixed
 
@@ -246,6 +247,7 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | 10-04 | (voice) "type hello into this window" / "write hello here in the kitty terminal" → dev.type, "Claude Code isn't open" (5 times) | code check: dev.type without Claude in the request → sent back as screen.type; "open a terminal on 3 and type hello" types into the terminal that request opened (#38) |
 | 10-04 | (voice) "open a terminal" → "Alacritty or kitty?" — the rice moved to `~/.config/orrery`, SONU read only `hypr-theme` | default apps read from `~/.config/orrery/defaults` first (#38). Theme and wallpaper fixed the same way in #39 (`orrery-theme`/`orrery-wall`, falling back to the old names) |
 | 10-04 | "next wallpaper" → "The wallpaper is still 1-mountain.png": Orrery's Eclipse theme has one picture | says "This theme has only one wallpaper — name a picture from ~/Pictures" (#39) |
+| 10-10 | (dry run) "remove visual studio code" asked "1 installed packages could be …" | one installed match goes straight to the yes/no, naming `visual-studio-code-bin` (#41) |
 | 10-04 | (M6) vision coordinates in pixels missed 5/5 Thunar controls | Qwen's own 0–1000 scale: 4/5 hits; every click asked as high risk, "it can miss" (#37) |
 | 09-28 | (M6) "press the home button in thunar" → control "home button"; Thunar's is "Home" | words like button/icon/tab/menu are ignored when matching (#34) |
 | 09-28 | (M6) "press the frobnicate button in thunar" → listed as unsupported, and the reply said "I pressed Back in Thunar" (the request before) | a press/click part in unsupported is sent back to screen.press; replies may not claim pressed/clicked/typed without a result line (#34) |
