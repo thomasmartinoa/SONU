@@ -323,6 +323,7 @@ async def test_the_activity_journal_line(xdg_env: dict[str, str]) -> None:
     assert (result.status, result.summary) == ("ok", "2 window changes recorded · kept 30 days, local only")
     journal.pause(True)
     assert by_id(await check_sonu(context))["sonu.journal"].summary.startswith("paused")
+    journal.close()
     off = make_context(
         xdg_env, hypr=None, ollama=None, settings=Settings(journal=JournalSettings(enabled=False))
     )

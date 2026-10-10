@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -35,8 +35,24 @@ def minutes(spans: list[Any]) -> list[tuple[str, float]]:
 
 
 # ---------------------------------------------------------------- the store
-def test_each_window_keeps_the_focus_until_the_next_but_at_most_half_an_hour(tmp_path: Path) -> None:
-    journal = Journal(tmp_path / "data" / "journal.sqlite3")
+@pytest.fixture
+def journals() -> Iterator[Callable[..., Journal]]:
+    """Journals that are closed after the test (Python 3.13+ warns about an open database)."""
+    opened: list[Journal] = []
+
+    def make(*args: Any, **kwargs: Any) -> Journal:
+        opened.append(Journal(*args, **kwargs))
+        return opened[-1]
+
+    yield make
+    for journal in opened:
+        journal.close()
+
+
+def test_each_window_keeps_the_focus_until_the_next_but_at_most_half_an_hour(
+    tmp_path: Path, journals: Callable[..., Journal]
+) -> None:
+    journal = journals(tmp_path / "data" / "journal.sqlite3")
     journal.record("zen", "Pull Request #41 — Zen Browser", at(9))
     journal.record("code-oss", "engine.py - SONU - Code - OSS", at(9, 20))
     journal.record("kitty", "nvim dataset.py", at(10, 30))  # 70 min on Code: the user walked away
@@ -48,9 +64,11 @@ def test_each_window_keeps_the_focus_until_the_next_but_at_most_half_an_hour(tmp
     assert oct((tmp_path / "data" / "journal.sqlite3").stat().st_mode)[-3:] == "600"
 
 
-def test_password_managers_and_private_windows_are_never_written(tmp_path: Path) -> None:
+def test_password_managers_and_private_windows_are_never_written(
+    tmp_path: Path, journals: Callable[..., Journal]
+) -> None:
     path = tmp_path / "journal.sqlite3"
-    journal = Journal(path, exclude_apps=["signal"])
+    journal = journals(path, exclude_apps=["signal"])
     journal.record("zen", "News — Zen Browser", at(9))
     journal.record("org.keepassxc.KeePassXC", "Passwords.kdbx - KeePassXC", at(9, 5))
     journal.record("zen", "My Bank — Zen Browser Private Browsing", at(9, 10))
@@ -59,14 +77,16 @@ def test_password_managers_and_private_windows_are_never_written(tmp_path: Path)
     journal.record("kitty", "zsh", at(9, 25))
     journal.close()
     # The time in them only ends the window before.
-    assert minutes(Journal(path).spans(at(0), at(9, 30), at(15))) == [("zen", 5), ("kitty", 5)]
+    assert minutes(journals(path).spans(at(0), at(9, 30), at(15))) == [("zen", 5), ("kitty", 5)]
     stored = path.read_bytes()
     for word in (b"Passwords", b"Bank", b"Secret", b"Anna", b"keepass", b"signal"):
         assert word not in stored
 
 
-def test_a_title_changing_quickly_replaces_the_one_before(tmp_path: Path) -> None:
-    journal = Journal(None)
+def test_a_title_changing_quickly_replaces_the_one_before(
+    tmp_path: Path, journals: Callable[..., Journal]
+) -> None:
+    journal = journals(None)
     journal.record("zen", "Loading…", at(9))
     journal.record("zen", "(1) YouTube", at(9) + 0.5)
     journal.record("zen", "(2) YouTube", at(9) + 1.0)
@@ -75,12 +95,12 @@ def test_a_title_changing_quickly_replaces_the_one_before(tmp_path: Path) -> Non
     assert [span.title for span in journal.spans(at(0), at(10), at(10))] == ["(2) YouTube"]
 
 
-def test_pausing_stops_recording_until_resumed(tmp_path: Path) -> None:
+def test_pausing_stops_recording_until_resumed(tmp_path: Path, journals: Callable[..., Journal]) -> None:
     pause_file = tmp_path / "journal-paused"
-    journal = Journal(None, pause_file=pause_file)
+    journal = journals(None, pause_file=pause_file)
     journal.record("zen", "News", at(9))
     journal.pause(True, at(9, 10))
-    assert pause_file.exists() and Journal(None, pause_file=pause_file).paused  # sonud sees it too
+    assert pause_file.exists() and journals(None, pause_file=pause_file).paused  # sonud sees it too
     journal.record("kitty", "zsh", at(9, 20))
     journal.pause(False)
     journal.record("code-oss", "engine.py", at(9, 40))
@@ -88,8 +108,8 @@ def test_pausing_stops_recording_until_resumed(tmp_path: Path) -> None:
     assert minutes(journal.spans(at(0), at(10), at(10))) == [("zen", 10), ("code-oss", 10)]
 
 
-def test_old_entries_go_and_forget_deletes(tmp_path: Path) -> None:
-    journal = Journal(None, keep_days=30)
+def test_old_entries_go_and_forget_deletes(tmp_path: Path, journals: Callable[..., Journal]) -> None:
+    journal = journals(None, keep_days=30)
     journal.record("zen", "old", at(9, days_ago=40))
     journal.record("kitty", "zsh", at(9, days_ago=1))
     journal.record("code-oss", "engine.py", at(9))
@@ -99,8 +119,8 @@ def test_old_entries_go_and_forget_deletes(tmp_path: Path) -> None:
     assert [span.app for span in journal.spans(0, at(15), at(15))] == ["kitty"]
 
 
-def test_focus_events_become_entries() -> None:
-    journal = Journal(None)
+def test_focus_events_become_entries(journals: Callable[..., Journal]) -> None:
+    journal = journals(None)
     tracker = FocusTracker(journal)
     tracker.start("kitty", "zsh", "0xa1")
     for line in (
@@ -174,6 +194,8 @@ async def rig(fake_hypr: FakeHyprland, tmp_path: Path) -> AsyncIterator[Rig]:
         journal=Journal(tmp_path / "journal.sqlite3", pause_file=tmp_path / "journal-paused"),
     )
     yield Rig(ctx, fake_hypr)
+    if ctx.journal is not None:
+        ctx.journal.close()
 
 
 @pytest.mark.anyio
@@ -217,6 +239,7 @@ async def test_an_empty_journal_says_so(rig: Rig) -> None:
 
 @pytest.mark.anyio
 async def test_the_journal_off_in_the_config(rig: Rig) -> None:
+    rig.journal.close()
     rig.ctx.journal = None
     report = await rig.run("what was I doing today?", ("journal.read", {"when": "today"}))
     assert report.steps[0].outcome.status is StepStatus.FAILED
@@ -250,9 +273,9 @@ async def test_forgetting_asks_first(rig: Rig) -> None:
     assert rig.journal.count() == 1  # yesterday's stays
 
 
-def test_a_spinner_or_a_count_in_front_of_a_title_is_the_same_title() -> None:
+def test_a_spinner_or_a_count_in_front_of_a_title_is_the_same_title(journals: Callable[..., Journal]) -> None:
     # Found on the laptop: Claude Code's spinner changed its terminal's title every second, a row every 2 s.
-    journal = Journal(None)
+    journal = journals(None)
     for second, title in enumerate(
         ["◑ Fix the tests", "◐ Fix the tests", "◓ Fix the tests", "✳ Fix the tests"]
     ):

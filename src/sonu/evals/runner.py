@@ -336,6 +336,8 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
             (sys_dir / "type").write_text("x86_pkg_temp\n")
             (sys_dir / "temp").write_text("61000\n")
             power_supply = workdir / "power_supply"
+            journal = Journal(None)
+            stack.callback(journal.close)
             if case.battery is not None:
                 (power_supply / "BAT1").mkdir(parents=True, exist_ok=True)
                 (power_supply / "BAT1" / "capacity").write_text(f"{case.battery}\n")
@@ -358,10 +360,10 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 terminals=SonuTerminals(workdir / "run" / "terminals", system),
                 writer=PromptWriter(cast(TextModel, model)) if hasattr(model, "complete_text") else None,
                 reader=FakeScreenReader(),
-                journal=Journal(None),
+                journal=journal,
             )
             for minutes_ago, app, title in case.journal:
-                cast(Journal, ctx.journal).record(app, title, time.time() - minutes_ago * 60)
+                journal.record(app, title, time.time() - minutes_ago * 60)
             engine = Engine(
                 planner=LLMPlanner(model),
                 registry=ToolRegistry(),

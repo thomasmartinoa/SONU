@@ -425,6 +425,10 @@ async def test_thanks_ends_the_conversation(rig: Rig) -> None:
     voice = voice_rig(rig, "open kitty on 2", "thank you")
     planned = len(rig.ollama.chat_requests)
     _, out = await rig.run("listen")
+    for _ in range(40):  # the client is done at the result; the daemon may still be saying the reply
+        if voice.said[-1] == "You're welcome.":
+            break
+        await asyncio.sleep(0.05)
     assert voice.said[-1] == "You're welcome."
     assert out.splitlines()[-1] == "You: thank you"
     assert (
