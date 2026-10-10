@@ -73,6 +73,7 @@ sonu eval                           # score your planner model on 20 realistic r
 sonu desktop windows                # windows as SONU sees them (--no-titles for sharing)
 sonu desktop events                 # live Hyprland events
 sonu audit tail                     # everything SONU did; `sonu audit verify` checks the hash chain
+sonu journal show yesterday         # the activity journal (local); also pause, resume, forget
 sonu config init                    # write a commented ~/.config/sonu/config.toml
 ```
 

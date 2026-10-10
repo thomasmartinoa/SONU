@@ -456,6 +456,7 @@ class FakeHyprland:
         await self.emit("openwindow", f"{address.removeprefix('0x')},{workspace},{app.window_class},{title}")
         if workspace == self.active_workspace:
             self.active_address = address
+            await self.emit("activewindow", f"{app.window_class},{title}")
             await self.emit("activewindowv2", address.removeprefix("0x"))
 
     async def _move(self, window: dict[str, Any], workspace: int) -> None:
@@ -474,6 +475,7 @@ class FakeHyprland:
         if workspace != self.active_workspace:
             await self._focus_workspace(workspace)
         self.active_address = window["address"]
+        await self.emit("activewindow", f"{window['class']},{window['title']}")
         await self.emit("activewindowv2", window["address"].removeprefix("0x"))
 
     async def _close(self, window: dict[str, Any]) -> None:

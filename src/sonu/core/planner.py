@@ -213,6 +213,14 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
         },
     ),
     (
+        "what was I working on yesterday?",
+        {
+            "kind": "steps",
+            "message": "Looking at yesterday in your activity journal.",
+            "steps": [{"tool": "journal.read", "args": {"when": "yesterday"}}],
+        },
+    ),
+    (
         "how hot is my laptop running?",
         {
             "kind": "steps",
@@ -313,6 +321,10 @@ recording?" is system.status with what ["obs"].
 VS Code I mean Code OSS": text "VS Code", app "Code OSS"), name for "call me …" / "my name is …", \
 else note. "Forget …" is memory.forget; "what do you remember (about me)?" is memory.list, not \
 reminders.list.
+- What the user did on the computer earlier ("what was I doing / working on yesterday?", "what did I \
+do this morning?") is journal.read with when; "when did I last use / open / look at <thing>?" is \
+journal.read with about = the user's words for the thing (no when). "Pause / resume the journal" is \
+journal.recording; "delete / forget today's journal" is journal.forget — never memory.forget.
 - Claude Code: "open Claude Code in <folder>" is dev.claude_open (no folder: the one this request \
 made); "tell it / tell Claude / type: <words>" is dev.type with text = exactly the user's words \
 after that (never rewrite them); "switch it to Sonnet/Opus/Haiku" is dev.claude_model; "what is \

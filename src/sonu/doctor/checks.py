@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import re
+import sqlite3
 import stat
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from sonu.audit.log import AuditError, AuditLog
 from sonu.config.settings import ModelRole
+from sonu.core.journal import Journal
 from sonu.desktop.hyprland.errors import HyprlandError, HyprlandNotFound
 from sonu.desktop.hyprland.instance import discover_instance
 from sonu.desktop.hyprland.ipc import HyprlandClient
@@ -96,6 +98,42 @@ def _private_dir_result(path: Path) -> tuple[str, str] | None:
     if mode & 0o077:
         return "warn", f"{path} is accessible by other users (mode {mode:o})"
     return "ok", f"{path} (mode {mode:o})"
+
+
+def _journal_result(ctx: DoctorContext, group: str) -> CheckResult:
+    """The activity journal (D60): on, paused or off, and how much it holds."""
+    settings = ctx.settings.journal
+    if not settings.enabled:
+        return CheckResult("sonu.journal", group, "Activity journal", "info", "off in config")
+    path = ctx.paths.data_dir / "journal.sqlite3"
+    kept = f"kept {settings.keep_days} days, local only"
+    if (ctx.paths.data_dir / "journal-paused").exists():
+        return CheckResult(
+            "sonu.journal",
+            group,
+            "Activity journal",
+            "info",
+            f"paused · {kept}",
+            hint="`sonu journal resume` (or say “resume the journal”) to record again.",
+        )
+    if not path.exists():
+        return CheckResult(
+            "sonu.journal", group, "Activity journal", "info", f"nothing yet — sonud records it · {kept}"
+        )
+    try:
+        journal = Journal(path)
+        count = journal.count()
+        journal.close()
+    except (OSError, sqlite3.Error) as exc:
+        return CheckResult("sonu.journal", group, "Activity journal", "fail", f"cannot read {path}: {exc}")
+    return CheckResult(
+        "sonu.journal",
+        group,
+        "Activity journal",
+        "ok",
+        f"{count} window change{'s' * (count != 1)} recorded · {kept}",
+        details={"path": str(path)},
+    )
 
 
 async def check_sonu(ctx: DoctorContext) -> list[CheckResult]:
@@ -203,6 +241,7 @@ async def check_sonu(ctx: DoctorContext) -> list[CheckResult]:
                     )
                 )
 
+    results.append(_journal_result(ctx, group))
     policy = ctx.settings.policy.autonomy
     cloud = ctx.settings.privacy.cloud
     results.append(

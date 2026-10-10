@@ -4,7 +4,7 @@ The living record of where SONU is: what works on real hardware, what's next, wh
 **Updated in every PR.** Design and research live in [`PROPOSAL.md`](PROPOSAL.md); decisions in
 [`DECISIONS.md`](DECISIONS.md).
 
-_Last update: 2026-09-28_
+_Last update: 2026-10-11_
 
 ## Where we are
 
@@ -15,7 +15,7 @@ _Last update: 2026-09-28_
 | M1.5 System settings (PC control) | ✅ done and **verified on the owner's laptop** (2026-09-25); connect to saved Wi-Fi / paired Bluetooth devices added after ([D21](DECISIONS.md), [D24](DECISIONS.md), [D26](DECISIONS.md), [D27](DECISIONS.md)) |
 | Capability batch 1 | ✅ done and **verified on the owner's laptop** (2026-09-27) — play on YouTube (Zen and Chromium), reminders, screenshots, rice switches, laptop health ([`CAPABILITIES.md`](CAPABILITIES.md), [D34](DECISIONS.md)) |
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
-| M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); the journal comes after voice |
+| M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); part 4 🧪 **the activity journal** ("what was I doing yesterday?", #44, [D60](DECISIONS.md)) |
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
 | M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)) |
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
@@ -44,7 +44,7 @@ _Last update: 2026-09-28_
 
 ### Eval suite
 
-`qwen3.5:4b`: **116 / 116** twice on the v23 suite (2026-09-28, the laptop's GPU, ~1.3 s mean planning), including nine
+`qwen3.5:4b`: **120 / 120** twice on the v24 suite (2026-10-11, the laptop's GPU, ~1.3 s mean planning), including nine
 complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
@@ -104,7 +104,8 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    workspace 2" → "Kitty is up on workspace two.", "move it to workspace 4" (the window SONU opened), "play faded on
    spotify", "pause it", "play it again", small talk. ~~"Remember …"~~ (#20, [D45](DECISIONS.md)) — on the laptop:
    "remember that when I say editor I mean visual studio code" → "open my editor" opens Visual Studio Code; notes
-   listed back. The activity journal comes after voice.
+   listed back. ~~The activity journal~~ (#44, [D60](DECISIONS.md)): sonud records the focused window; "what was I
+   doing yesterday?", "when did I last use …?", pause, delete.
 2. **M3 — voice** ([D46](DECISIONS.md)): ~~push-to-talk~~ (#21) — tried on the laptop through a virtual microphone
    (a PipeWire null sink with Kokoro speaking into it): "What's my battery?" → "✔ Battery 100%" and the reply spoken;
    "Remember that when I say editor, I mean Visual Studio Code" → stored, reply spoken; ~2 s from the end of speech
@@ -238,7 +239,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #37 | 2026-10-04 | M6 part 3: the ladder's last rung — an app without accessibility: SONU finds the button by looking (0–1000 scale) and clicks with the pointer (high risk, "it can miss"; done only if the window changed); `screen.type` types the user's words into an app (high risk; focus checked right before; text through stdin); eval suite v21 (112) |
 | #38 | 2026-10-04 | Found by voice: typing goes to your window, never Claude Code unless asked (plan check); "open a terminal on 3 and type hello" types into that terminal; the rice's default apps read from `~/.config/orrery` (it moved; "open a terminal" asked "Alacritty or kitty?"); eval suite v22 (114) |
 | #39 | 2026-10-04 | The rice renamed Orrery: theme and wallpaper through `orrery-theme` / `orrery-wall` (falling back to `hypr-theme` / `hypr-wall`), backgrounds from `~/.config/orrery`; "next wallpaper" in a one-picture theme says so; doctor says "Orrery rice" |
-| #41 | open | Removing software by voice (`packages.remove`, [D59](DECISIONS.md)): the exact package and what only it needed shown and asked; refused when other software or the system needs it; the install window shared (password typed or said); verified with `pacman -Q`; eval suite v23 (116) |
+| #41 | 2026-10-11 | Removing software by voice (`packages.remove`, [D59](DECISIONS.md)): the exact package and what only it needed shown and asked; refused when other software or the system needs it; the install window shared (password typed or said); verified with `pacman -Q`; eval suite v23 (116) |
+| #44 | open | The activity journal (M2 part 4, [D60](DECISIONS.md)): sonud records which window has the focus (local SQLite, 30 days, password managers and private windows never); "what was I doing yesterday / this morning?", "when did I last use …?", pause/resume, delete (asks); `sonu journal`; eval suite v24 (120) |
 
 ### Found on real hardware → fixed
 
@@ -247,6 +249,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | 10-04 | (voice) "type hello into this window" / "write hello here in the kitty terminal" → dev.type, "Claude Code isn't open" (5 times) | code check: dev.type without Claude in the request → sent back as screen.type; "open a terminal on 3 and type hello" types into the terminal that request opened (#38) |
 | 10-04 | (voice) "open a terminal" → "Alacritty or kitty?" — the rice moved to `~/.config/orrery`, SONU read only `hypr-theme` | default apps read from `~/.config/orrery/defaults` first (#38). Theme and wallpaper fixed the same way in #39 (`orrery-theme`/`orrery-wall`, falling back to the old names) |
 | 10-04 | "next wallpaper" → "The wallpaper is still 1-mountain.png": Orrery's Eclipse theme has one picture | says "This theme has only one wallpaper — name a picture from ~/Pictures" (#39) |
+| 10-11 | (journal, recording the real desktop) Claude Code's spinner (◑ ◐ …) changed its terminal's title every second: a new row every ~2 s | a spinner or an unread count ("(3) Inbox") in front of a title is the same title (#44) |
+| 10-11 | `sonu journal show today` went to the planner as a request | `journal` routed as a command; a test checks every subcommand is (#44) |
 | 10-10 | (dry run) "remove visual studio code" asked "1 installed packages could be …" | one installed match goes straight to the yes/no, naming `visual-studio-code-bin` (#41) |
 | 10-04 | (M6) vision coordinates in pixels missed 5/5 Thunar controls | Qwen's own 0–1000 scale: 4/5 hits; every click asked as high risk, "it can miss" (#37) |
 | 09-28 | (M6) "press the home button in thunar" → control "home button"; Thunar's is "Home" | words like button/icon/tab/menu are ignored when matching (#34) |
