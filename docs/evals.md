@@ -11,7 +11,7 @@ sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
 ```
 
-## The cases (v22, 114 cases)
+## The cases (v23, 116 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -117,6 +117,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-09-28 | `qwen3.5:4b` | v20 with that check (and a sent-back unsupported "press …") | **111 / 111** twice | — |
 | 2026-10-04 | `qwen3.5:4b` | v21: + `type-into-this-window` (screen.type, not Claude Code's dev.type) | **112 / 112** twice | — |
 | 2026-10-04 | `qwen3.5:4b` | v22: + `type-here-no-claude`, `open-terminal-and-type` (found by voice: typing went to Claude Code's dev.type) | **114 / 114** twice | — |
+| 2026-10-10 | `qwen3.5:4b` | v23: + `uninstall-an-app`, `get-rid-of-an-app` (packages.remove) | **116 / 116** twice | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

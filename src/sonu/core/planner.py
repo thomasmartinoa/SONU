@@ -326,7 +326,8 @@ the whole screen.
 - Typing words into another app (not the Claude Code SONU opened) is screen.type, text = the user's \
 exact words; "and press enter" sets enter.
 - "Install <app>" is packages.install with name = the user's words for it (SONU finds the package and \
-asks). Removing software isn't possible yet.
+asks). "Uninstall / remove / get rid of <app>" is packages.remove with name = the user's words \
+(SONU shows what goes and asks).
 - GitHub: "my pull requests / PRs" is github.prs; "merge the pull request (in <repo>)" is \
 github.merge — give the number only if the user said one; SONU finds the pull request.
 - "Listen for Hey Sonu" / "turn on the wake word" is voice.wake with on true; "stop listening for \

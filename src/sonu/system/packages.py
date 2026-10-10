@@ -119,12 +119,45 @@ class Packages:
         ok, out = await self._run("pacman", "-Ss", *terms)
         return parse_search(out) if ok else []
 
+    async def search_installed(self, words: str) -> list[Package]:
+        """Installed packages whose name or description has all the words (``pacman -Qs``)."""
+        terms = [t for t in re.split(r"\s+", words.strip()) if t and not t.startswith("-")]
+        if not terms:
+            return []
+        ok, out = await self._run("pacman", "-Qs", "--", *terms)
+        return parse_search(out) if ok else []
+
+    async def removal(self, name: str) -> Removal:
+        """What removing ``name`` with its no-longer-needed dependencies would take (a preview)."""
+        argv = ("pacman", "-Rsp", "--print-format", "%n %v", "--", name)
+        try:
+            result = await self.runner.run(argv, timeout_s=20.0)
+        except (ProgramMissing, CommandError):
+            return Removal()
+        if not result.ok:
+            return Removal(needed_by=tuple(dict.fromkeys(_NEEDED_BY.findall(result.stderr + result.stdout))))
+        targets = tuple(
+            (parts[0], parts[1]) for line in result.stdout.splitlines() if len(parts := line.split()) == 2
+        )
+        return Removal(targets=targets)
+
     async def search_aur(self, words: str) -> list[Package]:
         terms = [t for t in re.split(r"\s+", words.strip()) if t]
         if not terms:
             return []
         ok, out = await self._run("yay", "-Ssa", "--sortby", "votes", *terms, timeout_s=30.0)
         return parse_search(out) if ok else []
+
+
+@dataclass(frozen=True, slots=True)
+class Removal:
+    """What ``pacman -Rs`` would take away (``pacman -Rsp``: no root, nothing changes)."""
+
+    targets: tuple[tuple[str, str], ...] = ()  # (name, version): the package, then what only it needed
+    needed_by: tuple[str, ...] = ()  # installed packages that need it: pacman refuses
+
+
+_NEEDED_BY = re.compile(r"breaks dependency '[^']+' required by (\S+)")
 
 
 def rank(packages: list[Package], words: str) -> list[Package]:

@@ -284,3 +284,79 @@ async def test_hearing_a_password_drops_whisper_punctuation_and_spaces() -> None
     session = VoiceSession(ears, Voice(), recorder=recorder, speaker_argv=("true",))  # type: ignore[arg-type]
     assert await session.hear_secret("Say your password.") == "Hunter2!"
     assert ears.hints == [""]  # no app names to bend it
+
+
+# ---------------------------------------------------------------------------- removing software
+def with_vlc(rig: Rig) -> None:
+    rig.system.installed_packages.update({"vlc": "3.0.21-1", "vlc-gui-qt": "3.0.21-1", "lua51": "5.1.5-13"})
+    rig.system.only_needs["vlc"] = ("vlc-gui-qt", "lua51")
+
+
+@pytest.mark.anyio
+async def test_remove_shows_exactly_what_goes_and_checks_it_went(rig: Rig) -> None:
+    with_vlc(rig)
+    report = await rig.run("uninstall vlc", ("packages.remove", {"name": "vlc"}))
+    [asked] = rig.confirmations
+    assert asked.risk is Risk.HIGH
+    assert asked.description == (
+        "Remove vlc 3.0.21-1 and 2 packages only it needed (vlc-gui-qt, lua51). "
+        "Your password is asked by the system itself."
+    )
+    assert report.status == "done" and lines(report) == ["Removed vlc"]
+    assert not {"vlc", "vlc-gui-qt", "lua51"} & set(rig.system.installed_packages)
+    [program] = rig.system.kitty.programs.values()
+    assert program.argv == ["pkexec", "pacman", "-Rs", "--noconfirm", "--", "vlc"]
+
+
+@pytest.mark.anyio
+async def test_nothing_removed_without_a_yes_or_with_the_prompt_cancelled(rig: Rig) -> None:
+    with_vlc(rig)
+    report = await rig.run("uninstall vlc", ("packages.remove", {"name": "vlc"}), approve=False)
+    assert report.status == "declined" and "vlc" in rig.system.installed_packages
+    rig.system.polkit_answer = "dismiss"
+    report = await rig.run("uninstall vlc", ("packages.remove", {"name": "vlc"}))
+    assert report.status == "failed" and "vlc" in rig.system.installed_packages
+    assert "the password prompt was cancelled" in lines(report)[0]
+
+
+@pytest.mark.anyio
+async def test_what_the_system_needs_is_never_removed(rig: Rig) -> None:
+    rig.system.installed_packages.update({"linux-cachyos": "6.17-1", "libvlc": "3.0.21-1"})
+    report = await rig.run("remove linux cachyos", ("packages.remove", {"name": "linux cachyos"}))
+    assert lines(report) == [
+        "SONU won't remove linux-cachyos: your system or SONU needs it (use a terminal if you really mean to)"
+    ]
+    rig.system.required_by["libvlc"] = ("vlc", "obs-studio")
+    report = await rig.run("remove libvlc", ("packages.remove", {"name": "libvlc"}))
+    assert lines(report) == ["libvlc can't be removed: other software needs it (vlc, obs-studio)"]
+    assert rig.confirmations == [] and rig.system.kitty.programs == {}
+
+
+@pytest.mark.anyio
+async def test_a_name_that_isnt_a_package_asks_which_installed_one(rig: Rig) -> None:
+    # "spotify player" never falls back to "spotify": the whole name, or the user picks.
+    rig.system.installed_packages.update({"spotify-launcher": "0.6.6-2", "spotify-player": "0.25.1-1"})
+    rig.picked = ["spotify-player"]
+    report = await rig.run("remove spotify", ("packages.remove", {"name": "spotify"}))
+    assert rig.offered == ["spotify-launcher", "spotify-player"] and report.status == "done"
+    assert "spotify-player" not in rig.system.installed_packages
+    # Found on the laptop: one match asked "1 installed packages could be …" — it's the yes/no now.
+    report = await rig.run("remove the spotify client", ("packages.remove", {"name": "spotify client"}))
+    assert report.status == "done" and "spotify-launcher" not in rig.system.installed_packages
+    assert rig.confirmations[-1].description.startswith(
+        "Remove spotify-launcher 0.6.6-2 (for 'spotify client')"
+    )
+    report = await rig.run("remove frobnicator", ("packages.remove", {"name": "frobnicator"}))
+    assert lines(report) == ["Nothing installed is called 'frobnicator'"]
+
+
+@pytest.mark.anyio
+async def test_remove_with_the_password_by_voice(rig: Rig) -> None:
+    with_vlc(rig)
+    prompts = by_voice(rig, "Hunter2!")
+    report = await rig.run("uninstall vlc", ("packages.remove", {"name": "vlc"}))
+    assert report.status == "done" and prompts == ["Say your password, or type it in the window."]
+    by_voice(rig, "hunter to")
+    rig.system.installed_packages["vlc"] = "3.0.21-1"
+    report = await rig.run("uninstall vlc", ("packages.remove", {"name": "vlc"}))
+    assert "the spoken password didn't work — remove it again and type the password" in lines(report)[0]
