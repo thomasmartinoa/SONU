@@ -64,11 +64,11 @@ src/sonu/
                   prompt_writer.py, screen_reader.py, page_reader.py (a page's text → the local model)
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py (folders, files by name, recent),
-                  file_change_tools.py (move, rename, the trash, restore), clipboard_tools.py, rice_tools.py,
-                  power_tools.py, obs_tools.py, voice_tools.py, dev_tools.py (folders, Claude Code),
-                  project_tools.py (VS Code, a project's commands, git, a terminal in a folder), layout_tools.py,
-                  message_tools.py, browser_tools.py,
-                  history_tools.py (bookmarks, history), github_tools.py, package_tools.py, screen_tools.py,
+                  file_change_tools.py (move, rename, the trash, restore), clipboard_tools.py, music_tools.py,
+                  rice_tools.py, power_tools.py, obs_tools.py, voice_tools.py, dev_tools.py (folders, Claude
+                  Code), project_tools.py (VS Code, a project's commands, git, a terminal in a folder),
+                  layout_tools.py, message_tools.py, browser_tools.py, history_tools.py (bookmarks, history),
+                  github_tools.py, package_tools.py, screen_tools.py,
                   naming.py (a control by its name), grounding.py, registry.py (plan schema), targets.py, context.py
   system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …),
                   github.py (gh), packages.py (pacman, yay), projects.py (a project's commands), git.py
@@ -79,10 +79,10 @@ src/sonu/
   llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
   verify/ policy/ audit/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS,
                   kitty = SONU-owned terminals, run_task = a command's exit code, browser = the extension's sockets,
-                  browser_data = history and bookmarks from profile folders,
+                  browser_data = history and bookmarks from profile folders, mpv = SONU's music player,
                   claude_code = reading its screen, a11y + a11y_helper = AT-SPI)
   testing/        FakeHyprland (simulates dispatch, apps, browsers), FakeOllama, sample apps, scripted planner,
-                  a fake MCP server, a fake browser, fake browser profiles
+                  a fake MCP server, a fake browser, fake browser profiles, a fake mpv
   evals/          cases.toml + runner
 tests/unit, tests/integration
 ```

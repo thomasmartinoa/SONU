@@ -79,7 +79,7 @@ works:
 | Play a particular song or video (YouTube) | 🧪 this batch | see Browser |
 | Play on Apple Music by name | ⛔ for now | the owner's Apple Music app (apple-music-desktop, an Electron wrapper) ignores links passed to it, so a song can't be opened or started without clicking in it (M6). "Play X" plays it on YouTube |
 | Play on Spotify by name: "play believer on spotify" (`media.play` service spotify) | ✅ | **no API key**: a `spotify:search:<your words>` link through the media controls (MPRIS OpenUri) makes Spotify play the top result; SONU starts Spotify if needed and checks it's playing a new song whose title or artist shares your words (else "unverified") |
-| Local music ("play my downloads folder") | ⏭ | `mpv` with the folder + MPRIS |
+| Local music: "play my music", "shuffle my music", "play <artist / album> from my music", "play the songs in my downloads"; pause, next, "what's playing?", stop | 🧪 #65 | SONU's own `mpv` over its IPC socket (no MPRIS plugin needed), checked by the song's position moving ([D77](DECISIONS.md)) |
 | "What's playing?" | ✅ | `system.status` media: `playerctl metadata` (read-only; kept out of the audit log) |
 
 ## Files and folders

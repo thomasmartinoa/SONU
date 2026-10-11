@@ -20,6 +20,7 @@ from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.integrations.browser import Browsers
 from sonu.integrations.kitty import SonuTerminals, runtime_folder
+from sonu.integrations.mpv import SonuPlayer
 from sonu.integrations.obs import ObsLink
 from sonu.system.control import SystemControl
 from sonu.world.origin import ancestor_pids
@@ -106,6 +107,8 @@ class ToolContext:
     # SONU's browser extension (D70), through its hosts' sockets. None: no browser (tests and evals never
     # reach the user's real browser; sonud and the CLI pass the real one).
     browsers: Browsers | None = None
+    # SONU's own music player (mpv over its IPC socket, D77). None: no player (tests and evals pass a fake).
+    music: SonuPlayer | None = None
 
     def sonu_terminals(self) -> SonuTerminals:
         if self.terminals is None:

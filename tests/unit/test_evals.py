@@ -200,6 +200,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "delete-the-last-download": steps(("files.trash", {"name": "my last download"})),
     "copy-a-files-path": steps(("clipboard.copy", {"what": "path", "name": "invoice"})),
     "copy-the-last-screenshot": steps(("clipboard.copy", {"what": "screenshot"})),
+    "play-my-music": steps(("media.play_local", {})),
+    "shuffle-an-artist": steps(("media.play_local", {"words": "kestrel band"})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),
