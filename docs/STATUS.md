@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **154 / 154** on the v37 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **156 / 156** on the v38 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks, two for files by name, three for moving, renaming and the trash and two for copying; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying and two for local music; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -286,7 +286,13 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
     removed); dry runs with the branch's code: "copy the path of the SONU readme" → "Copy the path of 'README.md'
     (~/dev_works/SONU)"; "copy my last screenshot" → the picture; "copy hello from sonu" → those words.
 
-Waiting on music in `~/Music`: local music with `mpv`.
+11. **Local music** ([D77](DECISIONS.md); the owner: "continue"): ~~"play my music", shuffle, an artist or album, a folder; pause,
+    next, "what's playing?", stop~~ (#65) — SONU's own mpv over its IPC socket (the laptop has no `mpv-mpris`). On the
+    laptop with silent test songs (ffmpeg) in a scratch home — the owner's `~/Music` doesn't exist yet: "play my music"
+    → "Playing 4 songs from ~/Music: playing — Ridge Song 1 — Kestrel Band"; "what's playing?", "pause the music", "next
+    song", "resume the music", "stop the music" → each done and checked on mpv's socket; "shuffle kestrel band from my
+    music" while music played was a resume, and "stop" once a pause (both fixed); mpv stopped afterwards. With the
+    owner: songs in `~/Music`; optionally `sudo pacman -S mpv-mpris` so the rice's media keys and `playerctl` see it.
 
 ## Open questions and known issues
 
@@ -378,12 +384,15 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #61 | 2026-10-11 | History and bookmarks ([D73](DECISIONS.md)): `browser.history` (by the user's words and/or a time; private) and `browser.open_saved` (a bookmark low, a page from history shown and asked) — read from read-only copies of Zen/Firefox `places.sqlite` (with its `-wal`) and Chromium `History` / `Bookmarks` in SONU's 0700 runtime folder, deleted after; no extension needed; a search uses this request's words only; planner rule and a check (bookmarks and history aren't `web.*`); fake profiles for tests and evals; eval suite v34 (147) |
 | #62 | 2026-10-11 | Files by name ([D74](DECISIONS.md)): `files.open` opens a file by its name when no folder has it (several → the user picks; programs never; unusual types ask), `files.find` (where files are, private), `files.recent` (from `recently-used.xbel`, private); kind words ("pdf", "photo") as extensions; planner rule; eval suite v35 (149) |
 | #63 | 2026-10-11 | Move, rename, delete to the trash, restore ([D75](DECISIONS.md)): `files.move`, `files.rename` (the user's exact words, the extension kept), `files.trash` (`gio trash` only; a folder high), `files.restore`; never outside the home, its main folders or anything hidden; never overwrites; each asked and checked on disk; the planner example that said renaming wasn't possible replaced, and a check for a step's own part listed as unsupported; eval suite v36 (152) |
-| #64 | open | Copying to the clipboard ([D76](DECISIONS.md)): `clipboard.copy` — a file's path, a picture or text file, the newest screenshot, the page's link, the user's own words; checked by reading it back; words left out of the plan come from the request; a file is also found by its folders' names (the one right in the named folder); desktop.shell clears notifications only when the user says so; eval suite v37 (154) |
+| #64 | 2026-10-11 | Copying to the clipboard ([D76](DECISIONS.md)): `clipboard.copy` — a file's path, a picture or text file, the newest screenshot, the page's link, the user's own words; checked by reading it back; words left out of the plan come from the request; a file is also found by its folders' names (the one right in the named folder); desktop.shell clears notifications only when the user says so; eval suite v37 (154) |
+| #65 | open | Local music ([D77](DECISIONS.md)): `media.play_local` with SONU's own mpv (IPC socket in its runtime folder; no MPRIS needed): the music folder or a named one, an artist's or album's folder, shuffle only when said; done when the song's position moves; `media.control` and "what's playing?" reach it; "stop" stops it; planner checks (own music only when the user says so; shuffle isn't a resume; page reading needs a page word); a web search goes to the site the user names; a fake mpv for tests and evals; eval suite v38 (156) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-11 | (D77, SONU's real mpv on silent test songs) "shuffle kestrel band from my music" while music played was planned as a resume; "stop the music" once as pause | own-music words send it to media.play_local; "stop" said (not "pause") stops SONU's player (#65) |
+| 10-11 | (eval v38, after the music rule) "…and play me alone music there" went to the user's own files ("no songs"); "what is open in zen?" to page reading; "search for username thomasmartinoa in github" to a web search | own music only when the user says so; page reading needs a page word; a web search goes to the one site the user's words name, its trailing name dropped from the query (#65) |
 | 10-11 | (eval v37, after the copy rule) "turn off night light and turn off do not disturb" was planned with clear_notifications — the notifications would have been cleared | desktop.shell clears notifications only when the user says clear / dismiss; with do-not-disturb said, that switch instead (#64) |
 | 10-11 | (dry runs, D76) "copy hello from sonu" planned with no text; "copy the path of my invoice" planned as files.find + a copy with no name; "the SONU readme" found nothing (README.md doesn't say SONU) | words left out come from the request; a file's folders count, the one right in the named folder first (#64) |
 | 10-11 | (D75, a scratch folder) "move kestrel-invoice.pdf to …" was planned with files.move **and** listed as "can't do" — a planner example said renaming files wasn't possible | the example now uses printing; a plan that lists what its own step does as unsupported is sent back (#63) |

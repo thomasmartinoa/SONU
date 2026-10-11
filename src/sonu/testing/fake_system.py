@@ -55,6 +55,7 @@ ALL_PROGRAMS = frozenset(
         "wtype",
         "git",
         "gio",
+        "mpv",
     }
 )
 # A repository for `git` in the fake home's projects: on a branch with one commit not pushed, two files

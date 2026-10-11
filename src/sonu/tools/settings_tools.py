@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 from collections.abc import Awaitable, Callable
 from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from sonu.desktop.apps.resolver import normalize
+from sonu.integrations.mpv import MpvError, Playing
 from sonu.system.commands import CommandError, ProgramMissing
 from sonu.system.control import AudioTarget, BluetoothDevice, PlayerAction, PowerMode, Volume
 from sonu.tools.base import (
@@ -30,6 +32,7 @@ from sonu.tools.base import (
 )
 from sonu.tools.context import ToolContext
 from sonu.tools.grounding import ungrounded_words
+from sonu.tools.music_tools import describe, player_in_use
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -314,7 +317,8 @@ class MediaControl(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(MediaArgs, args)
-        if problem := _missing(ctx, "playerctl"):
+        # SONU's own music (D77) needs no playerctl: mpv answers on its socket.
+        if (ctx.music is None or not await ctx.music.running()) and (problem := _missing(ctx, "playerctl")):
             return problem
         text = {
             "play": "Play the media",
@@ -328,6 +332,8 @@ class MediaControl(Tool):
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
         a = cast(MediaArgs, prepared.payload)
+        if (music := await player_in_use(ctx)) is not None:
+            return await _control_music(ctx, a.action, music)
         timeout = ctx.settings.verify.timeout_s
         try:
             status = await ctx.system.player_status()
@@ -358,6 +364,43 @@ class MediaControl(Tool):
             f"Media {wanted.lower()}",
             f"The player is {str(after_status).lower()}, not {wanted.lower()}",
         )
+
+
+async def _control_music(ctx: ToolContext, action: PlayerAction, before: Playing) -> ToolOutcome:
+    """Pause, play, skip or stop SONU's own mpv (D77), checked on its socket."""
+    player = ctx.music
+    if player is None:
+        return ToolOutcome(StepStatus.FAILED, "SONU's music player isn't available")
+    timeout = ctx.settings.verify.timeout_s
+    said = ctx.request_text.casefold()
+    if action == "pause" and re.search(r"\bstop\b", said) and "pause" not in said:
+        action = "stop"  # found on the laptop: "stop the music" was planned as pause; the user's word decides
+    try:
+        if action == "stop":
+            await player.command("stop")
+            gone = await _settle(player.running, lambda running: not running, timeout)
+            check = Check("the music stopped", not gone)
+            return outcome_from_checks([check], "Stopped the music", "The music didn't stop")
+        if action in ("next", "previous"):
+            if action == "next" and before.index + 1 >= before.count:
+                return ToolOutcome(StepStatus.FAILED, "That's the last song in the list")
+            if action == "previous" and before.index == 0:
+                return ToolOutcome(StepStatus.FAILED, "That's the first song in the list")
+            await player.command("playlist-next" if action == "next" else "playlist-prev")
+            after = await _settle(
+                player.state, lambda s: s is not None and s.index != before.index, TRACK_CHANGE_S
+            )
+            check = Check("the song changed", after is not None and after.index != before.index)
+            done = "Skipped to the next song" if action == "next" else "Went back to the previous song"
+            return outcome_from_checks([check], done, "The song didn't change")
+        paused = {"play": False, "pause": True}.get(action, not before.paused)
+        await player.command("set_property", "pause", paused)
+        after = await _settle(player.state, lambda s: s is not None and s.paused == paused, timeout)
+        wanted = "paused" if paused else "playing"
+        check = Check(f"the music is {wanted}", after is not None and after.paused == paused)
+        return outcome_from_checks([check], f"Music {wanted}", f"The music isn't {wanted}")
+    except MpvError as exc:
+        return ToolOutcome(StepStatus.FAILED, f"The music player didn't answer: {exc}")
 
 
 # ---------------------------------------------------------------------------- settings.power_mode
@@ -481,6 +524,8 @@ class SystemStatus(Tool):
     async def _read(item: StatusItem, ctx: ToolContext) -> str:
         program = ctx.system.rice_program(item) if item in ("theme", "wallpaper") else _ITEM_PROGRAM.get(item)
         label = item.replace("_", " ").capitalize()
+        if item == "media" and (music := await player_in_use(ctx)) is not None:
+            return f"Media (SONU's music): {describe(music)}"  # SONU's own mpv needs no playerctl (D77)
         if program and not ctx.system.available(program):
             return f"{label}: unknown ({program} isn't installed)"
         try:

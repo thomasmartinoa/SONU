@@ -337,6 +337,18 @@ class WebSearch(Tool):
     ) -> Prepared | ToolOutcome:
         a = cast(SearchArgs, args)
         query, site_key = _without_site_operator(a.query, a.site, ctx.request_text)
+        if (
+            site_key == "web"
+            and len(named := [k for k in sites_named_in(ctx.request_text) if SITES[k].search]) == 1
+        ):
+            # Found in the evals (v38): "search for username thomasmartinoa in github" was planned as a web
+            # search for "username thomasmartinoa github". The one site the user's words name is searched.
+            site_key = named[0]
+        words = query.split()
+        if site_key != "web" and len(words) > 1:  # "… github" at the end of a GitHub search is the site
+            site_words = {*SITES[site_key].words, normalize(SITES[site_key].name)}
+            if normalize(words[-1]) in site_words:
+                query = " ".join(words[:-1])
         if not query:
             return ToolOutcome(StepStatus.FAILED, "There's nothing to search for")
         missing = ungrounded_words(query, ctx.user_words or ctx.request_text)

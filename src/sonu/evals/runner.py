@@ -33,6 +33,7 @@ from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.integrations.browser import Browsers
 from sonu.integrations.kitty import SonuTerminals
+from sonu.integrations.mpv import SonuPlayer
 from sonu.integrations.obs import ObsLink, ObsSettings
 from sonu.llm.chat import ChatModel, TextModel
 from sonu.policy.engine import Policy
@@ -40,6 +41,7 @@ from sonu.system.control import SystemControl
 from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_browser import FakeBrowser, FakeControl, FakeTab
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
+from sonu.testing.fake_mpv import FakeMpv
 from sonu.testing.fake_obs import FakeObs, FakeObsState
 from sonu.testing.fake_profiles import firefox_profile
 from sonu.testing.fake_system import FakeSystem
@@ -67,7 +69,14 @@ ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty", "files": "thunar
 HOME_FOLDERS = ("Downloads", "Documents", "Pictures/screenshot", "dev_works/SONU", "hypr-dotfiles")
 NEWEST_DOWNLOAD = "Downloads/cat.png"
 # Older files (D74): what "open my kestrel lake photo" and "where is my invoice?" find.
-HOME_FILES = ("Pictures/kestrel lake.png", "Documents/invoice march.pdf", "Pictures/screenshot/shot.png")
+HOME_FILES = (
+    "Pictures/kestrel lake.png",
+    "Documents/invoice march.pdf",
+    "Pictures/screenshot/shot.png",
+    "Music/Kestrel Band/First Album/01 Morning.ogg",
+    "Music/Kestrel Band/First Album/02 Ridge.ogg",
+    "Music/Other Artist/Single.flac",
+)
 # The SONU project's files (D65): what "run the tests" and "open planner.py" find.
 PROJECT_FILES = {
     "dev_works/SONU/pyproject.toml": "[project]\nname = 'sonu'\n[tool.ruff]\n[tool.pytest.ini_options]\n",
@@ -375,7 +384,14 @@ async def run_case(
             system = FakeSystem(**case.system)
             system.trash_dir = workdir / ".local" / "share" / "Trash"  # gio trash (D75)
             fake.on_url = system.page_opened
-            fake.on_exec = system.kitty.launched
+            mpv = FakeMpv(runtime_dir / "music")  # SONU's own music player (D77)
+            stack.push_async_callback(mpv.aclose)
+
+            def on_exec(argv: list[str]) -> None:
+                system.kitty.launched(argv)
+                mpv.launched(argv)
+
+            fake.on_exec = on_exec
             fake.proc = workdir / "proc"
             sys_dir = workdir / "sys" / "class" / "thermal" / "thermal_zone0"
             sys_dir.mkdir(parents=True, exist_ok=True)
@@ -440,6 +456,7 @@ async def run_case(
                 layouts=Layouts(workdir / "data" / "layouts.json"),
                 notifications=notifications,
                 browsers=browsers,
+                music=SonuPlayer(runtime_dir / "music"),
             )
             for minutes_ago, app, title in case.journal:
                 journal.record(app, title, time.time() - minutes_ago * 60)

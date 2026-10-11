@@ -317,6 +317,8 @@ is normal. "Put X and Y side by side / next to each other" is windows.side_by_si
 - Volume, mic, brightness, Bluetooth, Wi-Fi, media and power mode have their own tools; \
 "what's my …" / "is … on?" is system.status; "how is my laptop doing?" is system.status with \
 what ["health"].
+- Music from the user's own folders ("play my music", "shuffle my music", "play <artist> from my music", \
+"play the songs in <folder>") is media.play_local.
 - "Play <a song, artist or video>" is media.play (YouTube, or service spotify if they said \
 Spotify); its query is the user's words only, and a browser they named goes in browser. \
 media.control only plays, pauses or skips what is already playing.
@@ -488,6 +490,11 @@ _OFF_AND_DND = re.compile(r"\boff\b.*\band (?:the )?(?:do not disturb|dnd)\b(?! 
 _PAIR = re.compile(r"\bpair\b")
 _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 # The words that point at the focused window ("close this", "close it", "close the window").
+_LOCAL_MUSIC = re.compile(
+    r"\bshuffle\b|\b(?:from|in)\s+my\s+(?:music|songs)\b|\bplay\s+my\s+(?:music|songs)\b"
+)
+_SONGS_IN = re.compile(r"\b(?:songs|music|tracks)\s+(?:in|from)\s+(?:my|the)\b")
+_ABOUT_A_PAGE = re.compile(r"\b(?:summari[sz]e|selected|selection|highlighted)\b")
 _FILE_VERBS = {
     "move": "files.move",
     "rename": "files.rename",
@@ -696,6 +703,33 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 problems.append(
                     f"step {index + 1} (screen.read): the user asked about a web page — plan {wanted} "
                     "instead (add words only for a tab they named)"
+                )
+    # Found in the evals (v38): "…and play me alone music there" became media.play_local ("no songs") once it
+    # existed. The user's own songs only when their words say so.
+    if not _LOCAL_MUSIC.search(said) and not _SONGS_IN.search(said):
+        for index, step in enumerate(plan.steps):
+            if step.tool == "media.play_local":
+                problems.append(
+                    f"step {index + 1} (media.play_local) is for the user's own music files — they didn't "
+                    "say 'my music' or a folder: play it with media.play (query = their words)"
+                )
+    # Found in the evals (v38): "what is open in zen?" became browser.read (the page's text) — that's a look
+    # at the window (screen.read) unless they asked about a page.
+    if not _WEB_PAGE.search(said) and not _ABOUT_A_PAGE.search(said):
+        for index, step in enumerate(plan.steps):
+            if step.tool == "browser.read":
+                problems.append(
+                    f"step {index + 1} (browser.read) is for a web page's text — the user didn't ask about a "
+                    "page: use screen.read (question = their question)"
+                )
+    # Found on the laptop (D77): "shuffle kestrel band from my music" while music played was planned as
+    # media.control play. Music from the user's own folders is media.play_local.
+    if _LOCAL_MUSIC.search(said) and not any(step.tool == "media.play_local" for step in plan.steps):
+        for index, step in enumerate(plan.steps):
+            if step.tool in ("media.control", "media.play"):
+                problems.append(
+                    f"step {index + 1} ({step.tool}): the user asked for music from their own folders — use "
+                    "media.play_local (words = their words for an artist, album or song; place for a folder)"
                 )
     # The user's bookmarks and history are on the laptop (D73): never a web search or a site by name.
     if _SAVED.search(said):

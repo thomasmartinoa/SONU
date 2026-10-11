@@ -274,9 +274,19 @@ def file_words(name: str) -> tuple[list[str], frozenset[str] | None]:
     return words, frozenset(kinds) or None
 
 
-def files_named(folder: Path, words: list[str], kinds: frozenset[str] | None) -> list[Path]:
+def files_named(
+    folder: Path,
+    words: list[str],
+    kinds: frozenset[str] | None,
+    *,
+    limit: int = MAX_FOUND,
+    nearest: bool = True,
+    in_name: bool = True,
+) -> list[Path]:
     """Files under ``folder`` whose name has every word (a kind: one of its extensions), newest first.
-    Not searched: hidden folders, dependencies and build output."""
+    Not searched: hidden folders, dependencies and build output. ``nearest``: when words name a folder,
+    only the files right in it; ``in_name``: at least one word in the file's own name (a playlist wants
+    every song below an artist's folder: both False)."""
     if not words and not kinds:
         return []
     keys = [compact(w) for w in words if compact(w)]
@@ -303,7 +313,9 @@ def files_named(folder: Path, words: list[str], kinds: frozenset[str] | None) ->
                 # Every word in the file's name or its folders' ("the SONU readme": README.md in SONU), at
                 # least one in its own name.
                 where = compact(os.path.relpath(entry.path, folder))
-                if not all(key in where for key in keys) or (keys and not any(key in name for key in keys)):
+                if not all(key in where for key in keys) or (
+                    in_name and keys and not any(key in name for key in keys)
+                ):
                     continue
                 if kinds and Path(entry.name).suffix.lower() not in kinds:
                     continue
@@ -313,12 +325,12 @@ def files_named(folder: Path, words: list[str], kinds: frozenset[str] | None) ->
     found.sort(key=lambda item: -item[0])
     # Words that name a folder ("the SONU readme"): the files right in that folder, not deeper ones
     # (SONU/README.md, not SONU/docs/adr/README.md).
-    nearest = min((_below(p, folder, keys) for _, p in found), default=0)
-    paths = [p for _, p in found if _below(p, folder, keys) == nearest]
+    closest = min((_below(p, folder, keys) for _, p in found), default=0) if nearest else 0
+    paths = [p for _, p in found if not nearest or _below(p, folder, keys) == closest]
     # The file the words name exactly ("notes" → notes.txt) before the ones that only contain them.
     whole = compact(" ".join(words))
     exact = [p for p in paths if compact(p.stem) == whole]
-    return (exact + [p for p in paths if p not in exact])[:MAX_FOUND]
+    return (exact + [p for p in paths if p not in exact])[:limit]
 
 
 def _below(path: Path, top: Path, keys: list[str]) -> int:

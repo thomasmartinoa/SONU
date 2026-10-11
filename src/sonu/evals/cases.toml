@@ -1318,3 +1318,18 @@ request = "copy my last screenshot"
 expect_status = ["done"]
 require_tools = ["clipboard.copy"]
 forbid_tools = ["screen.capture"]
+
+# ---- local music with SONU's mpv (v38)
+[[case]]
+id = "play-my-music"
+request = "play my music"
+expect_status = ["done"]
+require_tools = ["media.play_local"]
+forbid_tools = ["media.play", "web.open", "apps.launch"]
+
+[[case]]
+id = "shuffle-an-artist"
+request = "shuffle kestrel band from my music"
+expect_status = ["done"]
+require_tools = ["media.play_local"]
+forbid_tools = ["media.play", "media.control"]

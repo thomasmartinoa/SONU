@@ -801,3 +801,13 @@ async def test_search_goes_to_the_site_the_user_named(harness: Harness) -> None:
     report = await harness.engine(plans).run(request, confirm=Confirmations(False))
     assert harness.fake.launched[-1][-1] == "https://www.youtube.com/results?search_query=faded"
     assert report.status == "partial"
+
+
+@pytest.mark.anyio
+async def test_a_web_search_goes_to_the_site_the_user_named(harness: Harness) -> None:
+    """Found in the evals (v38): "search for username thomasmartinoa in github" was planned as a web search
+    for "username thomasmartinoa github"."""
+    request = "search for username thomasmartinoa in github"
+    plans = {request: steps_plan(("web.search", {"query": "username thomasmartinoa github"}))}
+    await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert harness.fake.launched[-1][-1] == "https://github.com/search?q=thomasmartinoa&type=users"

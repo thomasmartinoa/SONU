@@ -514,3 +514,27 @@ def test_a_part_a_step_does_isnt_unsupported() -> None:
     assert "remove it from unsupported" in problem
     plan.unsupported = ["print invoice.pdf"]
     assert _problems(plan, REGISTRY, "move invoice.pdf to documents and print it") == []
+
+
+def test_music_from_the_users_folders_is_play_local() -> None:
+    """Found on the laptop (D77): "shuffle kestrel band from my music" while music played became a resume."""
+    resume = _plan(("media.control", {"action": "play"}))
+    [problem] = _problems(resume, REGISTRY, "shuffle kestrel band from my music")
+    assert "media.play_local" in problem
+    assert _problems(resume, REGISTRY, "resume the music") == []
+    youtube = _plan(("media.play", {"query": "my music"}))
+    assert _problems(youtube, REGISTRY, "play my music") != []
+
+
+def test_own_music_and_page_reading_need_the_users_cue() -> None:
+    """Found in the evals (v38): "play me alone music there" became media.play_local; "what is open in zen?"
+    became browser.read."""
+    local = _plan(("media.play_local", {"words": "alone"}))
+    [problem] = _problems(local, REGISTRY, "open zen on 4 and play me alone music there")
+    assert "media.play" in problem
+    assert _problems(local, REGISTRY, "play alone from my music") == []
+    assert _problems(_plan(("media.play_local", {})), REGISTRY, "play the songs in my downloads") == []
+    read = _plan(("browser.read", {"question": "what is open"}))
+    [problem] = _problems(read, REGISTRY, "what is open in zen?")
+    assert "screen.read" in problem
+    assert _problems(read, REGISTRY, "summarise it") == []
