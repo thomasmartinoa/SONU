@@ -174,6 +174,10 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "run-project-tests": steps(("dev.run", {"task": "tests", "folder": "SONU"})),
     "what-did-i-change": steps(("dev.git", {"folder": "SONU"})),
     "last-commits": steps(("dev.git", {"folder": "SONU", "what": "commits"})),
+    "terminal-in-a-folder": steps(("dev.terminal", {"folder": "dev_works"})),
+    "folder-and-a-terminal-there": steps(
+        ("files.make_folder", {"name": "demo", "inside": "dev_works"}), ("dev.terminal", {"workspace": 4})
+    ),
     "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
     "install-already-there": steps(("packages.install", {"name": "kitty"})),
     "github-open-prs": steps(("github.prs", {})),

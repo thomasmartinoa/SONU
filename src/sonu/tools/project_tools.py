@@ -20,6 +20,7 @@ import os
 import re
 import secrets
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal, cast
@@ -29,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sonu.desktop.apps.classes import window_matches
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import normalize
+from sonu.desktop.hyprland.dialect import WorkspaceTarget
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.models import Window
 from sonu.system.commands import CommandError
@@ -47,6 +49,7 @@ from sonu.tools.base import (
 )
 from sonu.tools.context import ToolContext
 from sonu.tools.desktop_tools import failed_dispatch, resolve_app
+from sonu.tools.dev_tools import _names
 from sonu.tools.file_tools import _home_relative, _inside, find_folders
 from sonu.tools.grounding import ungrounded_words
 from sonu.tools.web_tools import compact
@@ -107,25 +110,28 @@ def _is_file(text: str | None) -> bool:
     return bool(text) and Path(str(text)).is_file()
 
 
-async def _project(ctx: ToolContext, place: str | None, choice: str | None) -> Path | ToolOutcome:
+async def _project(
+    ctx: ToolContext, place: str | None, choice: str | None, noun: str = "project"
+) -> Path | ToolOutcome:
     """The project the user means: their words, the folder this request made, or the folder of the
     Claude Code SONU opened last."""
     home = ctx.system.home
     if choice:
         return _chosen(choice, home)
+    task = ctx.task_folder  # made by an earlier step of this request (in a dry run: would be)
+    if task is not None and (not place or _names(task, place)):
+        return task
     if not place:
-        if ctx.task_folder is not None:
-            return ctx.task_folder
         claude = [t for t in await ctx.sonu_terminals().open_ones() if t.program == "claude"]
         if claude:
             return Path(claude[0].folder)
-        return ToolOutcome(StepStatus.FAILED, "Which project? Say its name (“… in SONU”)")
+        return ToolOutcome(StepStatus.FAILED, f"Which {noun}? Say its name (“… in SONU”)")
     words = " ".join(w for w in normalize(place).split() if w not in _NOT_NAME) or place
     found = find_folders(words, home)
     projects = [folder for folder in found if is_project(folder)] or found
     if not projects:
         return ToolOutcome(
-            StepStatus.FAILED, f"I couldn't find a project called '{words}' in your home folder"
+            StepStatus.FAILED, f"I couldn't find a {noun} called '{words}' in your home folder"
         )
     if len(projects) > 1:
         options = tuple(Choice(_where(ctx, path), str(path)) for path in projects[:MAX_CHOICES])
@@ -637,4 +643,124 @@ class GitInfo(Tool):
         return ToolOutcome(StepStatus.DONE, text, (Check("git answered", True),), private=True)
 
 
-PROJECT_TOOLS: tuple[Tool, ...] = (OpenProject(), RunTask(), RunResult(), GitInfo())
+# ---------------------------------------------------------------------------- dev.terminal
+# How each terminal is told the folder to start in (its shell starts there).
+TERMINAL_FOLDER: dict[str, Callable[[str], tuple[str, ...]]] = {
+    "kitty": lambda folder: ("--directory", folder),
+    "alacritty": lambda folder: ("--working-directory", folder),
+    "foot": lambda folder: (f"--working-directory={folder}",),
+    "wezterm": lambda folder: ("start", "--cwd", folder),
+    "ghostty": lambda folder: (f"--working-directory={folder}",),
+    "konsole": lambda folder: ("--workdir", folder),
+    "gnome-terminal": lambda folder: (f"--working-directory={folder}",),
+}
+_ON_WORKSPACE = re.compile(r"\b(?:on|in|to) workspace (\d{1,2})\b", re.I)
+SHELL_WAIT_S = 3.0  # the shell starts a moment after the window maps
+
+
+@dataclass(frozen=True, slots=True)
+class _TerminalPlan:
+    entry: AppEntry
+    argv: tuple[str, ...]
+    folder: Path
+    workspace: WorkspaceTarget | None
+
+
+class TerminalArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    folder: str | None = Field(
+        default=None,
+        max_length=120,
+        description="the folder, the user's words; none: the one this request made",
+    )
+    app: str | None = Field(default=None, max_length=60, description="the terminal the user named, if any")
+    workspace: int | None = Field(default=None, ge=1, le=99)
+
+
+class OpenTerminal(Tool):
+    name = "dev.terminal"
+    description = (
+        "Open the user's terminal in a folder ('open a terminal in dev_works', 'open kitty in SONU'): a new "
+        "window whose shell starts there. Only when a folder is named or made in this request."
+    )
+    risk = Risk.LOW
+    effects = frozenset({Effect.APP_LAUNCH})
+    Args = TerminalArgs
+    grounded = ("folder", "app")
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(TerminalArgs, args)
+        for field, value in (("folder", a.folder), ("terminal", a.app)):
+            if problem := _own_words(ctx, field, value):
+                return problem
+        entry = resolve_app(a.app or "terminal", ctx)
+        if isinstance(entry, ToolOutcome):
+            return entry
+        start_in = TERMINAL_FOLDER.get(entry.executable)
+        if start_in is None:
+            return ToolOutcome(StepStatus.FAILED, f"SONU can't tell {entry.name} which folder to start in")
+        folder = await _project(ctx, a.folder, choice, noun="folder")
+        if isinstance(folder, ToolOutcome):
+            return folder
+        workspace = a.workspace
+        if workspace is None:  # like dev.claude_open: the one workspace the user's words name
+            named = {int(n) for n in _ON_WORKSPACE.findall(ctx.request_text)}
+            workspace = named.pop() if len(named) == 1 and 1 <= min(named) <= 99 else None
+        argv = (entry.argv[0], *start_in(str(folder)))
+        where = f" on workspace {workspace}" if workspace else ""
+        target = WorkspaceTarget.of(workspace) if workspace else None
+        return Prepared(
+            f"Open {entry.name} in {_where(ctx, folder)}{where}", _TerminalPlan(entry, argv, folder, target)
+        )
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        plan = cast(_TerminalPlan, prepared.payload)
+        before = await ctx.desktop.snapshot()
+        learned = ctx.learned(plan.entry)
+        try:
+            await ctx.desktop.launch(plan.argv, plan.workspace)
+        except HyprlandError as exc:
+            return failed_dispatch(f"start {plan.entry.name}", exc)
+
+        def opened(snapshot: WorldSnapshot) -> Window | None:
+            new = snapshot.new_windows(before)
+            return next(
+                (w for w in new if window_matches(plan.entry, (w.window_class, w.initial_class), learned)),
+                None,
+            )
+
+        window, _ = await ctx.desktop.wait_for(opened, timeout_s=ctx.settings.apps.launch_timeout_s)
+        where = _where(ctx, plan.folder)
+        if window is None:
+            return ToolOutcome(StepStatus.FAILED, f"{plan.entry.name} didn't open a window")
+        # Checked on the process: its shell's working folder (/proc), not the title (a shell sets that).
+        deadline = time.monotonic() + SHELL_WAIT_S
+        while plan.folder not in (shells := ctx.system.child_folders(window.pid)):
+            if time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(0.2)
+        shell = Check(f"its shell is in {where}", plan.folder in shells)
+        placed = [Check(f"{plan.entry.name} opened", True, {"workspace": window.workspace.name})]
+        if plan.workspace is not None:
+            wanted = plan.workspace.value
+            placed.append(Check(f"it's on workspace {wanted}", window.workspace.name == wanted))
+        checks = [*placed, shell]
+        if not shell.passed and all(c.passed for c in placed):
+            return ToolOutcome(
+                StepStatus.UNVERIFIED,
+                f"Opened {plan.entry.name}, but I couldn't see its shell start in {where}",
+                tuple(checks),
+                data={"windows": [window.address]},
+            )
+        return outcome_from_checks(
+            checks,
+            f"Opened {plan.entry.name} in {where} on workspace {window.workspace.name}",
+            f"Opened {plan.entry.name}, but not where it should be",
+            windows=[window.address],
+        )
+
+
+PROJECT_TOOLS: tuple[Tool, ...] = (OpenProject(), RunTask(), RunResult(), GitInfo(), OpenTerminal())

@@ -33,6 +33,16 @@ def app_pid(window_class: str) -> int:
     return FAKE_PID_BASE + zlib.crc32(window_class.encode()) % 1_000_000
 
 
+def _start_folder(argv: list[str]) -> str | None:
+    """The folder a terminal is told to start in (not SONU's own terminals: they run a program)."""
+    if "--listen-on" in argv:
+        return None
+    for index, arg in enumerate(argv[:-1]):
+        if arg in ("--directory", "--working-directory", "--cwd", "--workdir"):
+            return argv[index + 1]
+    return next((a.split("=", 1)[1] for a in argv if a.startswith("--working-directory=")), None)
+
+
 def _toggled(current: bool, action: str | None) -> bool:
     return True if action == "enable" else False if action == "disable" else not current
 
@@ -159,6 +169,10 @@ class FakeHyprland:
         # class (e.g. FakeSystem.page_opened).
         self.on_url: Callable[[str, str], None] | None = None
         self.on_exec: Callable[[list[str]], None] | None = None  # e.g. FakeKitty.launched
+        # A /proc for terminals started with a folder (--directory, --working-directory…): their shell's
+        # working folder, as SystemControl.child_folders reads it. None: not written.
+        self.proc: Path | None = None
+        self._next_child = 900_000
         self.cursor: tuple[int, int] = (0, 0)
         self.requests: list[str] = []
         self.dispatch_handler: Callable[[str], str] | None = None
@@ -406,6 +420,8 @@ class FakeHyprland:
         app = self.apps.get(Path(argv[0]).name)
         if app is None or not app.opens_window:
             return "ok"  # real Hyprland reports ok even if the program fails to start
+        if self.proc is not None and (folder := _start_folder(argv)) is not None:
+            self._shell_in(app_pid(app.window_class), folder)
         rule_workspace = int(parsed.workspace) if parsed.workspace else None
         url = next((arg for arg in argv[1:] if arg.startswith(("https://", "http://"))), None)
         if url and self.on_url is not None:
@@ -426,6 +442,18 @@ class FakeHyprland:
                 title = f"{Path(file).name} - {Path(path).name} - {app.title}"
             self._background(self._open(app, rule_workspace, title))
         return "ok"
+
+    def _shell_in(self, pid: int, folder: str) -> None:
+        if self.proc is None:
+            return
+        self._next_child += 1
+        children = self.proc / str(pid) / "task" / str(pid) / "children"
+        children.parent.mkdir(parents=True, exist_ok=True)
+        before = children.read_text() if children.exists() else ""
+        children.write_text(f"{before}{self._next_child} ")
+        shell = self.proc / str(self._next_child)
+        shell.mkdir(parents=True)
+        (shell / "cwd").symlink_to(folder)
 
     async def _load_page(self, app: FakeApp, window: dict[str, Any], url: str) -> None:
         await asyncio.sleep(app.delay_s)

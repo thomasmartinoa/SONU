@@ -659,6 +659,26 @@ class SystemControl:
             return package[0]
         return max((temp for _, temp in zones), default=None)
 
+    def child_folders(self, pid: int, depth: int = 2) -> set[Path]:
+        """The working folders of a process's children (and theirs): where a terminal's shell is."""
+        found: set[Path] = set()
+        level = [pid]
+        for _ in range(depth):
+            children: list[int] = []
+            for parent in level:
+                for tasks in (self.proc / str(parent) / "task").glob("*/children"):
+                    try:
+                        children += [int(c) for c in tasks.read_text().split()]
+                    except (OSError, ValueError):
+                        continue
+            for child in children:
+                try:
+                    found.add((self.proc / str(child) / "cwd").readlink())
+                except OSError:
+                    continue
+            level = children
+        return found
+
     def uptime_s(self) -> float | None:
         try:
             return float((self.proc / "uptime").read_text().split()[0])
