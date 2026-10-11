@@ -252,7 +252,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #41 | 2026-10-11 | Removing software by voice (`packages.remove`, [D59](DECISIONS.md)): the exact package and what only it needed shown and asked; refused when other software or the system needs it; the install window shared (password typed or said); verified with `pacman -Q`; eval suite v23 (116) |
 | #44 | 2026-10-11 | The activity journal (M2 part 4, [D60](DECISIONS.md)): sonud records which window has the focus (local SQLite, 30 days, password managers and private windows never); "what was I doing yesterday / this morning?", "when did I last use …?", pause/resume, delete (asks); `sonu journal`; eval suite v24 (120) |
 | #45 | 2026-10-11 | M5 part 1: SONU as an MCP server ([D61](DECISIONS.md)) — `sonu mcp serve` / `tools` / `setup`; every tool but `voice.wake` and `dev.prompt`; `Engine.call_tool` (policy, checks, audit); asked on screen for words, links, typing, writing; private results shown to the user, never sent to the client |
-| #46 | open | M5 part 2: Ollama Cloud, opt-in ([D62](DECISIONS.md)) — `[cloud]` (model, vision_model, use_for, plan); prompts, harder requests without window titles (falls back to local), vision; `[models]` refuses cloud models; every send audited first (`cloud.send`); `sonu doctor` checks sign-in and retired models; `sonu eval --cloud` |
+| #46 | 2026-10-11 | M5 part 2: Ollama Cloud, opt-in ([D62](DECISIONS.md)) — `[cloud]` (model, vision_model, use_for, plan); prompts, harder requests without window titles (falls back to local), vision; `[models]` refuses cloud models; every send audited first (`cloud.send`); `sonu doctor` checks sign-in and retired models; `sonu eval --cloud` |
+| #47 | open | `sonu eval --help` lost a word ("[cloud]" taken as markup) — reworded, with a test |
 
 ### Found on real hardware → fixed
 
@@ -261,6 +262,7 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | 10-04 | (voice) "type hello into this window" / "write hello here in the kitty terminal" → dev.type, "Claude Code isn't open" (5 times) | code check: dev.type without Claude in the request → sent back as screen.type; "open a terminal on 3 and type hello" types into the terminal that request opened (#38) |
 | 10-04 | (voice) "open a terminal" → "Alacritty or kitty?" — the rice moved to `~/.config/orrery`, SONU read only `hypr-theme` | default apps read from `~/.config/orrery/defaults` first (#38). Theme and wallpaper fixed the same way in #39 (`orrery-theme`/`orrery-wall`, falling back to the old names) |
 | 10-04 | "next wallpaper" → "The wallpaper is still 1-mountain.png": Orrery's Eclipse theme has one picture | says "This theme has only one wallpaper — name a picture from ~/Pictures" (#39) |
+| 10-11 | `sonu eval --help`: "Also score your  model" — rich took "[cloud]" as markup | reworded; a test checks the help keeps its words (#47) |
 | 10-11 | (journal, recording the real desktop) Claude Code's spinner (◑ ◐ …) changed its terminal's title every second: a new row every ~2 s | a spinner or an unread count ("(3) Inbox") in front of a title is the same title (#44) |
 | 10-11 | `sonu journal show today` went to the planner as a request | `journal` routed as a command; a test checks every subcommand is (#44) |
 | 10-10 | (dry run) "remove visual studio code" asked "1 installed packages could be …" | one installed match goes straight to the yes/no, naming `visual-studio-code-bin` (#41) |
