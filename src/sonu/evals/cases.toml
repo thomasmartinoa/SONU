@@ -1266,3 +1266,19 @@ bookmarks = [["ArchWiki: Hyprland", "https://wiki.archlinux.org/title/Hyprland",
 expect_status = ["done", "unverified"]
 require_tools = ["browser.open_saved"]
 forbid_tools = ["web.open", "web.search"]
+
+# ---- files by name (v35)
+[[case]]
+id = "open-a-file-by-name"
+request = "open my kestrel lake photo"
+expect_status = ["done"]
+expect_windows = [{ class = "imv", title_contains = "kestrel lake" }]
+require_tools = ["files.open"]
+
+[[case]]
+id = "find-a-file"
+request = "where is my invoice?"
+expect_status = ["done"]
+expect_reply_contains = "invoice march.pdf"
+require_tools = ["files.find"]
+forbid_tools = ["files.open", "web.search", "browser.history"]

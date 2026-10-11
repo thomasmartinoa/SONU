@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **147 / 147** on the v34 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **149 / 149** on the v35 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
-for messages and notifications, three for browser tabs, two for reading a page, three for acting on one and two for
-history and bookmarks; the M1 example (VSCodium + Chromium
+for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
+history and bookmarks and two for files by name; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -270,6 +270,13 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    run: it would open the owner's real browser) → "Open your history matching “kestrel lake” in Chromium". Next: the
    owner's own browsers once the extension is added.
 
+10. **Files, part 2** ([D74](DECISIONS.md); the owner: "continue"): ~~open a file by name, find files, recent files~~
+    (#62). On the laptop, counts and timings only (never names): 9,422 files in 1,125 folders walked in 0.03 s; "pdf" 40
+    files in 0.13 s; 17 recent files in 0.01 s. Dry runs with the branch's code: "open dev_works/SONU/README.md" →
+    "Open 'README.md' with LibreOffice Writer" (the desktop's app for Markdown); "where is my pyproject.toml file?" →
+    "Look for files matching …"; "what files did I open yesterday?" → the recent list. Next: move, rename, and delete to
+    the trash only (`gio trash`), each asked first.
+
 Waiting on music in `~/Music`: local music with `mpv`.
 
 ## Open questions and known issues
@@ -359,7 +366,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #58 | 2026-10-11 | Browser tabs ([D70](DECISIONS.md)): SONU's extension (one manifest for Chromium and Zen/Firefox; `tabs` + `nativeMessaging` only), its native messaging host (a 0600 socket in SONU's runtime folder), `sonu browser install / status / uninstall`, `browser.tabs` (private), `browser.tab` (SONU focuses the window: Wayland won't let the browser), `browser.close_tabs` (asks, titles shown, never logged); a `sonu doctor` line; tests and evals never reach the real browser; "open my last download" and "what is open in zen?" decided from the user's words (two eval slips); eval suite v31 (140) |
 | #59 | 2026-10-11 | Reading a page ([D71](DECISIONS.md)): `browser.read` answers a question about a page, a tab the user names or the selected text, from its visible text — through the extension (0.2.0: `scripting` + `<all_urls>`, one tab only when SONU asks) to the local model only (`core/page_reader.py`), a private answer; browsers' own pages refused; an older extension told to update (`sonu browser status` shows each browser's extension version); answers up to 4 MiB (the 64 KiB default cut long tab lists and pages); a planner check: a page question isn't `screen.read`; the tab the user's words name decides; `messages.unread` leaves out an app the user didn't name; eval suite v32 (142) |
 | #60 | 2026-10-11 | Clicking, typing and scrolling on a page ([D72](DECISIONS.md)): `browser.click` (a link low, a button or checkbox medium, "delete / buy / send …" high), `browser.fill` (the user's exact words, never a password or card field, Enter optional), `browser.scroll`; the extension 0.3.0 lists a page's controls by name and number; the control is checked again before acting; done only when the page changed / the field shows the words / the page moved; `screen.type` into a page's named field goes through the extension; name matching shared with `screen.press` (`tools/naming.py`); the user's words decide where to scroll; an "alias" without "mean" is a note; planner rule and a check (a page's field isn't keystrokes); page input asks over MCP; eval suite v33 (145) |
-| #61 | open | History and bookmarks ([D73](DECISIONS.md)): `browser.history` (by the user's words and/or a time; private) and `browser.open_saved` (a bookmark low, a page from history shown and asked) — read from read-only copies of Zen/Firefox `places.sqlite` (with its `-wal`) and Chromium `History` / `Bookmarks` in SONU's 0700 runtime folder, deleted after; no extension needed; a search uses this request's words only; planner rule and a check (bookmarks and history aren't `web.*`); fake profiles for tests and evals; eval suite v34 (147) |
+| #61 | 2026-10-11 | History and bookmarks ([D73](DECISIONS.md)): `browser.history` (by the user's words and/or a time; private) and `browser.open_saved` (a bookmark low, a page from history shown and asked) — read from read-only copies of Zen/Firefox `places.sqlite` (with its `-wal`) and Chromium `History` / `Bookmarks` in SONU's 0700 runtime folder, deleted after; no extension needed; a search uses this request's words only; planner rule and a check (bookmarks and history aren't `web.*`); fake profiles for tests and evals; eval suite v34 (147) |
+| #62 | open | Files by name ([D74](DECISIONS.md)): `files.open` opens a file by its name when no folder has it (several → the user picks; programs never; unusual types ask), `files.find` (where files are, private), `files.recent` (from `recently-used.xbel`, private); kind words ("pdf", "photo") as extensions; planner rule; eval suite v35 (149) |
 
 ### Found on real hardware → fixed
 

@@ -8,6 +8,7 @@ final desktop state against the case's expectations.
 from __future__ import annotations
 
 import contextlib
+import os
 import shutil
 import tempfile
 import time
@@ -65,6 +66,8 @@ ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty", "files": "thunar
 # The home folders every case starts with (like the owner's), and the newest download.
 HOME_FOLDERS = ("Downloads", "Documents", "Pictures/screenshot", "dev_works/SONU", "hypr-dotfiles")
 NEWEST_DOWNLOAD = "Downloads/cat.png"
+# Older files (D74): what "open my kestrel lake photo" and "where is my invoice?" find.
+HOME_FILES = ("Pictures/kestrel lake.png", "Documents/invoice march.pdf")
 # The SONU project's files (D65): what "run the tests" and "open planner.py" find.
 PROJECT_FILES = {
     "dev_works/SONU/pyproject.toml": "[project]\nname = 'sonu'\n[tool.ruff]\n[tool.pytest.ini_options]\n",
@@ -360,6 +363,10 @@ async def run_case(
             catalog = AppCatalog.load(env, which=lambda name: f"/usr/bin/{name}")
             for folder in HOME_FOLDERS:
                 (workdir / folder).mkdir(parents=True, exist_ok=True)
+            for name in HOME_FILES:
+                (workdir / name).parent.mkdir(parents=True, exist_ok=True)
+                (workdir / name).write_bytes(b"x")
+                os.utime(workdir / name, (time.time() - 86400, time.time() - 86400))
             (workdir / NEWEST_DOWNLOAD).write_bytes(b"png")
             for name, text in PROJECT_FILES.items():
                 (workdir / name).parent.mkdir(parents=True, exist_ok=True)

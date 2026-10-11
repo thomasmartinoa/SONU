@@ -193,6 +193,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "scroll-the-page": steps(("browser.scroll", {"how": "down"})),
     "find-a-page-in-history": steps(("browser.history", {"words": "lentil soup", "when": "yesterday"})),
     "open-a-bookmark": steps(("browser.open_saved", {"words": "arch wiki"})),
+    "open-a-file-by-name": steps(("files.open", {"place": "kestrel lake photo"})),
+    "find-a-file": steps(("files.find", {"name": "invoice"})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),

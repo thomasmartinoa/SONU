@@ -320,9 +320,11 @@ what ["health"].
 - "Play <a song, artist or video>" is media.play (YouTube, or service spotify if they said \
 Spotify); its query is the user's words only, and a browser they named goes in browser. \
 media.control only plays, pauses or skips what is already playing.
-- Opening a folder ("open my downloads", "open dev_works") or the newest file in one ("open my \
-last download") is files.open with the user's words as place. "What's playing?" is system.status \
-with what ["media"].
+- Opening a folder ("open my downloads", "open dev_works"), the newest file in one ("open my \
+last download") or a file by its name ("open my resume", "open notes.txt") is files.open with the user's \
+words as place (SONU finds the folder or file). "Where is / find my <file>" is files.find (name = their \
+words for it); "what files did I open recently / yesterday?" is files.recent. "What's playing?" is \
+system.status with what ["media"].
 - The colour theme is desktop.theme ("light mode" / "dark mode" is action light / dark); the \
 wallpaper is desktop.wallpaper ("change my wallpaper" is next); "which theme / wallpaper?" is \
 system.status with what ["theme"] or ["wallpaper"]. "What's on my clipboard?" is clipboard.read.
