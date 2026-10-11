@@ -238,9 +238,6 @@ Waiting on music in `~/Music`: local music with `mpv`.
 
 - **Zen and background tabs**: once, a page SONU sent to Zen didn't show in any window title; SONU now says "didn't
   see it open (may be in a background tab)". Worth checking what Zen does with links from other apps.
-- **A dry run's typing target**: "open a terminal on workspace 3 and type hello" dry-runs as "Type “hello” into zen"
-  (the window focused now — the terminal doesn't exist in a dry run); a real run types into the new terminal (eval
-  `open-terminal-and-type`). The dry run's wording could say "into the new terminal".
 - **Planner variance**: once, "open zen on workspace 3 and …" was planned as "show workspace 3"; the same request
   worked on the next try.
 - Deep planner: `qwen3:8b` (installed, thinking on) measured 2026-10-11: **113 / 123, 10.9 s a plan** — worse and ten
@@ -318,12 +315,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #53 | 2026-10-11 | A terminal in a folder ([D66](DECISIONS.md), `dev.terminal`): the user's terminal told the folder (kitty `--directory`, foot/alacritty/ghostty/gnome-terminal `--working-directory`, wezterm `--cwd`, konsole `--workdir`), done when its shell's working folder (`/proc`) is that folder; the folder a request makes is found by its name in a dry run too; planner checks: a terminal with no folder stays apps.launch, a terminal in a folder doesn't also open the file manager; eval suite v27 (130) |
 | #54 | 2026-10-11 | Saved layouts ([D67](DECISIONS.md)): `layouts.save` (which app is on which workspace and a terminal's folder — never titles; replacing one asks), `layouts.restore` (open windows moved, missing apps opened there, each checked; nothing closed), `layouts.list`, `layouts.forget`; "this workspace" only when the user says it; eval suite v28 (133) |
 | #55 | 2026-10-11 | Unread messages ([D68](DECISIONS.md), M7 part 1): `messages.unread` reads the count open chat and mail apps show in their titles — "(3) WhatsApp", "Telegram (3)", "Inbox (12) …", "• Discord" — and says only the app and the number; apps not open are said, never counted as zero; "emails" means the mail apps (the user's words decide); eval suite v29 (135) |
-| #56 | open | "What was that notification?" ([D69](DECISIONS.md), opt-in): sonud watches the session bus for notifications (`busctl --user monitor`) and keeps the latest 30 in memory only (dropped after `keep_minutes`, gone when it stops); never password managers', the listed apps' or SONU's own (except reminders); `notifications.read` (latest / recent / one app) is a private result; `notifications.forget`; a `sonu doctor` line; eval suite v30 (137) |
+| #56 | 2026-10-11 | "What was that notification?" ([D69](DECISIONS.md), opt-in): sonud watches the session bus for notifications (`busctl --user monitor`) and keeps the latest 30 in memory only (dropped after `keep_minutes`, gone when it stops); never password managers', the listed apps' or SONU's own (except reminders); `notifications.read` (latest / recent / one app) is a private result; `notifications.forget`; a `sonu doctor` line; eval suite v30 (137) |
+| #57 | open | A dry run names the window an earlier step would open: "open a terminal on 3 and type hello" → "Type “hello” … into the window from “Open kitty on workspace 3”" (it said "into zen", the window focused now) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-11 | (dry run) "open a terminal on workspace 3 and type hello" → "Type “hello” into zen" — nothing opens in a dry run, so the focused window was named (a real run typed into the terminal) | the engine notes what earlier dry-run steps would open; screen.type names it (#57) |
 | 10-11 | (dry run, D68) "how many unread emails do I have?" was planned with no app — every chat app was read | "emails / mail / inbox" in the user's words means the mail apps (#55) |
 | 10-11 | (dry run, D67) "remember this setup as coding" / "save this layout as work" were planned as this workspace only | the user's words decide ("this workspace"); the argument is gone (#54) |
 | 10-11 | (dry run, D66) "make a folder called demo … and open a terminal there" → "no folder called demo" (a dry run doesn't make it); "open a terminal in downloads" → Thunar too | the folder this request makes is found by its name; plan check: no file manager for a terminal's folder (#53) |

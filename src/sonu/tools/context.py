@@ -85,6 +85,9 @@ class ToolContext:
     # The windows earlier steps of this task opened or acted on ("open a terminal on 3 and type hello":
     # the keys go to that terminal). Reset by the engine for every task.
     task_windows: tuple[str, ...] = ()
+    # In a dry run, what earlier steps of this task would open ("Open kitty on workspace 3"): nothing is
+    # opened, so a later "type hello" names that step instead of the window focused now.
+    task_would_open: tuple[str, ...] = ()
     # Writes a prompt for Claude Code from the user's idea (the local model); None: not available.
     writer: PromptWriter | None = None
     # Reads the screen with the local vision model (M6); None: not available.

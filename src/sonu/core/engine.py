@@ -19,7 +19,7 @@ from sonu.core.report import StepRecord, TaskReport
 from sonu.core.responder import Responder
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.policy.engine import Policy, outside_caller_risk
-from sonu.tools.base import Choices, Prepared, Risk, StepStatus, Tool, ToolOutcome, args_problem
+from sonu.tools.base import Choices, Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome, args_problem
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import MAX_STEPS, ToolRegistry
 from sonu.world.origin import find_origin
@@ -129,6 +129,7 @@ class Engine:
         self.ctx.task_browser = None
         self.ctx.task_folder = None
         self.ctx.task_windows = ()
+        self.ctx.task_would_open = ()
 
         try:
             snapshot = await self.ctx.desktop.snapshot()
@@ -219,6 +220,7 @@ class Engine:
         self.ctx.task_browser = None
         self.ctx.task_folder = None
         self.ctx.task_windows = ()
+        self.ctx.task_would_open = ()
         tool = self.registry.get(tool_name)
         try:
             snapshot = await self.ctx.desktop.snapshot()
@@ -333,6 +335,8 @@ class Engine:
         decision = self.policy.decide(tool, tainted=True, risk=prepared.risk)
         risk = max(tool.risk, prepared.risk or tool.risk, key=lambda r: r.rank)
         if dry_run:
+            if Effect.APP_LAUNCH in tool.effects:  # what a later step's "it" would be (screen.type)
+                self.ctx.task_would_open += (prepared.description,)
             outcome = ToolOutcome(StepStatus.SKIPPED, prepared.description)
             return record(outcome, prepared.description, decision)
         if decision.verdict == "deny":
