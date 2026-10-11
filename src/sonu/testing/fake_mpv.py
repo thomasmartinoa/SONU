@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -46,7 +47,9 @@ class FakeMpv:
         self._load(playlist, shuffle)
         self.socket.parent.mkdir(parents=True, exist_ok=True)
         self.socket.unlink(missing_ok=True)
-        self._server = await asyncio.start_unix_server(self._serve, path=str(self.socket))
+        # Like mpv, leave the socket file when it stops (Python 3.13+ removes it unless told not to).
+        keep: dict[str, Any] = {"cleanup_socket": False} if sys.version_info >= (3, 13) else {}
+        self._server = await asyncio.start_unix_server(self._serve, path=str(self.socket), **keep)
 
     async def aclose(self) -> None:
         server, self._server = self._server, None
