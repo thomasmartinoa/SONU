@@ -182,6 +182,9 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "unread-in-one-app": steps(("messages.unread", {"app": "telegram"})),
     "what-was-that-notification": steps(("notifications.read", {})),
     "read-my-notifications": steps(("notifications.read", {"which": "recent"})),
+    "switch-to-a-tab": steps(("browser.tab", {"words": "youtube"})),
+    "close-a-tab": steps(("browser.close_tabs", {"words": "youtube"})),
+    "list-tabs": steps(("browser.tabs", {})),
     "folder-and-a-terminal-there": steps(
         ("files.make_folder", {"name": "demo", "inside": "dev_works"}), ("dev.terminal", {"workspace": 4})
     ),

@@ -20,12 +20,15 @@ from datetime import timedelta
 from pathlib import Path
 
 from sonu.audit.log import AuditError, AuditLog
+from sonu.browser.host import socket_folder
+from sonu.browser.install import plan
 from sonu.config.settings import ModelRole
 from sonu.core.journal import Journal
 from sonu.desktop.hyprland.errors import HyprlandError, HyprlandNotFound
 from sonu.desktop.hyprland.instance import discover_instance
 from sonu.desktop.hyprland.ipc import HyprlandClient
 from sonu.doctor.model import CheckResult, DoctorContext, Status
+from sonu.integrations.browser import Browsers
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.cloud import PAUSE_FILE, CloudPause, CloudRefused, check_local_roles, cloud_usage, staying_local
 from sonu.llm.ollama import InstalledModel, ModelInfo, OllamaClient, OllamaError, same_model
@@ -876,8 +879,32 @@ def _mcp_result(ctx: DoctorContext) -> CheckResult:
     )
 
 
+async def _browser_result(ctx: DoctorContext) -> CheckResult:
+    """SONU's browser extension (D70): set up (the host's manifests), and which browsers are connected."""
+    check_id, group, title = "integration.browser", "Integrations", "Browser extension"
+    setup = plan(ctx.home, ctx.paths.data_dir)
+    if not setup.launcher.exists() or not any(path.exists() for path in setup.manifests):
+        return CheckResult(
+            check_id, group, title, "info", "not set up — `sonu browser install` (tabs by voice)"
+        )
+    links = await Browsers(socket_folder(dict(ctx.env))).links()
+    if not links:
+        return CheckResult(
+            check_id,
+            group,
+            title,
+            "info",
+            "set up; no browser connected",
+            hint="Add the extension in the browser (`sonu browser install` says how) and keep it open.",
+        )
+    return CheckResult(
+        check_id, group, title, "ok", "connected: " + ", ".join(sorted({link.browser for link in links}))
+    )
+
+
 async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
     mcp = _mcp_result(ctx)
+    browser = await _browser_result(ctx)
     info = detect_hypr_theme(ctx.home)
     if not info.detected:
         return [
@@ -889,6 +916,7 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
                 "no Orrery (hypr-dotfiles) / Quickshell setup detected",
             ),
             mcp,
+            browser,
         ]
     parts = []
     if info.theme_dir_present:
@@ -926,6 +954,7 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
             },
         ),
         mcp,
+        browser,
     ]
 
 

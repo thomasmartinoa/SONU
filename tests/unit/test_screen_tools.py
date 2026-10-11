@@ -404,3 +404,13 @@ async def test_a_dry_run_names_the_window_an_earlier_step_would_open(rig: Rig) -
         "Type “hello” as keystrokes into the window from “Open kitty on workspace 3”",
     ]
     assert rig.system.typed == []
+
+
+@pytest.mark.anyio
+async def test_the_app_the_user_named_when_the_plan_named_no_window(rig: Rig) -> None:
+    # Found in the evals (twice, after prompt changes): "what is open in zen?" was planned with no window,
+    # and the whole screen was read. The user's words name the window.
+    request = "what is open in zen?"
+    report = await rig.run(request, ("screen.read", {"question": request}))
+    assert report.status == "done", lines(report)
+    assert report.steps[0].description == "Show zen (workspace 2) and look at it"

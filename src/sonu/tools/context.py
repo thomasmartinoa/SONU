@@ -17,6 +17,7 @@ from sonu.core.screen_reader import ScreenReader
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.integrations.browser import Browsers
 from sonu.integrations.kitty import SonuTerminals, runtime_folder
 from sonu.integrations.obs import ObsLink
 from sonu.system.control import SystemControl
@@ -99,6 +100,9 @@ class ToolContext:
     journal: Journal | None = None
     # The latest notifications (D69), kept by sonud when the user turned it on. None: not kept.
     notifications: NotificationLog | None = None
+    # SONU's browser extension (D70), through its hosts' sockets. None: no browser (tests and evals never
+    # reach the user's real browser; sonud and the CLI pass the real one).
+    browsers: Browsers | None = None
 
     def sonu_terminals(self) -> SonuTerminals:
         if self.terminals is None:

@@ -33,6 +33,7 @@ from typing import Any
 import httpx
 
 from sonu.audit.log import AuditLog
+from sonu.browser.host import socket_folder
 from sonu.config.paths import SonuPaths
 from sonu.config.settings import Settings
 from sonu.core.engine import ConfirmRequest, Engine, Observer
@@ -50,6 +51,7 @@ from sonu.desktop.hyprland.errors import HyprlandError, HyprlandNotFound
 from sonu.desktop.hyprland.events import stream_events
 from sonu.desktop.hyprland.instance import HyprlandInstance, discover_instance
 from sonu.desktop.hyprland.ipc import HyprlandClient
+from sonu.integrations.browser import Browsers
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.ollama import OllamaClient, OllamaError
 from sonu.mcp.outside import OutsideServers
@@ -654,6 +656,7 @@ class Daemon:
             ancestors=lambda: ancestor_pids(pid),  # the terminal the request was typed in
             memory=memory,
             layouts=load_layouts(self.paths),
+            browsers=Browsers(socket_folder({**self.env, **env})),
             wake=self.wake,
             journal=self.journal,
             notifications=self.notifications,

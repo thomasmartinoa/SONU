@@ -15,6 +15,7 @@ from typing import cast
 from pydantic import BaseModel, ConfigDict, Field
 
 from sonu.core.screen_reader import ScreenReaderError
+from sonu.desktop.apps.resolver import normalize
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.models import Window
 from sonu.integrations.a11y import Accessibility, AccessibilityError, Control
@@ -81,6 +82,21 @@ async def _picture(ctx: ToolContext, window: Window | None) -> bytes:
             await asyncio.to_thread(picture.unlink, missing_ok=True)
 
 
+def _app_named(ctx: ToolContext, snapshot: WorldSnapshot) -> WindowTarget | None:
+    """The one open app the user's words name ("what is open in zen?"), when the plan named no window.
+
+    Found in the evals (twice, after prompt changes): the model left the window out and the whole screen
+    was read. SONU decides from the user's words, like the workspace in dev.claude_open."""
+    said = f" {normalize(ctx.request_text)} "
+    labels = ctx.resolver.labels_for_classes(w.window_class for w in snapshot.windows if w.workspace.id >= 1)
+    named = set()
+    for window_class, label in labels.items():
+        words = {normalize(window_class), normalize(label.split(",")[0]).split(" ")[0]}
+        if any(word and len(word) > 2 and f" {word} " in said for word in words):
+            named.add(normalize(label.split(",")[0]).split(" ")[0])
+    return WindowTarget(app=named.pop()) if len(named) == 1 else None
+
+
 class ReadArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -110,9 +126,10 @@ class ReadScreen(Tool):
             return ToolOutcome(StepStatus.FAILED, "There's no vision model to read the screen with")
         if not ctx.which("grim"):
             return ToolOutcome(StepStatus.FAILED, "grim isn't installed (it takes the picture)")
-        if a.window is None:
+        target = a.window or _app_named(ctx, snapshot)
+        if target is None:
             return Prepared("Look at the screen", (None, a.question))
-        match = find_windows(a.window, snapshot, ctx)
+        match = find_windows(target, snapshot, ctx)
         if match.problem or not match.windows:
             return ToolOutcome(StepStatus.FAILED, f"Can't look at it: {match.problem or 'no such window'}")
         window = match.windows[0]

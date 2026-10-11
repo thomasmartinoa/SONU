@@ -12,6 +12,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from sonu.tools.base import Tool
+from sonu.tools.browser_tools import BROWSER_TOOLS
 from sonu.tools.desktop_tools import DEFAULT_TOOLS
 from sonu.tools.dev_tools import DEV_TOOLS
 from sonu.tools.everyday_tools import EVERYDAY_TOOLS
@@ -62,6 +63,7 @@ class ToolRegistry:
             *DEFAULT_TOOLS,
             *WINDOW_TOOLS,
             *WEB_TOOLS,
+            *BROWSER_TOOLS,
             *MEDIA_TOOLS,
             *SETTINGS_TOOLS,
             *EVERYDAY_TOOLS,

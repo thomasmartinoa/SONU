@@ -16,6 +16,7 @@ from sonu.audit import AuditError, AuditLog
 from sonu.cli import (
     ask_cmd,
     audit_cmd,
+    browser_cmd,
     config_cmd,
     daemon_cmd,
     desktop_cmd,
@@ -47,6 +48,7 @@ app.add_typer(daemon_cmd.app, name="daemon")
 app.add_typer(voice_cmd.app, name="voice")
 app.add_typer(journal_cmd.app, name="journal")
 app.add_typer(mcp_cmd.app, name="mcp")
+app.add_typer(browser_cmd.app, name="browser")
 
 
 def _version_callback(value: bool) -> None:
@@ -116,6 +118,7 @@ COMMANDS = {
     "listen",
     "journal",
     "mcp",
+    "browser",
 }
 _GLOBAL_FLAGS = {"-v", "-vv", "-vvv", "--verbose"}
 # `sonu ask` options that may come before a bare request: `sonu --dry-run open kitty`.

@@ -30,6 +30,7 @@ _COMMANDS = {
     "voice",
     "journal",
     "mcp",
+    "browser",
 }
 _FLAGS = {"--dry-run", "--json", "--notify", "-v", "-vv", "-vvv", "--verbose"}
 _COLOURS = {

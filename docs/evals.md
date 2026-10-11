@@ -12,7 +12,7 @@ sonu eval --json                       # machine-readable
 sonu eval --cloud                      # also your [cloud] model (Ollama Cloud), planning as SONU will: no titles
 ```
 
-## The cases (v30, 137 cases)
+## The cases (v31, 140 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -128,6 +128,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-10-11 | `qwen3.5:4b` | v28: + `save-a-layout`, `restore-a-layout`, `list-layouts` (D67) | **133 / 133**, twice (~1.2 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v29: + `unread-messages`, `unread-in-one-app` (D68) | **135 / 135**, twice (~1.2 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v30: + `what-was-that-notification`, `read-my-notifications` (D69) | **137 / 137**, twice (~1.2 s mean) | — |
+| 2026-10-11 | `qwen3.5:4b` | v31: + `switch-to-a-tab`, `close-a-tab`, `list-tabs` (D70, a fake browser) | **140 / 140**, twice (~1.2 s mean) | — ; before two tool fixes `open-last-download` opened the folder and `read-a-window-on-another-workspace` read the whole screen (the model's plans shifted with the new rule) |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

@@ -68,6 +68,11 @@ _FILLERS = {"my", "the", "folder", "folders", "directory", "dir", "open", "in", 
 # "my last download", "the newest file in documents": the newest file, not the folder. Found in an
 # eval: the model put "my last download" in place and left newest out.
 _NEWEST = re.compile(r"\b(last|latest|newest|most recent|recent)\b", re.IGNORECASE)
+# "open my last download": found in the evals (v31) — the model dropped "last" from the place.
+_NEWEST_FILE = re.compile(
+    r"\b(?:last|latest|newest|most recent)\s+(?:download|file|screenshot|photo|picture|video|document)s?\b",
+    re.IGNORECASE,
+)
 # Not searched: they're huge and nobody means them ("open build" means their own folder).
 _SKIP = {"node_modules", "__pycache__", "site-packages", "venv", "target", "snap"}
 SEARCH_DEPTH = 3
@@ -264,7 +269,7 @@ class OpenFiles(Tool):
                 ),
             )
         folder = folders[0]
-        if not (a.newest or _NEWEST.search(a.place)):
+        if not (a.newest or _NEWEST.search(a.place) or _NEWEST_FILE.search(ctx.request_text)):
             manager = resolve_app("file manager", ctx)
             if isinstance(manager, ToolOutcome):
                 return manager

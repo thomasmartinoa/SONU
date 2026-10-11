@@ -414,3 +414,25 @@ async def test_the_notifications_line(xdg_env: dict[str, str]) -> None:
         "ok",
         "the latest, in memory only for 30 min, while sonud runs",
     )
+
+
+@pytest.mark.anyio
+async def test_the_browser_extension_line(xdg_env: dict[str, str], short_tmp: Path) -> None:
+    import dataclasses
+
+    from sonu.browser.install import install, plan
+    from sonu.doctor.checks import check_integrations
+    from sonu.testing.fake_browser import FakeBrowser
+
+    context = make_context(xdg_env, hypr=None, ollama=None)
+    assert by_id(await check_integrations(context))["integration.browser"].summary.startswith("not set up")
+    (context.home / ".config" / "chromium").mkdir(parents=True, exist_ok=True)
+    install(plan(context.home, context.paths.data_dir))
+    context = dataclasses.replace(context, env={**context.env, "XDG_RUNTIME_DIR": str(short_tmp)})
+    assert (
+        by_id(await check_integrations(context))["integration.browser"].summary
+        == "set up; no browser connected"
+    )
+    async with FakeBrowser(short_tmp / "sonu" / "browsers"):
+        result = by_id(await check_integrations(context))["integration.browser"]
+    assert (result.status, result.summary) == ("ok", "connected: zen")
