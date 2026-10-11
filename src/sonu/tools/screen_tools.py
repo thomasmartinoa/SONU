@@ -387,7 +387,13 @@ class TypeText(Tool):
         if not ctx.which("wtype"):
             return ToolOutcome(StepStatus.FAILED, "wtype isn't installed (it types the keys)")
         opened = [w for a_ in reversed(ctx.task_windows) for w in snapshot.windows if w.address == a_]
-        if opened and (a.window is None or (a.window.focused and not a.window.app)):
+        into_new = a.window is None or (a.window.focused and not a.window.app)
+        if into_new and not opened and ctx.task_would_open:
+            # Found on the laptop: the dry run of "open a terminal on 3 and type hello" said "into zen".
+            then = " and press Enter" if a.enter else ""
+            step = ctx.task_would_open[-1]
+            return Prepared(f"Type “{a.text}” as keystrokes{then} into the window from “{step}”", None)
+        if opened and into_new:
             window = opened[0]  # "open a terminal on 3 and type hello": the one this request opened
         else:
             match = find_windows(a.window or WindowTarget(focused=True), snapshot, ctx)

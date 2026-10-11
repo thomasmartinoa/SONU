@@ -380,3 +380,27 @@ async def test_keys_go_to_the_terminal_this_request_opened(rig: Rig) -> None:
     new = next(w for w in rig.fake.windows if w["class"] == "kitty" and w["workspace"]["id"] == 3)
     assert new["address"] != focused_before and rig.fake.active_address == new["address"]
     assert rig.system.typed == ["hello"]
+
+
+@pytest.mark.anyio
+async def test_a_dry_run_names_the_window_an_earlier_step_would_open(rig: Rig) -> None:
+    # Found on the laptop: the dry run of "open a terminal on workspace 3 and type hello" said
+    # "Type “hello” into zen" — the window focused now; nothing is opened in a dry run.
+    request = "open kitty on workspace 3 and type hello"
+    plan = steps_plan(("apps.launch", {"app": "kitty", "workspace": 3}), ("screen.type", {"text": "hello"}))
+    engine = Engine(
+        planner=ScriptedPlanner({request: plan}),
+        registry=ToolRegistry(),
+        ctx=rig.ctx,
+        policy=Policy("confirm-risky"),
+    )
+
+    async def never(_: Any) -> bool:
+        raise AssertionError("a dry run asks nothing")
+
+    report = await engine.run(request, confirm=never, dry_run=True)
+    assert [record.description for record in report.steps] == [
+        "Open kitty on workspace 3",
+        "Type “hello” as keystrokes into the window from “Open kitty on workspace 3”",
+    ]
+    assert rig.system.typed == []
