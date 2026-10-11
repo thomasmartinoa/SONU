@@ -1303,3 +1303,18 @@ request = "delete my last download"
 expect_status = ["done"]
 expect_confirmed = ["files.trash"]
 forbid_tools = ["files.open"]
+
+# ---- copying to the clipboard (v37)
+[[case]]
+id = "copy-a-files-path"
+request = "copy the path of my invoice"
+expect_status = ["done"]
+require_tools = ["clipboard.copy"]
+forbid_tools = ["files.open"]
+
+[[case]]
+id = "copy-the-last-screenshot"
+request = "copy my last screenshot"
+expect_status = ["done"]
+require_tools = ["clipboard.copy"]
+forbid_tools = ["screen.capture"]

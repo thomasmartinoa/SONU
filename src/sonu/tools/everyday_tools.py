@@ -252,6 +252,15 @@ class ShellArgs(BaseModel):
     )
 
 
+_CLEAR_SAID = re.compile(r"\b(?:clear|dismiss|delete|remove|get rid of|empty)\b", re.I)
+_DND_SAID = re.compile(
+    r"\b(?:turn|switch)\s+(on|off)\s+(?:the\s+)?do\s*-?\s*not\s*-?\s*disturb\b"
+    r"|\bdo\s*-?\s*not\s*-?\s*disturb\s+(on|off)\b"
+    r"|\b(enable|disable)\s+(?:the\s+)?do\s*-?\s*not\s*-?\s*disturb\b",
+    re.I,
+)
+
+
 class DesktopShell(Tool):
     name = "desktop.shell"
     description = (
@@ -266,6 +275,17 @@ class DesktopShell(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         action = cast(ShellArgs, args).action
+        if action == "clear_notifications" and not _CLEAR_SAID.search(ctx.request_text):
+            # Found in the evals (v37; once before on the laptop): "turn off night light and turn off do not
+            # disturb" cleared the notifications. Only "clear / dismiss …" clears them; do-not-disturb said
+            # with on or off decides that switch instead.
+            said = _DND_SAID.search(ctx.request_text)
+            if said is None:
+                return ToolOutcome(
+                    StepStatus.FAILED, "You didn't ask to clear your notifications — none cleared"
+                )
+            state = next(g for g in said.groups() if g)
+            action = "do_not_disturb_on" if state.lower() in ("on", "enable") else "do_not_disturb_off"
         if not ctx.system.available("qs"):
             return ToolOutcome(
                 StepStatus.FAILED,

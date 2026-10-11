@@ -54,7 +54,7 @@ works:
 | Wallpaper: "change my wallpaper", "set my wallpaper to the mountain" (`desktop.wallpaper`) | ✅ | the rice's `hypr-wall next/set` (a picture SONU found in the theme's backgrounds or `~/Pictures`), read back from `hypr-wall current` |
 | Volume/brightness popup when SONU changes them | ✅ | volume: the rice's OSD shows it by itself (it watches PipeWire); brightness: `qs ipc call osd brightness <percent>` like `brightness.sh` |
 | Clipboard: "what's on my clipboard?", "clear my clipboard" (`clipboard.read`, `clipboard.clear`) | ✅ | `wl-paste` / `wl-copy --clear`; shown only to you — never to the model, the audit log or anywhere else |
-| Copy something to the clipboard | ⏭ | needs a source SONU can read (a file, a screenshot — already copied) |
+| Copy to the clipboard: "copy the path of my invoice", "copy my last screenshot", "copy this page's link", "copy hello" | 🧪 #64 | a file's path, a picture or text file, the newest screenshot, the page's address (extension), your own words; checked by reading it back ([D76](DECISIONS.md)) |
 | Suspend, restart, shut down, log out (`system.power`) | ✅ | what the rice's power menu runs (`systemctl suspend/reboot/poweroff`, Hyprland `exit`); high risk: **always asks** and names the open windows; reported "requested", never "done" |
 | Join **new** Wi-Fi networks, pair **new** Bluetooth devices | ⛔ for now | needs passwords/PINs; SONU doesn't handle secrets yet |
 

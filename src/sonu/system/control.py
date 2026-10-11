@@ -538,9 +538,14 @@ class SystemControl:
         await self._run("grim", *area, str(path), timeout_s=15.0)
 
     async def copy_image(self, path: Path) -> None:
+        await self.copy(await asyncio.to_thread(path.read_bytes), "image/png")
+
+    async def copy(self, data: bytes, mime: str) -> None:
+        """Onto the clipboard as ``mime`` (D76); the data goes through stdin, never an argument."""
+        if not _MIME.match(mime.split(";")[0]):
+            raise CommandError(f"Not a type: {mime!r}")
         # wl-copy keeps serving the clipboard from a forked helper: don't capture its output.
-        image = await asyncio.to_thread(path.read_bytes)
-        result = await self.runner.run(("wl-copy", "--type", "image/png"), input_bytes=image, capture=False)
+        result = await self.runner.run(("wl-copy", "--type", mime), input_bytes=data, capture=False)
         if not result.ok:
             raise CommandError(result.problem())
 

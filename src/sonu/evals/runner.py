@@ -67,7 +67,7 @@ ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty", "files": "thunar
 HOME_FOLDERS = ("Downloads", "Documents", "Pictures/screenshot", "dev_works/SONU", "hypr-dotfiles")
 NEWEST_DOWNLOAD = "Downloads/cat.png"
 # Older files (D74): what "open my kestrel lake photo" and "where is my invoice?" find.
-HOME_FILES = ("Pictures/kestrel lake.png", "Documents/invoice march.pdf")
+HOME_FILES = ("Pictures/kestrel lake.png", "Documents/invoice march.pdf", "Pictures/screenshot/shot.png")
 # The SONU project's files (D65): what "run the tests" and "open planner.py" find.
 PROJECT_FILES = {
     "dev_works/SONU/pyproject.toml": "[project]\nname = 'sonu'\n[tool.ruff]\n[tool.pytest.ini_options]\n",

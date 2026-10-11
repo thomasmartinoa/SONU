@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **152 / 152** on the v36 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **154 / 154** on the v37 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks, two for files by name and three for moving, renaming and the trash; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name, three for moving, renaming and the trash and two for copying; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -281,6 +281,10 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
     invoice" → "march kestrel invoice.pdf"; "delete march kestrel invoice" → in the trash; "restore march kestrel
     invoice" → back; "delete my sonu-scratch-d75 folder" → asked **high**, in the trash (then taken back out and removed).
     The move was also listed as "can't do" — a planner example still said renaming files wasn't possible (fixed).
+    ~~Copying to the clipboard~~ (#64, [D76](DECISIONS.md)) — on the laptop `wl-copy --type` and reading back checked for
+    real (the owner's clipboard item was put back from the rice's `cliphist` history afterwards, the test entries
+    removed); dry runs with the branch's code: "copy the path of the SONU readme" → "Copy the path of 'README.md'
+    (~/dev_works/SONU)"; "copy my last screenshot" → the picture; "copy hello from sonu" → those words.
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
@@ -373,12 +377,15 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #60 | 2026-10-11 | Clicking, typing and scrolling on a page ([D72](DECISIONS.md)): `browser.click` (a link low, a button or checkbox medium, "delete / buy / send …" high), `browser.fill` (the user's exact words, never a password or card field, Enter optional), `browser.scroll`; the extension 0.3.0 lists a page's controls by name and number; the control is checked again before acting; done only when the page changed / the field shows the words / the page moved; `screen.type` into a page's named field goes through the extension; name matching shared with `screen.press` (`tools/naming.py`); the user's words decide where to scroll; an "alias" without "mean" is a note; planner rule and a check (a page's field isn't keystrokes); page input asks over MCP; eval suite v33 (145) |
 | #61 | 2026-10-11 | History and bookmarks ([D73](DECISIONS.md)): `browser.history` (by the user's words and/or a time; private) and `browser.open_saved` (a bookmark low, a page from history shown and asked) — read from read-only copies of Zen/Firefox `places.sqlite` (with its `-wal`) and Chromium `History` / `Bookmarks` in SONU's 0700 runtime folder, deleted after; no extension needed; a search uses this request's words only; planner rule and a check (bookmarks and history aren't `web.*`); fake profiles for tests and evals; eval suite v34 (147) |
 | #62 | 2026-10-11 | Files by name ([D74](DECISIONS.md)): `files.open` opens a file by its name when no folder has it (several → the user picks; programs never; unusual types ask), `files.find` (where files are, private), `files.recent` (from `recently-used.xbel`, private); kind words ("pdf", "photo") as extensions; planner rule; eval suite v35 (149) |
-| #63 | open | Move, rename, delete to the trash, restore ([D75](DECISIONS.md)): `files.move`, `files.rename` (the user's exact words, the extension kept), `files.trash` (`gio trash` only; a folder high), `files.restore`; never outside the home, its main folders or anything hidden; never overwrites; each asked and checked on disk; the planner example that said renaming wasn't possible replaced, and a check for a step's own part listed as unsupported; eval suite v36 (152) |
+| #63 | 2026-10-11 | Move, rename, delete to the trash, restore ([D75](DECISIONS.md)): `files.move`, `files.rename` (the user's exact words, the extension kept), `files.trash` (`gio trash` only; a folder high), `files.restore`; never outside the home, its main folders or anything hidden; never overwrites; each asked and checked on disk; the planner example that said renaming wasn't possible replaced, and a check for a step's own part listed as unsupported; eval suite v36 (152) |
+| #64 | open | Copying to the clipboard ([D76](DECISIONS.md)): `clipboard.copy` — a file's path, a picture or text file, the newest screenshot, the page's link, the user's own words; checked by reading it back; words left out of the plan come from the request; a file is also found by its folders' names (the one right in the named folder); desktop.shell clears notifications only when the user says so; eval suite v37 (154) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-11 | (eval v37, after the copy rule) "turn off night light and turn off do not disturb" was planned with clear_notifications — the notifications would have been cleared | desktop.shell clears notifications only when the user says clear / dismiss; with do-not-disturb said, that switch instead (#64) |
+| 10-11 | (dry runs, D76) "copy hello from sonu" planned with no text; "copy the path of my invoice" planned as files.find + a copy with no name; "the SONU readme" found nothing (README.md doesn't say SONU) | words left out come from the request; a file's folders count, the one right in the named folder first (#64) |
 | 10-11 | (D75, a scratch folder) "move kestrel-invoice.pdf to …" was planned with files.move **and** listed as "can't do" — a planner example said renaming files wasn't possible | the example now uses printing; a plan that lists what its own step does as unsupported is sent back (#63) |
 | 10-11 | (D73, throwaway profiles) "what pages did I visit today?" right after a lentil soup search was planned with words "lentil soup" | a history search uses this request's words only (#61) |
 | 10-11 | (D72, a unit test while building) a test of `screen.type` ran with the real `wtype` — "martin" was typed once into the focused window (the owner's Zen); no Enter, nothing sent | the browser tests' context has no real programs (`which` finds nothing, a fake system) (#60) |
