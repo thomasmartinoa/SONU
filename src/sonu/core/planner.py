@@ -20,7 +20,7 @@ from sonu.core.conversation import Turn
 from sonu.core.planning import Plan, PlannedStep, PlanningError
 from sonu.desktop.apps.resolver import ROLES, normalize
 from sonu.llm.chat import ChatMessage, ChatModel, ChatModelError
-from sonu.tools.base import Effect
+from sonu.tools.base import Effect, args_problem
 from sonu.tools.grounding import ungrounded_words
 from sonu.tools.registry import MAX_STEPS, MAX_UNSUPPORTED, ToolRegistry
 from sonu.tools.web_tools import sites_named_in
@@ -464,10 +464,9 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
             problems.append(f"step {index + 1}: unknown tool '{step.tool}'")
             continue
         try:
-            tool.Args.model_validate(step.args)
-        except ValidationError as exc:
-            details = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:3])
-            problems.append(f"step {index + 1} ({step.tool}): {details}")
+            tool.parse_args(step.args)
+        except ValueError as exc:
+            problems.append(f"step {index + 1} ({step.tool}): {args_problem(exc)}")
             continue
         if tool.effects & {Effect.POWER} and index != len(plan.steps) - 1:
             # Nothing after a suspend/shutdown would run: it must be the last step.

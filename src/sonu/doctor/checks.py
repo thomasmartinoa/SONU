@@ -799,7 +799,39 @@ async def check_settings_programs(ctx: DoctorContext) -> list[CheckResult]:
 
 
 # ---------------------------------------------------------------------------- integrations
+def _mcp_result(ctx: DoctorContext) -> CheckResult:
+    """The MCP servers the user added (D63) — not started here: `sonu mcp check` does that."""
+    check_id, group, title = "integration.mcp", "Integrations", "MCP servers"
+    servers = {name: server for name, server in ctx.settings.mcp.servers.items() if server.enabled}
+    if not servers:
+        return CheckResult(check_id, group, title, "info", "none added (see [mcp.servers] in the config)")
+    missing = [
+        f"{name} ({server.command[0]})"
+        for name, server in servers.items()
+        if ctx.which(str(Path(server.command[0]).expanduser())) is None
+    ]
+    if missing:
+        return CheckResult(
+            check_id,
+            group,
+            title,
+            "fail",
+            f"can't find the program for {', '.join(missing)}",
+            hint="Install it, or fix `command` in [mcp.servers.<name>].",
+        )
+    said = ", ".join(f"{name} ({server.reaches})" for name, server in servers.items())
+    return CheckResult(
+        check_id,
+        group,
+        title,
+        "ok",
+        f"{said} · their tools ask first unless listed read_only",
+        hint="`sonu mcp check` starts them and lists their tools.",
+    )
+
+
 async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
+    mcp = _mcp_result(ctx)
     info = detect_hypr_theme(ctx.home)
     if not info.detected:
         return [
@@ -809,7 +841,8 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
                 "Rice",
                 "skip",
                 "no Orrery (hypr-dotfiles) / Quickshell setup detected",
-            )
+            ),
+            mcp,
         ]
     parts = []
     if info.theme_dir_present:
@@ -845,7 +878,8 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
                 },
                 "quickshell": info.quickshell_config,
             },
-        )
+        ),
+        mcp,
     ]
 
 

@@ -48,9 +48,8 @@ def terminal_confirmer(console: Console) -> Confirmer:
 
 def gui_confirmer(picker: Picker) -> Confirmer:
     async def confirm(request: ConfirmRequest) -> bool:
-        details = f" — {request.details[:400]}" if request.details else ""
         return await picker.confirm(
-            f"SONU wants to: {request.description}{details} ({request.risk.value} risk). Allow?"
+            f"SONU wants to: {request.description} ({request.risk.value} risk). Allow?", request.details
         )
 
     return confirm

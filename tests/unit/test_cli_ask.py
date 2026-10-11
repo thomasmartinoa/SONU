@@ -208,6 +208,27 @@ async def test_picker_choose_reads_the_number_back(
     assert (tmp_path / "stdin").read_text() == "1. Code - OSS\n2. VSCodium\n"
 
 
+@pytest.mark.anyio
+async def test_details_are_shown_in_full_or_not_asked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The picker shows 160 characters of a question; details (an outside tool's arguments, a prompt
+    # SONU wrote) were cut to fit — approved unseen. rofi shows them whole; other pickers say no.
+    for program in ("rofi", "fuzzel"):
+        script = tmp_path / program
+        script.write_text(f"#!/bin/sh\nprintf '%s\\n' \"$@\" > '{tmp_path}/{program}.argv'\necho Yes\n")
+        script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:/usr/bin:/bin")
+    details = "text: <b>buy oat milk</b>\n" + "x" * 500 + " the end"
+    assert await Picker("rofi").confirm("SONU wants to: use add_note. Allow?", details) is True
+    shown = (tmp_path / "rofi.argv").read_text()
+    assert "&lt;b&gt;buy oat milk&lt;/b&gt;" in shown and "the end" in shown  # whole, and not markup
+    assert await Picker("fuzzel").confirm("SONU wants to: use add_note. Allow?", details) is False
+    assert not (tmp_path / "fuzzel.argv").exists()  # not even asked
+    assert await Picker("rofi").confirm("Allow?", "y" * 5000) is False  # too long to show
+    assert await Picker("fuzzel").confirm("Allow?") is True  # nothing to read first: asked as before
+
+
 def test_parts_sonu_cannot_do_are_printed(env: dict[str, str], fake_ollama: FakeOllama) -> None:
     plan = {**LAUNCH_KITTY, "unsupported": ["turn on bluetooth"]}
     fake_ollama.chat_responder = lambda body: json.dumps(plan)

@@ -5,6 +5,7 @@ import builtins
 import io
 import json
 import socket
+import sys
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -13,7 +14,7 @@ from typing import Any
 import pytest
 
 from sonu.config.paths import SonuPaths
-from sonu.config.settings import AppsSettings, Settings, VerifySettings, VoiceSettings
+from sonu.config.settings import AppsSettings, McpSettings, Settings, VerifySettings, VoiceSettings
 from sonu.daemon.client import Notice, parse, try_run
 from sonu.daemon.protocol import decode, encode
 from sonu.daemon.server import KEEP_LOADED, Daemon
@@ -524,7 +525,7 @@ async def test_by_voice_a_written_prompt_is_shown_then_asked_briefly(rig: Rig) -
         spoken="send the prompt I wrote to Claude Code in todo-app — it's on your screen",
     )
     assert await confirm(request) is True
-    assert shown == [("SONU wrote this", "Build a small todo app.\nRequirements:\n- a dark mode")]
+    assert shown == [("Read this first", "Build a small todo app.\nRequirements:\n- a dark mode")]
     assert voice.said == [
         "Should I send the prompt I wrote to Claude Code in todo-app — it's on your screen? Say yes or no."
     ]
@@ -564,3 +565,25 @@ async def test_the_journal_finds_hyprland_when_its_environment_is_stale(rig: Rig
     rig.daemon.env["HYPRLAND_INSTANCE_SIGNATURE"] = "gone_1_2"
     rig.daemon._client_env = {}
     assert rig.daemon._journal_instance().signature == rig.fake.signature
+
+
+@pytest.mark.anyio
+async def test_the_mcp_servers_the_user_added_start_with_sonud(
+    short_tmp: Path, xdg_env: dict[str, str]
+) -> None:
+    ollama = FakeOllama()
+    ollama.add_model("qwen3.5:4b", size_gib=3.2, capabilities=["completion", "tools"])
+    ollama.chat_responder = lambda body: json.dumps({"kind": "reply", "message": "Hi!", "steps": []})
+    command = [sys.executable, "-m", "sonu.testing.fake_mcp_server"]
+    settings = Settings(
+        mcp=McpSettings.model_validate({"servers": {"notes": {"command": command, "reaches": "local"}}})
+    )
+    daemon = Daemon(settings, SonuPaths.from_env(xdg_env), xdg_env, ollama_transport=ollama.transport)
+    await daemon.warm_up()
+    assert daemon.registry.get("mcp.notes.add_note") is not None
+    # Before the practice plan: the instructions Ollama keeps cached already list them.
+    assert "mcp.notes.add_note" in ollama.chat_requests[0]["messages"][0]["content"]
+    assert daemon.outside is not None
+    connection = daemon.outside.servers[0].connection
+    await daemon.stop()
+    assert connection is not None and not connection.alive

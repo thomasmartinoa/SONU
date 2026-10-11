@@ -15,11 +15,12 @@ checks can never be reported as done.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from sonu.verify.checks import Check
 
@@ -62,6 +63,7 @@ class Effect(StrEnum):
     INSTALL = "install"  # installs software (root, through the system's own password prompt)
     UNINSTALL = "uninstall"  # removes software (root, through the system's own password prompt)
     UI_INPUT = "ui.input"  # presses a control in an app (accessibility; no mouse)
+    OUTSIDE = "outside.tool"  # a tool of another program (an MCP server the user added, D63)
 
 
 class StepStatus(StrEnum):
@@ -129,6 +131,14 @@ class Tool(ABC):
     # itself; the planner also checks them, so the model can correct itself instead of failing.
     grounded: ClassVar[tuple[str, ...]] = ()
 
+    def parse_args(self, raw: Mapping[str, Any]) -> BaseModel:
+        """The arguments, checked (unknown fields rejected); raises ``ValueError`` when they're wrong."""
+        return self.Args.model_validate(raw)
+
+    def args_json_schema(self) -> dict[str, Any]:
+        """The arguments' JSON schema: what the planner's output is held to, and what MCP clients get."""
+        return self.Args.model_json_schema()
+
     @abstractmethod
     async def prepare(
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
@@ -142,6 +152,13 @@ class Tool(ABC):
     @abstractmethod
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
         """Act, then verify on fresh snapshots."""
+
+
+def args_problem(exc: ValueError) -> str:
+    """What was wrong with a step's arguments, in one line."""
+    if isinstance(exc, ValidationError):
+        return "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:3])
+    return str(exc)
 
 
 def outcome_from_checks(checks: list[Check], success: str, failure: str, **data: Any) -> ToolOutcome:

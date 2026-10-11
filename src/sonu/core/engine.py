@@ -12,8 +12,6 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
-from pydantic import ValidationError
-
 from sonu.audit.log import AuditError, AuditLog
 from sonu.core.conversation import Conversation, Turn, results_of
 from sonu.core.planning import Plan, Planner, PlanningError
@@ -21,7 +19,7 @@ from sonu.core.report import StepRecord, TaskReport
 from sonu.core.responder import Responder
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.policy.engine import Policy, outside_caller_risk
-from sonu.tools.base import Choices, Prepared, Risk, StepStatus, Tool, ToolOutcome
+from sonu.tools.base import Choices, Prepared, Risk, StepStatus, Tool, ToolOutcome, args_problem
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import MAX_STEPS, ToolRegistry
 from sonu.world.origin import find_origin
@@ -277,11 +275,12 @@ class Engine:
         if tool is None:
             return record(ToolOutcome(StepStatus.FAILED, f"the plan used an unknown tool '{tool_name}'"))
         try:
-            args = tool.Args.model_validate(raw_args)
-        except ValidationError as exc:
-            problem = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()[:3])
+            args = tool.parse_args(raw_args)
+        except ValueError as exc:
             return record(
-                ToolOutcome(StepStatus.FAILED, f"the plan gave {tool_name} invalid arguments ({problem})")
+                ToolOutcome(
+                    StepStatus.FAILED, f"the plan gave {tool_name} invalid arguments ({args_problem(exc)})"
+                )
             )
 
         try:

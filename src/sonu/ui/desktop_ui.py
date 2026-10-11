@@ -12,10 +12,13 @@ import logging
 import shutil
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from html import escape
 
 logger = logging.getLogger(__name__)
 
 PICKER_TIMEOUT_S = 120.0
+MAX_DETAILS = 3000  # what rofi's message area shows on a laptop screen
+MAX_DETAIL_LINES = 45
 NOTIFY_TIMEOUT_S = 5.0
 MAX_NOTIFY_BODY = 600
 
@@ -94,10 +97,23 @@ class Picker:
         text = result[1].strip()
         return text or None
 
-    async def confirm(self, question: str) -> bool:
-        """Yes/no with "No" first, so pressing Enter by accident never approves anything."""
+    async def confirm(self, question: str, details: str | None = None) -> bool:
+        """Yes/no with "No" first, so pressing Enter by accident never approves anything.
+
+        ``details`` — what must be read before answering (a prompt SONU wrote, an outside tool's
+        arguments) — are shown in full in rofi's message area. Other pickers can't show them, and
+        too much doesn't fit: then the answer is no, never a yes to something unseen (D63).
+        """
         prompt = question.replace("\n", " ")[:160]
-        result = await _run(self.choose_argv(prompt), stdin="No\nYes\n", timeout_s=PICKER_TIMEOUT_S)
+        argv = self.choose_argv(prompt)
+        if details:
+            fits = len(details) <= MAX_DETAILS and details.count("\n") < MAX_DETAIL_LINES
+            if self.program != "rofi" or not fits:
+                logger.info("not asked on screen: the details don't fit in %s", self.program)
+                return False
+            argv = ["rofi", "-dmenu", "-p", "SONU", "-mesg", f"{escape(prompt)}\n\n{escape(details)}", "-i"]
+            argv.append("-no-custom")
+        result = await _run(argv, stdin="No\nYes\n", timeout_s=PICKER_TIMEOUT_S)
         return result is not None and result[0] == 0 and result[1].strip() == "Yes"
 
     async def choose(self, question: str, options: Sequence[str]) -> int | None:
