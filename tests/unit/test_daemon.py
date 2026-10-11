@@ -425,6 +425,10 @@ async def test_thanks_ends_the_conversation(rig: Rig) -> None:
     voice = voice_rig(rig, "open kitty on 2", "thank you")
     planned = len(rig.ollama.chat_requests)
     _, out = await rig.run("listen")
+    for _ in range(40):  # the client is done at the result; the daemon may still be saying the reply
+        if voice.said[-1] == "You're welcome.":
+            break
+        await asyncio.sleep(0.05)
     assert voice.said[-1] == "You're welcome."
     assert out.splitlines()[-1] == "You: thank you"
     assert (
@@ -524,3 +528,39 @@ async def test_by_voice_a_written_prompt_is_shown_then_asked_briefly(rig: Rig) -
     assert voice.said == [
         "Should I send the prompt I wrote to Claude Code in todo-app — it's on your screen? Say yes or no."
     ]
+
+
+# ---------------------------------------------------------------- the activity journal
+async def _until(condition: Callable[[], bool]) -> None:
+    for _ in range(150):
+        if condition():
+            return
+        await asyncio.sleep(0.02)
+    raise AssertionError("not in time")
+
+
+@pytest.mark.anyio
+async def test_sonud_records_which_window_has_the_focus(rig: Rig) -> None:
+    journal = rig.daemon.journal
+    assert journal is not None and journal.path is not None
+    assert journal.path.parent == rig.daemon.paths.data_dir
+    await rig.fake.wait_for_event_clients(1)
+    await rig.fake.emit("activewindow", "kitty,nvim dataset.py")
+    await rig.fake.emit("activewindowv2", "c3")
+    await rig.fake.emit("windowtitlev2", "c3,nvim notes.txt")
+    await _until(lambda: journal.count() >= 1 and journal.spans(0, 2e9)[-1].title == "nvim notes.txt")
+    assert journal.spans(0, 2e9)[-1].app == "kitty"
+    # The CLI pauses it (a file sonud sees): nothing more is recorded.
+    journal.pause(True)
+    await rig.fake.emit("activewindow", "zen,News — Zen Browser")
+    await asyncio.sleep(0.1)
+    assert all(span.app != "zen" for span in journal.spans(0, 2e9))
+    journal.pause(False)
+
+
+@pytest.mark.anyio
+async def test_the_journal_finds_hyprland_when_its_environment_is_stale(rig: Rig) -> None:
+    # sonud can start before the session exports HYPRLAND_INSTANCE_SIGNATURE (or keep an old one).
+    rig.daemon.env["HYPRLAND_INSTANCE_SIGNATURE"] = "gone_1_2"
+    rig.daemon._client_env = {}
+    assert rig.daemon._journal_instance().signature == rig.fake.signature

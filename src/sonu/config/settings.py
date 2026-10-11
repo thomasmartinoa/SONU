@@ -118,6 +118,15 @@ class VoiceSettings(_Section):
     password_by_voice: bool = False
 
 
+class JournalSettings(_Section):
+    # The activity journal (D6): which window had the focus and when, for "what was I doing yesterday?".
+    # Local only; password managers and private browser windows are never recorded.
+    enabled: bool = True
+    keep_days: int = Field(default=30, ge=1, le=365)
+    # More apps never to record (window classes or parts of them), e.g. ["signal", "thunderbird"].
+    exclude_apps: list[str] = Field(default_factory=list, max_length=50)
+
+
 class AssistantSettings(_Section):
     # The name SONU answers to and uses for itself in replies.
     name: str = Field(default="Sonu", min_length=1, max_length=30)
@@ -141,6 +150,7 @@ class Settings(_Section):
     audit: AuditSettings = AuditSettings()
     assistant: AssistantSettings = AssistantSettings()
     voice: VoiceSettings = VoiceSettings()
+    journal: JournalSettings = JournalSettings()
 
 
 class ConfigError(Exception):
@@ -254,4 +264,11 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # follow_up_s = 6.0              # keep listening after a reply for the next request (0: off)
 # barge_in = true                # talk over SONU to stop it (a PipeWire echo canceller)
 # password_by_voice = false      # installs by voice: say the password too (anyone nearby hears it)
+
+[journal]
+# Which window had the focus and when, kept on this computer only ("what was I doing yesterday?").
+# Password managers and private browser windows are never recorded. `sonu journal pause` stops it.
+# enabled = true
+# keep_days = 30
+# exclude_apps = []              # more apps never to record, e.g. ["signal"]
 """

@@ -22,6 +22,7 @@ import logging
 import os
 import re
 import socket
+import sqlite3
 import struct
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -35,6 +36,7 @@ from sonu.audit.log import AuditLog
 from sonu.config.paths import SonuPaths
 from sonu.config.settings import Settings
 from sonu.core.engine import ConfirmRequest, Engine, Observer
+from sonu.core.journal import FocusTracker
 from sonu.core.planner import LLMPlanner
 from sonu.core.planning import Plan, PlanningError
 from sonu.core.prompt_writer import PromptWriter
@@ -45,13 +47,15 @@ from sonu.daemon.protocol import ENV_KEYS, decode, encode, socket_path
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
-from sonu.desktop.hyprland.errors import HyprlandError
-from sonu.desktop.hyprland.instance import discover_instance
+from sonu.desktop.hyprland.errors import HyprlandError, HyprlandNotFound
+from sonu.desktop.hyprland.events import stream_events
+from sonu.desktop.hyprland.instance import HyprlandInstance, discover_instance
+from sonu.desktop.hyprland.ipc import HyprlandClient
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.chat import OllamaChatModel
 from sonu.llm.ollama import OllamaClient, OllamaError
 from sonu.policy.engine import Policy
-from sonu.runtime import app_aliases, assistant_parts, load_memory
+from sonu.runtime import app_aliases, assistant_parts, load_memory, open_journal
 from sonu.tools.base import Choices, Risk, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
@@ -244,6 +248,9 @@ class Daemon:
         self._waking = False  # a "Hey Sonu" request is starting
         self._wake_request_task: asyncio.Task[None] | None = None
         self._quiet_until = 0.0  # SONU just spoke: its own voice isn't a wake word
+        self.journal = open_journal(settings, paths)
+        self._journaling: asyncio.Task[None] | None = None
+        self.journal_retry_s = 5.0  # Hyprland restarted or isn't up yet: try again this often
 
     # -------------------------------------------------------------- lifetime
     async def start(self, path: Path | None = None) -> Path:
@@ -256,7 +263,41 @@ class Daemon:
         path.chmod(0o600)
         self.path = path
         self._warming = asyncio.create_task(self.warm_up())
+        if self.journal is not None:
+            self._journaling = asyncio.create_task(self.keep_journal())
         return path
+
+    def _journal_instance(self) -> HyprlandInstance:
+        env = {**self.env, **self._client_env}
+        try:
+            return discover_instance(env)
+        except HyprlandNotFound:  # started before the session's environment: the newest Hyprland
+            return discover_instance({k: v for k, v in env.items() if k != "HYPRLAND_INSTANCE_SIGNATURE"})
+
+    async def keep_journal(self) -> None:
+        """Record which window has the focus (D6) for as long as sonud runs; Hyprland's events say
+        when it changes. A new Hyprland (log out and in) is found again."""
+        if self.journal is None:
+            return
+        tracker = FocusTracker(self.journal)
+        try:
+            while True:
+                try:
+                    instance = self._journal_instance()
+                    client = HyprlandClient(instance, timeout_s=self.settings.hyprland.request_timeout_s)
+                    active = await client.active_window()
+                    if active is None:
+                        tracker.start("", "", None)
+                    else:
+                        tracker.start(active.window_class, active.title, active.address)
+                    async for event in stream_events(instance):
+                        tracker.feed(event)
+                except (HyprlandError, OSError, sqlite3.Error) as exc:
+                    logger.info("activity journal: %s", exc)
+                tracker.stop()
+                await asyncio.sleep(self.journal_retry_s)
+        finally:
+            tracker.stop()
 
     async def warm_up(self) -> None:
         """Load the planner model and plan once, holding requests until then.
@@ -290,6 +331,12 @@ class Daemon:
     async def stop(self) -> None:
         if self._warming is not None:
             self._warming.cancel()
+        if self._journaling is not None:
+            self._journaling.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._journaling
+        if self.journal is not None:
+            self.journal.close()
         await self.wake.stop()
         self.echo.close()
         if self._server is not None:
@@ -581,6 +628,7 @@ class Daemon:
             ancestors=lambda: ancestor_pids(pid),  # the terminal the request was typed in
             memory=memory,
             wake=self.wake,
+            journal=self.journal,
             writer=PromptWriter(
                 OllamaChatModel(self.ollama, self.settings.models.planner, self.ollama_settings)
             ),

@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from sonu.config.settings import AppsSettings, Settings, VerifySettings
 from sonu.core.engine import ConfirmRequest, Engine
+from sonu.core.journal import Journal
 from sonu.core.planner import LLMPlanner
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.report import TaskReport
@@ -115,6 +116,8 @@ class EvalCase(_Model):
     battery: int | None = None  # a battery at this percent (discharging)
     expect_confirmed: list[str] = Field(default_factory=list)  # tools that must have asked first
     expect_reply_contains: str | None = None  # text the report must contain
+    # The activity journal at the start: [minutes ago, window class, title], oldest first ("" class: nothing).
+    journal: list[tuple[float, str, str]] = Field(default_factory=list)
     # Two window classes, tiled next to each other.
     expect_side_by_side: list[str] = Field(default_factory=list)
     obs: dict[str, Any] = Field(default_factory=dict)  # OBS's state at the start (FakeObsState fields)
@@ -333,6 +336,8 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
             (sys_dir / "type").write_text("x86_pkg_temp\n")
             (sys_dir / "temp").write_text("61000\n")
             power_supply = workdir / "power_supply"
+            journal = Journal(None)
+            stack.callback(journal.close)
             if case.battery is not None:
                 (power_supply / "BAT1").mkdir(parents=True, exist_ok=True)
                 (power_supply / "BAT1" / "capacity").write_text(f"{case.battery}\n")
@@ -355,7 +360,10 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
                 terminals=SonuTerminals(workdir / "run" / "terminals", system),
                 writer=PromptWriter(cast(TextModel, model)) if hasattr(model, "complete_text") else None,
                 reader=FakeScreenReader(),
+                journal=journal,
             )
+            for minutes_ago, app, title in case.journal:
+                journal.record(app, title, time.time() - minutes_ago * 60)
             engine = Engine(
                 planner=LLMPlanner(model),
                 registry=ToolRegistry(),

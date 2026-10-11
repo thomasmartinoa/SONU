@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from sonu.config.settings import Settings
+from sonu.core.journal import Journal
 from sonu.core.memory import Memory
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.screen_reader import ScreenReader
@@ -87,6 +88,8 @@ class ToolContext:
     # A spoken request with "password by voice" on: says the prompt, returns what was said (never
     # shown, logged or kept). None: not available — the user types it.
     ask_secret: Callable[[str], Awaitable[str | None]] | None = None
+    # The activity journal (which window had the focus, when); sonud records it. None: not available.
+    journal: Journal | None = None
 
     def sonu_terminals(self) -> SonuTerminals:
         if self.terminals is None:

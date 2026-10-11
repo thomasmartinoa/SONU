@@ -97,3 +97,39 @@ def test_desktop_commands_without_hyprland_fail_cleanly(runner: CliRunner, env: 
     result = runner.invoke(app, ["desktop", "windows"], env=env)
     assert result.exit_code == 1
     assert "Hyprland does not seem to be running" in result.output
+
+
+def test_every_subcommand_is_routed_as_a_command_not_a_request() -> None:
+    # Found on the laptop: `sonu journal show today` went to the planner as a request.
+    from sonu.cli.app import COMMANDS, rewrite_bare_request
+    from sonu.daemon.client import _COMMANDS
+
+    names = {group.name for group in app.registered_groups} | {
+        command.name or (command.callback.__name__ if command.callback else "")
+        for command in app.registered_commands
+    }
+    names.discard("version")
+    assert names <= COMMANDS
+    assert names - {"listen"} <= _COMMANDS  # the daemon's client leaves them to the full CLI
+    assert rewrite_bare_request(["journal", "show", "today"]) == ["journal", "show", "today"]
+
+
+def test_the_journal_command(runner: CliRunner, env: dict[str, str]) -> None:
+    from sonu.core.journal import Journal
+
+    data = Path(env["XDG_DATA_HOME"]) / "sonu"
+    journal = Journal(data / "journal.sqlite3")
+    journal.record("kitty", "nvim dataset.py", 1.0e9)  # 2001: older than 30 days, but forget --all takes it
+    journal.close()
+    path = runner.invoke(app, ["journal", "path"], env=env).output.replace("\n", "")
+    assert path == str(data / "journal.sqlite3")
+    result = runner.invoke(app, ["journal", "show", "today"], env=env)
+    assert result.exit_code == 0 and "Nothing in the journal today" in result.output
+    assert runner.invoke(app, ["journal", "show", "tomorrow"], env=env).exit_code == 2
+    assert runner.invoke(app, ["journal", "pause"], env=env).exit_code == 0
+    assert (data / "journal-paused").exists()
+    assert "paused" in runner.invoke(app, ["journal", "show"], env=env).output
+    assert runner.invoke(app, ["journal", "resume"], env=env).exit_code == 0
+    assert not (data / "journal-paused").exists()
+    result = runner.invoke(app, ["journal", "forget", "--all"], env=env)
+    assert result.exit_code == 0 and "Deleted 1 entries." in result.output

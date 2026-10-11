@@ -985,3 +985,36 @@ expect_confirmed = ["packages.remove"]
 require_tools = ["packages.remove"]
 expect_system = { installed_packages = { kitty = "0.49.1-1" } }
 
+
+[[case]]
+id = "what-was-i-doing-yesterday"
+request = "what was I working on yesterday?"
+notes = "The activity journal (empty here): it answers, it doesn't open anything."
+expect_status = ["done"]
+require_tools = ["journal.read"]
+forbid_tools = ["memory.list", "apps.launch", "screen.read"]
+
+[[case]]
+id = "the-last-hour-from-the-journal"
+request = "what have I been doing for the last hour?"
+journal = [[50, "kitty", "nvim dataset.py"], [30, "zen", "Pull Request #41 · SONU — Zen Browser"], [5, "", ""]]
+expect_status = ["done"]
+require_tools = ["journal.read"]
+expect_reply_contains = "Zen Browser 25 minutes"
+
+[[case]]
+id = "when-did-i-last-use"
+request = "when did I last use btop?"
+journal = [[90, "kitty", "btop"], [70, "zen", "News — Zen Browser"], [60, "", ""]]
+notes = "Searches the journal by the user's words; doesn't open btop."
+expect_status = ["done"]
+require_tools = ["journal.read"]
+forbid_tools = ["apps.launch"]
+expect_reply_contains = "in kitty (“btop”)"
+
+[[case]]
+id = "pause-the-journal"
+request = "pause the activity journal"
+expect_status = ["done"]
+require_tools = ["journal.recording"]
+forbid_tools = ["obs.record", "media.control", "journal.forget"]

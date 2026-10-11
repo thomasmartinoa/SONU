@@ -14,6 +14,7 @@ from sonu.config.paths import SonuPaths
 from sonu.config.settings import OllamaSettings, Settings
 from sonu.core.conversation import Conversation
 from sonu.core.engine import Engine
+from sonu.core.journal import Journal
 from sonu.core.memory import Memory
 from sonu.core.planner import LLMPlanner
 from sonu.core.prompt_writer import PromptWriter
@@ -35,6 +36,18 @@ from sonu.tools.registry import ToolRegistry
 def load_memory(paths: SonuPaths) -> Memory:
     """What the user asked SONU to remember (shared by the CLI and the daemon)."""
     return Memory.load(paths.data_dir / "memory.json")
+
+
+def open_journal(settings: Settings, paths: SonuPaths) -> Journal | None:
+    """The activity journal (sonud records it; the CLI only reads it). None when it's off in the config."""
+    if not settings.journal.enabled:
+        return None
+    return Journal(
+        paths.data_dir / "journal.sqlite3",
+        keep_days=settings.journal.keep_days,
+        exclude_apps=settings.journal.exclude_apps,
+        pause_file=paths.data_dir / "journal-paused",
+    )
 
 
 def app_aliases(settings: Settings, memory: Memory) -> dict[str, str]:
@@ -73,6 +86,8 @@ class Runtime:
 
     async def aclose(self) -> None:
         await self.ollama.aclose()
+        if self.engine.ctx.journal is not None:
+            self.engine.ctx.journal.close()
 
 
 async def build_runtime(
@@ -96,7 +111,12 @@ async def build_runtime(
     memory = load_memory(paths)
     resolver = AppResolver(catalog, role_defaults=role_defaults, aliases=app_aliases(settings, memory))
     ctx = ToolContext(
-        desktop, resolver, settings, default_terminal=role_defaults.get("terminal"), memory=memory
+        desktop,
+        resolver,
+        settings,
+        default_terminal=role_defaults.get("terminal"),
+        memory=memory,
+        journal=open_journal(settings, paths),
     )
 
     role = settings.models.planner_deep if deep else settings.models.planner

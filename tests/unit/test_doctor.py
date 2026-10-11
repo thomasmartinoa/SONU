@@ -304,3 +304,27 @@ def test_the_rices_default_apps_come_from_orrery(tmp_path: Path) -> None:
     defaults = detect_hypr_theme(tmp_path).defaults
     assert defaults["browser"] == DefaultApp("zen-browser", "file")
     assert defaults["terminal"] == DefaultApp("kitty", "rice-fallback")  # no file: the rice's own kitty
+
+
+@pytest.mark.anyio
+async def test_the_activity_journal_line(xdg_env: dict[str, str]) -> None:
+    from sonu.config.settings import JournalSettings
+    from sonu.core.journal import Journal
+    from sonu.doctor.checks import check_sonu
+
+    context = make_context(xdg_env, hypr=None, ollama=None)
+    assert by_id(await check_sonu(context))["sonu.journal"].summary.startswith("nothing yet")
+    journal = Journal(
+        context.paths.data_dir / "journal.sqlite3", pause_file=context.paths.data_dir / "journal-paused"
+    )
+    journal.record("kitty", "zsh", 1.0e9)
+    journal.record("zen", "News", 1.0e9 + 60)
+    result = by_id(await check_sonu(context))["sonu.journal"]
+    assert (result.status, result.summary) == ("ok", "2 window changes recorded · kept 30 days, local only")
+    journal.pause(True)
+    assert by_id(await check_sonu(context))["sonu.journal"].summary.startswith("paused")
+    journal.close()
+    off = make_context(
+        xdg_env, hypr=None, ollama=None, settings=Settings(journal=JournalSettings(enabled=False))
+    )
+    assert by_id(await check_sonu(off))["sonu.journal"].summary == "off in config"
