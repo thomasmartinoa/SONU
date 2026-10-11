@@ -15,6 +15,7 @@ from rich.table import Table
 from sonu.cli.state import get_state
 from sonu.evals.runner import EvalSummary, load_cases, run_eval
 from sonu.llm.chat import OllamaChatModel
+from sonu.llm.cloud import is_cloud_model
 from sonu.llm.ollama import OllamaClient, OllamaError
 
 _MODELS = typer.Option(
@@ -23,6 +24,11 @@ _MODELS = typer.Option(
 _CASES = typer.Option(None, "--case", "-c", help="Only run these case ids (repeatable).")
 _JSON = typer.Option(False, "--json", help="Print results as JSON.")
 _DEEP = typer.Option(False, "--deep", help="Use the deep-planner role settings (thinking on).")
+_CLOUD = typer.Option(
+    False,
+    "--cloud",
+    help="Also score your [cloud] model (Ollama Cloud; only the made-up eval desktop is sent).",
+)
 
 
 def eval_cmd(
@@ -31,13 +37,16 @@ def eval_cmd(
     cases: list[str] | None = _CASES,
     as_json: bool = _JSON,
     deep: bool = _DEEP,
+    cloud: bool = _CLOUD,
 ) -> None:
     """Measure how well planner models drive SONU (runs on a fake desktop; your real desktop is untouched)."""
     state = get_state(ctx)
     state.require_valid_config()
     settings = state.settings
     role = settings.models.planner_deep if deep else settings.models.planner
-    names = models or [role.model]
+    names = models or ([] if cloud else [role.model])
+    if cloud:
+        names.append(settings.cloud.model)
     selected = load_cases()
     if cases:
         unknown = set(cases) - {case.id for case in selected}
@@ -55,11 +64,18 @@ def eval_cmd(
                 except OllamaError as exc:
                     state.err.print(f"[red]✖ {escape(str(exc))}[/]")
                     continue
-                model = OllamaChatModel(client, role.model_copy(update={"model": name}), settings.ollama)
+                remote = is_cloud_model(name)  # planned as SONU will: no window titles (D62)
+                update: dict[str, object] = {"model": name}
+                if remote:
+                    update["think"] = settings.cloud.think
+                model = OllamaChatModel(client, role.model_copy(update=update), settings.ollama)
                 if not as_json:
-                    state.err.print(f"[dim]evaluating {escape(name)} on {len(selected)} cases…[/]")
+                    where = " (Ollama Cloud, no window titles)" if remote else ""
+                    state.err.print(f"[dim]evaluating {escape(name)}{where} on {len(selected)} cases…[/]")
                 with tempfile.TemporaryDirectory(prefix="sonu-eval-") as workdir:
-                    summaries.append(await run_eval(selected, model, Path(workdir)))
+                    summaries.append(
+                        await run_eval(selected, model, Path(workdir), include_titles=not remote)
+                    )
         return summaries
 
     summaries = asyncio.run(go())

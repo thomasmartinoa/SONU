@@ -9,6 +9,7 @@ sonu eval                              # your configured planner
 sonu eval -m qwen3.5:4b -m qwen3:8b    # compare models
 sonu eval -c move-by-title             # one case
 sonu eval --json                       # machine-readable
+sonu eval --cloud                      # also your [cloud] model (Ollama Cloud), planning as SONU will: no titles
 ```
 
 ## The cases (v24, 120 cases)

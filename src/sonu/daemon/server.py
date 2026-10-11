@@ -37,11 +37,8 @@ from sonu.config.paths import SonuPaths
 from sonu.config.settings import Settings
 from sonu.core.engine import ConfirmRequest, Engine, Observer
 from sonu.core.journal import FocusTracker
-from sonu.core.planner import LLMPlanner
 from sonu.core.planning import Plan, PlanningError
-from sonu.core.prompt_writer import PromptWriter
 from sonu.core.report import ICONS, StepRecord, TaskReport
-from sonu.core.screen_reader import ScreenReader
 from sonu.daemon.client import Notice, Progress
 from sonu.daemon.protocol import ENV_KEYS, decode, encode, socket_path
 from sonu.desktop.apps.catalog import AppCatalog
@@ -52,10 +49,9 @@ from sonu.desktop.hyprland.events import stream_events
 from sonu.desktop.hyprland.instance import HyprlandInstance, discover_instance
 from sonu.desktop.hyprland.ipc import HyprlandClient
 from sonu.integrations.hypr_theme import detect_hypr_theme
-from sonu.llm.chat import OllamaChatModel
 from sonu.llm.ollama import OllamaClient, OllamaError
 from sonu.policy.engine import Policy
-from sonu.runtime import app_aliases, assistant_parts, load_memory, open_journal
+from sonu.runtime import app_aliases, assistant_parts, load_memory, model_parts, open_journal
 from sonu.tools.base import Choices, Risk, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
@@ -233,8 +229,10 @@ class Daemon:
         )
         self.ollama_settings = settings.ollama.model_copy(update={"keep_alive": KEEP_LOADED})
         self.model = settings.models.planner.model
-        self.planner = LLMPlanner(OllamaChatModel(self.ollama, settings.models.planner, self.ollama_settings))
         self.audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
+        # Local, or Ollama Cloud for what the user allowed (D62); a cloud model in [models] stops here.
+        self.models = model_parts(settings, self.ollama, self.ollama_settings, self.audit)
+        self.planner = self.models.planner
         self.registry = ToolRegistry()
         self.policy = Policy(settings.policy.autonomy)
         self._ids = itertools.count(1)
@@ -309,7 +307,9 @@ class Daemon:
         async with self.lock:
             try:
                 await self.ollama.load(self.model, keep_alive=KEEP_LOADED)
-                await self.planner.plan("what's open right now?", WorldSnapshot(windows=()), self.registry)
+                await self.models.local_planner.plan(
+                    "what's open right now?", WorldSnapshot(windows=()), self.registry
+                )
             except (OllamaError, PlanningError) as exc:  # Ollama may start later: the first request pays
                 logger.warning("couldn't warm up %s: %s", self.model, exc)
             if voice_installed() and not missing_files(voice_dir(self.paths.data_dir)):
@@ -629,13 +629,8 @@ class Daemon:
             memory=memory,
             wake=self.wake,
             journal=self.journal,
-            writer=PromptWriter(
-                OllamaChatModel(self.ollama, self.settings.models.planner, self.ollama_settings)
-            ),
-            reader=ScreenReader(
-                OllamaChatModel(self.ollama, self.settings.models.planner, self.ollama_settings),
-                self.settings.ollama.host,
-            ),
+            writer=self.models.writer,
+            reader=self.models.reader,
         )
         conversation, responder = assistant_parts(
             self.settings, self.paths, self.ollama, self.ollama_settings, memory

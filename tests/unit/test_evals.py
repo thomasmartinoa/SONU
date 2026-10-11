@@ -295,3 +295,32 @@ def test_eval_cli_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, xdg_env:
     assert summary["model"] == "qwen3.5:4b"
     assert summary["passed"] == 1
     assert summary["results"][0]["case_id"] == cases["launch-one"].id
+
+
+def test_eval_cloud_scores_the_cloud_model_without_titles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, xdg_env: dict[str, str]
+) -> None:
+    import json
+
+    from typer.testing import CliRunner
+
+    from sonu.cli.app import app
+    from sonu.llm import OllamaClient
+    from sonu.testing.fake_ollama import FakeOllama
+
+    fake = FakeOllama()
+    fake.add_model("gpt-oss:120b-cloud", size_gib=60, capabilities=["completion", "tools", "thinking"])
+    fake.cloud_user = "martin"
+    fake.chat_responder = lambda body: json.dumps(GOLDEN["move-by-title"])
+
+    def client(host: str, timeout_s: float) -> OllamaClient:
+        return OllamaClient(host, timeout_s=timeout_s, transport=fake.transport)
+
+    monkeypatch.setattr("sonu.cli.eval_cmd.OllamaClient", client)
+    result = CliRunner().invoke(app, ["eval", "--cloud", "--json", "-c", "move-by-title"], env=xdg_env)
+    assert result.exit_code == 0, result.output
+    [summary] = json.loads(result.stdout)
+    assert summary["model"] == "gpt-oss:120b-cloud"
+    assert summary["passed"] == 1  # "the GitHub window": the user's words are enough
+    prompt = fake.chat_requests[0]["messages"][0]["content"]
+    assert "GitHub - SONU - Zen Browser" not in prompt and "YouTube - Zen Browser" not in prompt

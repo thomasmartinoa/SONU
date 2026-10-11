@@ -197,6 +197,17 @@ class OllamaClient:
         except (ValueError, ValidationError, AttributeError) as exc:
             raise OllamaError("/api/chat: unexpected reply") from exc
 
+    async def signed_in(self) -> str | None:
+        """Who Ollama Cloud knows this Ollama as (``ollama signin``), or None when it isn't signed in."""
+        try:
+            data = await self._request("POST", "/api/me")
+        except OllamaError as exc:
+            if "HTTP 401" in str(exc) or "unauthorized" in str(exc).lower():
+                return None
+            raise
+        name = data.get("name") if isinstance(data, dict) else None
+        return name if isinstance(name, str) and name else "this Ollama"
+
     async def model_info(self, name: str) -> ModelInfo:
         try:
             data = await self._request("POST", "/api/show", json={"model": name})

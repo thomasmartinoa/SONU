@@ -287,7 +287,9 @@ def check_expectations(
     return failures
 
 
-async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResult:
+async def run_case(
+    case: EvalCase, model: ChatModel, workdir: Path, *, include_titles: bool = True
+) -> CaseResult:
     runtime_dir = Path(tempfile.mkdtemp(prefix="sonu-eval-", dir="/tmp"))  # short: socket path limit
     started = time.monotonic()
     try:
@@ -365,7 +367,7 @@ async def run_case(case: EvalCase, model: ChatModel, workdir: Path) -> CaseResul
             for minutes_ago, app, title in case.journal:
                 journal.record(app, title, time.time() - minutes_ago * 60)
             engine = Engine(
-                planner=LLMPlanner(model),
+                planner=LLMPlanner(model, include_titles=include_titles),
                 registry=ToolRegistry(),
                 ctx=ctx,
                 policy=Policy("confirm-risky"),
@@ -425,10 +427,13 @@ class EvalSummary:
         return sum(timed) / len(timed) if timed else 0.0
 
 
-async def run_eval(cases: list[EvalCase], model: ChatModel, workdir: Path) -> EvalSummary:
+async def run_eval(
+    cases: list[EvalCase], model: ChatModel, workdir: Path, *, include_titles: bool = True
+) -> EvalSummary:
+    """``include_titles=False``: plan the way a cloud planner does (D62), without window titles."""
     results = []
     for case in cases:
         case_dir = workdir / case.id
         case_dir.mkdir(parents=True, exist_ok=True)
-        results.append(await run_case(case, model, case_dir))
+        results.append(await run_case(case, model, case_dir, include_titles=include_titles))
     return EvalSummary(model=model.name, results=results)
