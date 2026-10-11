@@ -11,6 +11,7 @@ from pathlib import Path
 import httpx
 
 from sonu.audit.log import AuditLog
+from sonu.browser.host import socket_folder
 from sonu.config.paths import SonuPaths
 from sonu.config.settings import CloudUse, ModelRole, OllamaSettings, Settings
 from sonu.core.conversation import Conversation
@@ -28,6 +29,7 @@ from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.instance import discover_instance
+from sonu.integrations.browser import Browsers
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.chat import OllamaChatModel, TextModel
 from sonu.llm.cloud import (
@@ -221,6 +223,7 @@ async def build_runtime(
         default_terminal=role_defaults.get("terminal"),
         memory=memory,
         layouts=load_layouts(paths),
+        browsers=Browsers(socket_folder(dict(env))),
         journal=open_journal(settings, paths),
     )
 

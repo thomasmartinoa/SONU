@@ -30,12 +30,14 @@ from sonu.core.report import TaskReport
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
+from sonu.integrations.browser import Browsers
 from sonu.integrations.kitty import SonuTerminals
 from sonu.integrations.obs import ObsLink, ObsSettings
 from sonu.llm.chat import ChatModel, TextModel
 from sonu.policy.engine import Policy
 from sonu.system.control import SystemControl
 from sonu.testing.fake_apps import write_desktop_files
+from sonu.testing.fake_browser import FakeBrowser, FakeTab
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_obs import FakeObs, FakeObsState
 from sonu.testing.fake_system import FakeSystem
@@ -127,6 +129,9 @@ class EvalCase(_Model):
     expect_reply_contains: str | None = None  # text the report must contain
     # The activity journal at the start: [minutes ago, window class, title], oldest first ("" class: nothing).
     journal: list[tuple[float, str, str]] = Field(default_factory=list)
+    # Tabs in a browser with SONU's extension (a fake one, as zen): [title, url]; the first is active, and
+    # the zen window shows the active tab's title. None: no browser connected.
+    tabs: list[tuple[str, str]] = Field(default_factory=list)
     # Notifications SONU kept (as if turned on): [minutes ago, app, summary, body].
     notifications: list[tuple[float, str, str, str]] = Field(default_factory=list)
     # Saved layouts the case starts with: name → [(desktop id, app name, workspace)].
@@ -367,6 +372,18 @@ async def run_case(
                 FakeObs(FakeObsState(recordings_dir=workdir / "Videos", **case.obs))
             )
             notifications = NotificationLog()  # as if the user turned it on
+            browsers = Browsers(runtime_dir / "browsers")  # never the user's real browser
+            if case.tabs:
+                tabs = [FakeTab(i + 1, title, url, active=i == 0) for i, (title, url) in enumerate(case.tabs)]
+
+                def shown(tab: FakeTab) -> None:
+                    for window in fake.windows:
+                        if window["class"] == "zen":
+                            window["title"] = f"{tab.title} — Zen Browser"
+
+                await stack.enter_async_context(
+                    FakeBrowser(runtime_dir / "browsers", tabs=tabs, on_activate=shown)
+                )
             ctx = ToolContext(
                 desktop,
                 AppResolver(catalog, role_defaults=ROLE_DEFAULTS),
@@ -389,6 +406,7 @@ async def run_case(
                 journal=journal,
                 layouts=Layouts(workdir / "data" / "layouts.json"),
                 notifications=notifications,
+                browsers=browsers,
             )
             for minutes_ago, app, title in case.journal:
                 journal.record(app, title, time.time() - minutes_ago * 60)

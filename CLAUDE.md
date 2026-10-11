@@ -54,8 +54,9 @@ sonu eval                               # real planner model on the eval suite (
 ```
 src/sonu/
   cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config,
-                  audit, desktop, daemon, voice (+ `sonu listen` through the daemon), journal, mcp
+                  audit, desktop, daemon, voice (+ `sonu listen` through the daemon), journal, mcp, browser
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
+  browser/        extension/ (SONU's own, Chromium + Zen), host.py (native messaging → a local socket), install.py
   mcp/            server.py: SONU's tools for Claude Code over MCP (stdio, Engine.call_tool, asked on screen);
                   client.py + outside.py + schema.py: other MCP servers' tools for SONU (untrusted, D63)
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
@@ -64,8 +65,9 @@ src/sonu/
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py, rice_tools.py, power_tools.py, obs_tools.py,
                   voice_tools.py, dev_tools.py (folders, Claude Code), project_tools.py (VS Code, a project's
-                  commands, git, a terminal in a folder), layout_tools.py, message_tools.py, github_tools.py,
-                  package_tools.py, screen_tools.py, grounding.py, registry.py (plan schema), targets.py, context.py
+                  commands, git, a terminal in a folder), layout_tools.py, message_tools.py, browser_tools.py,
+                  github_tools.py, package_tools.py, screen_tools.py, grounding.py, registry.py (plan schema),
+                  targets.py, context.py
   system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …),
                   github.py (gh), packages.py (pacman, yay), projects.py (a project's commands), git.py
   desktop/        hyprland/ (IPC, events, Lua/hyprlang dialects, desktop adapter), apps/ (XDG catalog, resolver)
@@ -74,10 +76,10 @@ src/sonu/
                   wake.py ("Hey Sonu")
   llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
   verify/ policy/ audit/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS,
-                  kitty = SONU-owned terminals, run_task = a command's exit code,
+                  kitty = SONU-owned terminals, run_task = a command's exit code, browser = the extension's sockets,
                   claude_code = reading its screen, a11y + a11y_helper = AT-SPI)
   testing/        FakeHyprland (simulates dispatch, apps, browsers), FakeOllama, sample apps, scripted planner,
-                  a fake MCP server
+                  a fake MCP server, a fake browser
   evals/          cases.toml + runner
 tests/unit, tests/integration
 ```

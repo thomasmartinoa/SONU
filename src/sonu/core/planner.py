@@ -360,6 +360,9 @@ layouts.forget — never memory.* for layouts.
 - "What was that notification? / read my notifications / any notifications from <app>?" is \
 notifications.read (which "recent" for more than one); "forget my notifications" is notifications.forget; \
 clearing the notifications on screen stays desktop.shell clear_notifications.
+- Browser tabs (SONU's extension): "what tabs do I have open?" is browser.tabs; "switch / go to the \
+<words> tab" is browser.tab with words = the user's words for it; "close the <words> tab(s)" is \
+browser.close_tabs (all only for "all / every"). A website that isn't open is web.open, not browser.tab.
 - "Do I have new / unread messages?", "any WhatsApp messages?", "how many unread emails?" is \
 messages.unread (app only if they named one) — not screen.read, not system.status.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \

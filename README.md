@@ -69,11 +69,12 @@ Done — every step verified
 More commands:
 
 ```sh
-sonu eval                           # score your planner model on 137 realistic requests (fake desktop)
+sonu eval                           # score your planner model on 140 realistic requests (fake desktop)
 sonu desktop windows                # windows as SONU sees them (--no-titles for sharing)
 sonu desktop events                 # live Hyprland events
 sonu audit tail                     # everything SONU did; `sonu audit verify` checks the hash chain
 sonu journal show yesterday         # the activity journal (local); also pause, resume, forget
+sonu browser install                # SONU's browser extension: tabs by voice (then add it in the browser)
 sonu mcp setup                      # let Claude Code use SONU's tools (MCP); SONU asks you on screen
 sonu mcp check                      # start the MCP servers you added ([mcp.servers]) and list their tools
 sonu eval --cloud                   # score your Ollama Cloud model too (opt-in: [privacy] and [cloud] in the config)

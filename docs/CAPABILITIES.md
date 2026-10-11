@@ -65,7 +65,8 @@ works:
 | Open a site you named or a link you typed; search the web, YouTube, GitHub, Wikipedia, ArchWiki, AUR, Reddit | ✅ | fixed URL templates; only your words leave the laptop |
 | **Play a video on YouTube**: "play faded on youtube", "play me faded" | 🧪 this batch | `yt-dlp` finds the top result (your words only) → the watch page opens in your browser → SONU makes sure it plays through the system media controls (MPRIS) and checks it's playing; a browser that isn't in the media controls counts as playing when it starts a new audio stream (PipeWire). Zen needs autoplay allowed for youtube.com |
 | Pause, next, back in the browser's video | ✅ | `playerctl` (same as any player) |
-| List, switch and close tabs; read or summarise the page; click, fill in, scroll | 🗺 M6 | a small SONU browser extension talking to SONU locally (native messaging); page content is data, never instructions |
+| List, switch and close tabs | 🧪 #58 | SONU's own extension (`sonu browser install`), native messaging to a local socket; titles private; closing asks ([D70](DECISIONS.md)) |
+| Read or summarise the page; click, fill in, scroll | 🗺 M6 | the same extension, with page access added; page content is data, never instructions |
 | Bookmarks and history search | 🗺 M6 | read-only from the browser profile; private, never sent anywhere |
 | Downloads: "open my last download" | ✅ | newest file in `~/Downloads` → the app set for its type (`xdg-mime`); programs/scripts never, archives and other types ask first |
 

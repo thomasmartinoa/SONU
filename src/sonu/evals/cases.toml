@@ -1171,3 +1171,33 @@ expect_status = ["done"]
 require_tools = ["notifications.read"]
 forbid_tools = ["desktop.shell", "screen.read"]
 
+# ---- browser tabs through SONU's extension (v31)
+
+[[case]]
+id = "switch-to-a-tab"
+request = "switch to the youtube tab"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { class = "zen", title = "Inbox — Zen Browser", workspace = 2 }]
+tabs = [["Inbox", "https://mail.google.com/"], ["Faded - YouTube", "https://www.youtube.com/watch?v=1"]]
+expect_status = ["done"]
+expect_windows = [{ class = "zen", title_contains = "Faded" }]
+require_tools = ["browser.tab"]
+forbid_tools = ["web.open", "media.play"]
+
+[[case]]
+id = "close-a-tab"
+request = "close the youtube tab"
+windows = [{ class = "zen", title = "Inbox — Zen Browser", workspace = 2, focused = true }]
+tabs = [["Inbox", "https://mail.google.com/"], ["Faded - YouTube", "https://www.youtube.com/watch?v=1"]]
+expect_status = ["done"]
+expect_confirmed = ["browser.close_tabs"]
+forbid_tools = ["windows.close"]
+
+[[case]]
+id = "list-tabs"
+request = "what tabs do I have open?"
+windows = [{ class = "zen", title = "Inbox — Zen Browser", workspace = 2, focused = true }]
+tabs = [["Inbox", "https://mail.google.com/"], ["Faded - YouTube", "https://www.youtube.com/watch?v=1"]]
+expect_status = ["done"]
+require_tools = ["browser.tabs"]
+forbid_tools = ["desktop.describe", "screen.read"]
+

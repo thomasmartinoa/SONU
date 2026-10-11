@@ -194,3 +194,11 @@ async def test_a_type_nothing_opens(rig: Rig) -> None:
     touch(rig.home / "Downloads" / "paper.pdf")
     report = await rig.run("open my last download", ("files.open", {"place": "downloads", "newest": True}))
     assert report.lines() == ["✖ No app is set to open application/pdf files like 'paper.pdf'"]
+
+
+@pytest.mark.anyio
+async def test_last_download_in_the_request_even_if_the_place_dropped_it(rig: Rig) -> None:
+    # Found in the evals (v31): planned as {"place": "my downloads"} — the folder opened, not the file.
+    touch(rig.home / "Downloads" / "cat.png")
+    report = await rig.run("open my last download", ("files.open", {"place": "my downloads"}))
+    assert report.lines() == ["✔ Opened 'cat.png' in imv"]

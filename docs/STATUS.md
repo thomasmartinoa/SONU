@@ -19,7 +19,7 @@ _Last update: 2026-10-11_
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
 | M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)); part 4 🧪 **projects**: open one in VS Code (at a file and line), run its own tests or build (asked first), "did it pass?", what changed in git (#52, [D65](DECISIONS.md)); 🧪 **a terminal in a folder**, checked on its shell (#53, [D66](DECISIONS.md)) |
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
-| M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); part 3 🧪 **clicking by looking + typing** (#37, [D58](DECISIONS.md)) |
+| M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); part 3 🧪 **clicking by looking + typing** (#37, [D58](DECISIONS.md)); part 4 🧪 **browser tabs** through SONU's own extension: list, switch, close — set up with `sonu browser install` (#58, [D70](DECISIONS.md)) |
 | M5 Connect | 🚧 part 1 🧪 **Claude Code uses SONU's tools (MCP)**: `sonu mcp serve`, SONU's policy, asked on screen, personal content kept back (#45, [D61](DECISIONS.md)); part 2 🧪 **Ollama Cloud, opt-in**: prompts, harder requests (no window titles), vision; every send audited (#46, [D62](DECISIONS.md)); part 3 🧪 **other MCP servers' tools**: local, web and account servers, high risk unless listed read-only, answers shown only to you (#49, [D63](DECISIONS.md)); 🧪 **cloud usage limits**: a 429 pauses the cloud and SONU stays local, use counted in `sonu doctor` (#50, [D64](DECISIONS.md)) — **M5 is complete** |
 | M7 Beyond the desktop | 🚧 part 1 🧪 **unread messages**: "do I have new messages?" — the counts open chat and mail apps show, nothing else of their titles (#55, [D68](DECISIONS.md)); part 2 🧪 **"what was that notification?"**, opt-in: the latest kept in memory only, shown and said only to you (#56, [D69](DECISIONS.md)) |
 
@@ -45,9 +45,9 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **137 / 137** on the v30 suite, twice (2026-10-11, the laptop's GPU, ~1.2 s mean planning), including
-nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts and four
-for messages and notifications; the M1 example (VSCodium + Chromium
+`qwen3.5:4b`: **140 / 140** on the v31 suite, twice (2026-10-11, the laptop's GPU, ~1.2 s mean planning), including
+nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
+for messages and notifications and three for browser tabs; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -231,13 +231,24 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    private session bus (nothing popped up on the owner's screen): a WhatsApp notification kept and cleaned
    ("Alice — see you at 6 ok?", markup and line breaks gone), KeePassXC's dropped, SONU's reminder kept. On the
    owner's own bus it's the owner's to try. Next in M7: opening a chat; sending only ever after asking.
+9. **Browser tabs — SONU's own extension** (M6's browser row, [D70](DECISIONS.md); the owner: "continue with what's
+   good"): ~~list, switch and close tabs~~ (#58). Measured before building, with throwaway browsers (separate home
+   folders and profiles, headless — the owner's browsers untouched): Zen 1.23 runs an unsigned add-on once
+   `xpinstall.signatures.required` is false, and reads native messaging hosts from `~/.mozilla/native-messaging-hosts`
+   (not `~/.config/zen` or `~/.config/mozilla`; creating `~/.mozilla` doesn't move Zen's profiles); Chromium 153 reads
+   them from its profile folder (`~/.config/chromium/NativeMessagingHosts`). End to end with the real browsers: headless
+   Chromium with the extension and the host → `sonu browser status` "chromium: connected · 2 tabs", `sonu doctor`
+   "connected: chromium", tabs listed, switched, closed; the socket 0600 and gone when the browser quit; headless Zen
+   → connected as "zen" (its user agent says Firefox: the host names the browser from its parent process). With the
+   owner: `sonu browser install`, then adding the extension in Zen and Chromium. Next: reading a page.
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
 ## Open questions and known issues
 
 - **Zen and background tabs**: once, a page SONU sent to Zen didn't show in any window title; SONU now says "didn't
-  see it open (may be in a background tab)". Worth checking what Zen does with links from other apps.
+  see it open (may be in a background tab)". With the extension added (#58), SONU can see every tab — checking what
+  Zen does with links from other apps is the owner's step once it's in.
 - **Planner variance**: once, "open zen on workspace 3 and …" was planned as "show workspace 3"; the same request
   worked on the next try.
 - Deep planner: `qwen3:8b` (installed, thinking on) measured 2026-10-11: **113 / 123, 10.9 s a plan** — worse and ten
@@ -316,12 +327,15 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #54 | 2026-10-11 | Saved layouts ([D67](DECISIONS.md)): `layouts.save` (which app is on which workspace and a terminal's folder — never titles; replacing one asks), `layouts.restore` (open windows moved, missing apps opened there, each checked; nothing closed), `layouts.list`, `layouts.forget`; "this workspace" only when the user says it; eval suite v28 (133) |
 | #55 | 2026-10-11 | Unread messages ([D68](DECISIONS.md), M7 part 1): `messages.unread` reads the count open chat and mail apps show in their titles — "(3) WhatsApp", "Telegram (3)", "Inbox (12) …", "• Discord" — and says only the app and the number; apps not open are said, never counted as zero; "emails" means the mail apps (the user's words decide); eval suite v29 (135) |
 | #56 | 2026-10-11 | "What was that notification?" ([D69](DECISIONS.md), opt-in): sonud watches the session bus for notifications (`busctl --user monitor`) and keeps the latest 30 in memory only (dropped after `keep_minutes`, gone when it stops); never password managers', the listed apps' or SONU's own (except reminders); `notifications.read` (latest / recent / one app) is a private result; `notifications.forget`; a `sonu doctor` line; eval suite v30 (137) |
-| #57 | open | A dry run names the window an earlier step would open: "open a terminal on 3 and type hello" → "Type “hello” … into the window from “Open kitty on workspace 3”" (it said "into zen", the window focused now) |
+| #57 | 2026-10-11 | A dry run names the window an earlier step would open: "open a terminal on 3 and type hello" → "Type “hello” … into the window from “Open kitty on workspace 3”" (it said "into zen", the window focused now) |
+| #58 | open | Browser tabs ([D70](DECISIONS.md)): SONU's extension (one manifest for Chromium and Zen/Firefox; `tabs` + `nativeMessaging` only), its native messaging host (a 0600 socket in SONU's runtime folder), `sonu browser install / status / uninstall`, `browser.tabs` (private), `browser.tab` (SONU focuses the window: Wayland won't let the browser), `browser.close_tabs` (asks, titles shown, never logged); a `sonu doctor` line; tests and evals never reach the real browser; "open my last download" and "what is open in zen?" decided from the user's words (two eval slips); eval suite v31 (140) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-11 | (eval v31, after the tabs rule) "open my last download" → the Downloads folder (the model dropped "last"); "what is open in zen?" → the whole screen read (no window, the second time after a prompt change) | the user's words decide: "last/newest download" opens the newest file; one open app the words name is the window read (#58) |
+| 10-11 | (D70, throwaway Zen) Zen's extension called itself "firefox" (Zen's user agent says Firefox) | the host names the browser from its parent process (#58) |
 | 10-11 | (dry run) "open a terminal on workspace 3 and type hello" → "Type “hello” into zen" — nothing opens in a dry run, so the focused window was named (a real run typed into the terminal) | the engine notes what earlier dry-run steps would open; screen.type names it (#57) |
 | 10-11 | (dry run, D68) "how many unread emails do I have?" was planned with no app — every chat app was read | "emails / mail / inbox" in the user's words means the mail apps (#55) |
 | 10-11 | (dry run, D67) "remember this setup as coding" / "save this layout as work" were planned as this workspace only | the user's words decide ("this workspace"); the argument is gone (#54) |
