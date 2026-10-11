@@ -37,7 +37,7 @@ from sonu.llm.chat import ChatModel, TextModel
 from sonu.policy.engine import Policy
 from sonu.system.control import SystemControl
 from sonu.testing.fake_apps import write_desktop_files
-from sonu.testing.fake_browser import FakeBrowser, FakeTab
+from sonu.testing.fake_browser import FakeBrowser, FakeControl, FakeTab
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_obs import FakeObs, FakeObsState
 from sonu.testing.fake_system import FakeSystem
@@ -106,6 +106,16 @@ class ExpectWindow(_Model):
     fullscreen: int | None = None  # 0 none, 1 maximized, 2 fullscreen
     floating: bool | None = None
     pinned: bool | None = None
+
+
+def page_controls() -> list[FakeControl]:
+    """What every page in the evals has (D72): a link, a button, a search box and a name field."""
+    return [
+        FakeControl("Pricing", "link", goes_to="https://example.com/pricing"),
+        FakeControl("Sign in"),
+        FakeControl("Search", "field", submits=True),
+        FakeControl("Your name", "field"),
+    ]
 
 
 class EvalCase(_Model):
@@ -375,7 +385,14 @@ async def run_case(
             browsers = Browsers(runtime_dir / "browsers")  # never the user's real browser
             if case.tabs:
                 tabs = [
-                    FakeTab(i + 1, title, url, active=i == 0, text=f"{title}. Some text on the page.")
+                    FakeTab(
+                        i + 1,
+                        title,
+                        url,
+                        active=i == 0,
+                        text=f"{title}. Some text on the page.",
+                        controls=page_controls(),
+                    )
                     for i, (title, url) in enumerate(case.tabs)
                 ]
 

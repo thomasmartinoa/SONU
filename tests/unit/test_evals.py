@@ -186,6 +186,11 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "close-a-tab": steps(("browser.close_tabs", {"words": "youtube"})),
     "list-tabs": steps(("browser.tabs", {})),
     "summarise-this-page": steps(("browser.read", {"question": "summarise this page"})),
+    "click-a-link-on-the-page": steps(("browser.click", {"control": "pricing"})),
+    "search-on-the-page": steps(
+        ("browser.fill", {"text": "red shoes", "field": "search box", "submit": True})
+    ),
+    "scroll-the-page": steps(("browser.scroll", {"how": "down"})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),

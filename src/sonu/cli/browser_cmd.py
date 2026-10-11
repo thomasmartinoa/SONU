@@ -16,7 +16,7 @@ from sonu.cli.state import get_state
 from sonu.integrations.browser import BrowserError, Browsers
 
 app = typer.Typer(
-    help="SONU's browser extension: list, switch and close tabs, read a page — by voice, local only.",
+    help="SONU's browser extension: tabs, reading a page, clicking, typing, scrolling — local only.",
     no_args_is_help=True,
 )
 

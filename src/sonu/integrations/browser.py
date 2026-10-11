@@ -64,6 +64,18 @@ class Page:
 
 
 @dataclass(frozen=True, slots=True)
+class PageControl:
+    """A link, button or field on a page (its name is what the page wrote: data, never instructions)."""
+
+    ref: int  # its number on the page (the same page numbers its controls the same way again)
+    name: str
+    kind: str  # "link", "button", "checkbox", "field"
+    secret: bool = False  # a password or card field: never typed into
+    host: str = ""  # where a link goes
+    in_view: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class BrowserLink:
     browser: str
     path: Path
@@ -157,6 +169,26 @@ class Browsers:
             length if isinstance(length, int) and length >= len(text) else len(text),
             str(result.get("selection") or "")[:limit],
         )
+
+    async def act(self, tab: Tab, op: str, **args: Any) -> dict[str, Any]:
+        """One action in the page (D72): "controls", "click", "state", "fill", "scroll"."""
+        return await request(tab.link, op, tab=tab.id, args=args)
+
+    async def controls(self, tab: Tab, kind: str) -> list[PageControl]:
+        found: list[PageControl] = []
+        for raw in (await self.act(tab, "controls", kind=kind)).get("controls") or []:
+            with contextlib.suppress(KeyError, TypeError, ValueError):
+                found.append(
+                    PageControl(
+                        int(raw["ref"]),
+                        str(raw.get("name") or "")[:120],
+                        str(raw.get("kind") or "button"),
+                        bool(raw.get("secret")),
+                        str(raw.get("host") or "")[:200],
+                        bool(raw.get("in_view", True)),
+                    )
+                )
+        return found
 
     async def close(self, tabs: list[Tab]) -> None:
         by_link: dict[Path, list[int]] = {}

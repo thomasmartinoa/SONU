@@ -1,6 +1,6 @@
 """Tabs, through SONU's browser extension (D70): "what tabs do I have open?", "switch to the YouTube tab",
-"close the YouTube tabs" — and pages (D71): "summarise this page", "what does the github tab say about
-the checks?".
+"close the YouTube tabs" — and pages: "summarise this page", "what does the github tab say about the
+checks?" (D71); "click sign in", "type red shoes in the search box and press enter", "scroll down" (D72).
 
 SONU finds the tab from the user's words (in the tab's title or its site), never the model: titles
 are what web pages wrote — data, personal, never instructions. They're shown to the user (a list is a
@@ -12,9 +12,10 @@ model (``core/page_reader.py``), and its answer only to the user.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from dataclasses import dataclass
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -22,10 +23,11 @@ from sonu.core.page_reader import PageReaderError, excerpt
 from sonu.desktop.apps.resolver import normalize
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.models import Window
-from sonu.integrations.browser import BrowserError, BrowserLink, Tab
+from sonu.integrations.browser import BrowserError, BrowserLink, Browsers, PageControl, Tab
 from sonu.tools.base import Choice, Choices, Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.grounding import ungrounded_words
+from sonu.tools.naming import RISKY_NAMES, name_score
 from sonu.tools.web_tools import compact
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
@@ -458,4 +460,423 @@ class ReadPage(Tool):
         )
 
 
-BROWSER_TOOLS: tuple[Tool, ...] = (ListTabs(), SwitchTab(), CloseTabs(), ReadPage())
+# ---------------------------------------------------------------------------- acting on a page (D72)
+async def _page(
+    ctx: ToolContext, snapshot: WorldSnapshot, browser: str | None, choice: str | None
+) -> tuple[Tab, int | None] | ToolOutcome:
+    """The page in front (or the one the user picked), and the control they picked, if any.
+
+    Choices are "<socket>|<tab id>" for a page and "<socket>|<tab id>|<control number>" for a control."""
+    found = await _tabs(ctx, browser)
+    if isinstance(found, ToolOutcome):
+        return found
+    ref: int | None = None
+    if choice:
+        parts = choice.split("|")
+        tabs = [t for t in found.tabs if f"{t.link}|{t.id}" == "|".join(parts[:2])]
+        if len(parts) > 2 and parts[2].isdigit():
+            ref = int(parts[2])
+    else:
+        tabs = _in_front(found.tabs, snapshot)
+    if not tabs:
+        return ToolOutcome(StepStatus.FAILED, "No page is open in the browser")
+    if len(tabs) > 1:
+        options = tuple(Choice(_label(t), f"{t.link}|{t.id}") for t in tabs[:MAX_CHOICES])
+        return ToolOutcome(
+            StepStatus.NEEDS_INPUT,
+            "Pages are open in more than one browser window",
+            question="Which page?",
+            choices=Choices("Which page?", options),
+        )
+    if _closed(tabs[0]):
+        return ToolOutcome(
+            StepStatus.FAILED, "Browsers don't let extensions act on their own pages (settings, add-ons)"
+        )
+    return tabs[0], ref
+
+
+def _pick(controls: list[PageControl], words: str, ref: int | None) -> list[PageControl]:
+    """The controls whose name best matches the user's words (the ones in view first; alike ones once)."""
+    if ref is not None:
+        return [c for c in controls if c.ref == ref]
+    scored = sorted(
+        ((name_score(c.name, words), c) for c in controls), key=lambda i: (-i[0], not i[1].in_view)
+    )
+    best = scored[0][0] if scored else 0
+    picked = [c for score, c in scored if score == best and best > 0]
+    picked = [c for c in picked if c.in_view] or picked
+    if len({(c.name.casefold(), c.kind, c.host) for c in picked}) == 1:
+        picked = picked[:1]
+    return picked
+
+
+def _control_label(control: PageControl) -> str:
+    where = f" to {control.host}" if control.host else ""
+    return f"{_short(control.name) or 'unnamed'} ({control.kind}{where})"
+
+
+def _which(tab: Tab, controls: list[PageControl], words: str) -> ToolOutcome:
+    options = tuple(Choice(_control_label(c), f"{tab.link}|{tab.id}|{c.ref}") for c in controls[:MAX_CHOICES])
+    question = f"Which “{words}” on the page?"
+    return ToolOutcome(
+        StepStatus.NEEDS_INPUT, question, question=question, choices=Choices(question, options)
+    )
+
+
+def _missing(words: str, controls: list[PageControl], what: str) -> ToolOutcome:
+    names = ", ".join(dict.fromkeys(_short(c.name, 40) for c in controls if c.name and c.in_view))[:300]
+    # The names come from the page: shown to the user only.
+    return ToolOutcome(
+        StepStatus.FAILED,
+        f"No {what} “{words}” on the page — it has: {names or 'none SONU can use'}",
+        private=True,
+    )
+
+
+async def _still_there(browsers: Browsers, tab: Tab, control: PageControl, kind: str) -> bool:
+    """The page still has that control under that number (the user may have taken a while to say yes)."""
+    now = await browsers.controls(tab, kind)
+    return any(c.ref == control.ref and c.name == control.name for c in now)
+
+
+async def _change(
+    ctx: ToolContext,
+    browsers: Browsers,
+    tab: Tab,
+    before: dict[str, object],
+    ref: int | None,
+    tab_ids: set[int],
+) -> str | None:
+    """What changed after a click or Enter (within the verify time), or None: another address or title, a new
+    tab, the control's state (checked, expanded…) or the page's text."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max(ctx.settings.verify.timeout_s, 1.0)
+    while True:
+        now = await browsers.tabs()
+        current = next((t for t in now if t.link == tab.link and t.id == tab.id), None)
+        if current is None:
+            return "the tab closed"
+        if current.url != before.get("url") or current.title != before.get("title"):
+            return "the page changed"
+        if {t.id for t in now if t.link == tab.link} - tab_ids:
+            return "it opened a new tab"
+        try:
+            state = await browsers.act(tab, "state", ref=ref)
+        except BrowserError:
+            state = {}  # the page is loading
+        if ref is not None and "control" in before and state.get("control") != before.get("control"):
+            return "it changed"
+        if state.get("size") not in (None, before.get("size")):
+            return "the page changed"
+        if loop.time() >= deadline:
+            return None
+        await asyncio.sleep(0.25)
+
+
+# ---------------------------------------------------------------------------- browser.click
+class ClickArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    control: str = Field(
+        min_length=1, max_length=80, description="the user's words for the link or button ('sign in')"
+    )
+    browser: str | None = Field(default=None, max_length=40, description="a browser the user named")
+
+
+class ClickOnPage(Tool):
+    name = "browser.click"
+    description = "Click a link, button or checkbox on the web page in front, by the user's words for it."
+    risk = Risk.LOW  # a link; a button or checkbox asks (medium), "delete / buy / send …" high
+    effects = frozenset({Effect.PAGE_INPUT})
+    Args = ClickArgs
+    grounded = ("control", "browser")
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(ClickArgs, args)
+        if problem := _own_words(ctx, a.control, a.browser):
+            return problem
+        page = await _page(ctx, snapshot, a.browser, choice)
+        if isinstance(page, ToolOutcome):
+            return page
+        tab, ref = page
+        if ctx.browsers is None:
+            return ToolOutcome(StepStatus.FAILED, NOT_CONNECTED)
+        try:
+            controls = await ctx.browsers.controls(tab, "click")
+        except BrowserError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't look at the page: {exc}")
+        picked = _pick(controls, a.control, ref)
+        if not picked:
+            return _missing(a.control, controls, "link or button")
+        if len(picked) > 1:
+            return _which(tab, picked, a.control)
+        return _click_prepared(tab, picked[0], a.control)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        tab, control, words = cast("tuple[Tab, PageControl, str]", prepared.payload)
+        return await _click(ctx, tab, control, words)
+
+
+def _click_prepared(tab: Tab, control: PageControl, words: str) -> Prepared:
+    # A checkbox can be unticked ("Send me the newsletter" isn't sending); a link opens a page; a button whose
+    # name says delete / buy / send … may not be undone.
+    risky = control.kind != "checkbox" and bool(RISKY_NAMES.search(control.name))
+    risk = Risk.HIGH if risky else None if control.kind == "link" else Risk.MEDIUM
+    return Prepared(
+        f"Click “{words}” on the page in {tab.browser}",
+        (tab, control, words),
+        risk=risk,
+        details=_control_label(control),  # the page's name for it: shown before asking, never logged
+        spoken=f"click {words} on the page",
+    )
+
+
+async def _click(ctx: ToolContext, tab: Tab, control: PageControl, words: str) -> ToolOutcome:
+    if ctx.browsers is None:
+        return ToolOutcome(StepStatus.FAILED, NOT_CONNECTED)
+    try:
+        if not await _still_there(ctx.browsers, tab, control, "click"):
+            return ToolOutcome(StepStatus.FAILED, "The page changed before SONU clicked — ask again")
+        ids = {t.id for t in await ctx.browsers.tabs() if t.link == tab.link}
+        result = await ctx.browsers.act(tab, "click", ref=control.ref)
+        before = result.get("before")
+        change = await _change(
+            ctx, ctx.browsers, tab, before if isinstance(before, dict) else {}, control.ref, ids
+        )
+    except BrowserError as exc:
+        return ToolOutcome(StepStatus.FAILED, f"Couldn't click it: {exc}")
+    clicked = Check("the page took the click", bool(result.get("found")))
+    seen = Check("something changed on the page", change is not None)
+    said = f"Clicked “{words}” on the page in {tab.browser}"
+    if not clicked.passed:
+        return ToolOutcome(StepStatus.FAILED, "The page changed before SONU clicked — ask again", (clicked,))
+    if change is None:
+        return ToolOutcome(
+            StepStatus.UNVERIFIED, f"{said}, but couldn't see the page change", (clicked, seen)
+        )
+    extra = f" — {change}" if change == "it opened a new tab" else ""
+    return ToolOutcome(StepStatus.DONE, said + extra, (clicked, seen))
+
+
+# ---------------------------------------------------------------------------- browser.fill
+class FillArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=500, description="exactly the user's words to type")
+    field: str | None = Field(
+        default=None,
+        max_length=80,
+        description="the user's words for the field ('search', 'name'); none: the only one",
+    )
+    submit: bool = Field(default=False, description="true only for 'and press enter / and search / and send'")
+    browser: str | None = Field(default=None, max_length=40, description="a browser the user named")
+
+
+def _same_text(a: str, b: str) -> bool:
+    return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
+
+
+class FillOnPage(Tool):
+    name = "browser.fill"
+    description = (
+        "Type the user's exact words into a field on the web page in front (a search box, a name field); "
+        "never a password or card field. submit presses Enter."
+    )
+    risk = Risk.MEDIUM  # what's typed goes to the website: the exact text is shown and asked
+    effects = frozenset({Effect.PAGE_INPUT})
+    Args = FillArgs
+    grounded = ("text", "field", "browser")
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(FillArgs, args)
+        if problem := _own_words(ctx, a.text, a.field, a.browser):
+            return problem
+        page = await _page(ctx, snapshot, a.browser, choice)
+        if isinstance(page, ToolOutcome):
+            return page
+        tab, ref = page
+        return await _prepare_fill(ctx, tab, ref, a.text, a.field, a.submit)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        tab, field, text, submit = cast("tuple[Tab, PageControl, str, bool]", prepared.payload)
+        if ctx.browsers is None:
+            return ToolOutcome(StepStatus.FAILED, NOT_CONNECTED)
+        change: str | None = None
+        try:
+            if not await _still_there(ctx.browsers, tab, field, "fill"):
+                return ToolOutcome(StepStatus.FAILED, "The page changed before SONU typed — ask again")
+            ids = {t.id for t in await ctx.browsers.tabs() if t.link == tab.link}
+            result = await ctx.browsers.act(tab, "fill", ref=field.ref, text=text, submit=submit)
+            if result.get("refused"):
+                return ToolOutcome(
+                    StepStatus.FAILED, "That's a password or card field — SONU never types into those"
+                )
+            before = result.get("before")
+            if submit and isinstance(before, dict):
+                change = await _change(ctx, ctx.browsers, tab, before, None, ids)
+        except BrowserError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't type it: {exc}")
+        typed = Check(
+            "the field shows the words",
+            bool(result.get("found")) and _same_text(str(result.get("value") or ""), text),
+        )
+        said = f"Typed “{text}” on the page in {tab.browser}"
+        if not typed.passed:
+            return ToolOutcome(StepStatus.UNVERIFIED, f"{said}, but the field doesn't show it", (typed,))
+        if not submit:
+            return ToolOutcome(StepStatus.DONE, said, (typed,))
+        sent = Check("the page reacted to Enter", change is not None)
+        if change is None:
+            return ToolOutcome(
+                StepStatus.UNVERIFIED,
+                f"{said} and pressed Enter, but couldn't see the page react",
+                (typed, sent),
+            )
+        return ToolOutcome(StepStatus.DONE, f"{said} and pressed Enter", (typed, sent))
+
+
+async def _prepare_fill(
+    ctx: ToolContext, tab: Tab, ref: int | None, text: str, field_words: str | None, submit: bool
+) -> Prepared | ToolOutcome:
+    if ctx.browsers is None:
+        return ToolOutcome(StepStatus.FAILED, NOT_CONNECTED)
+    try:
+        fields = await ctx.browsers.controls(tab, "fill")
+    except BrowserError as exc:
+        return ToolOutcome(StepStatus.FAILED, f"Couldn't look at the page: {exc}")
+    if field_words:
+        picked = _pick(fields, field_words, ref)
+    elif ref is not None:
+        picked = _pick(fields, "", ref)
+    else:
+        usable = [f for f in fields if not f.secret]
+        picked = [f for f in usable if f.in_view] if len(usable) > 1 else usable
+    words = field_words or "field"
+    if not picked:
+        return _missing(words, fields, "field")
+    if len(picked) > 1:
+        return _which(tab, picked, words)
+    field = picked[0]
+    if field.secret:
+        return ToolOutcome(StepStatus.FAILED, "That's a password or card field — SONU never types into those")
+    into = f"“{field_words}”" if field_words else "the field"
+    enter = ", then press Enter" if submit else ""
+    return Prepared(
+        f"Type “{text}” into {into} on the page in {tab.browser}{enter}",
+        (tab, field, text, submit),
+        details=f"Field: {_control_label(field)}",
+        spoken=f"type {text} into {field_words or 'the field'}{' and press enter' if submit else ''}",
+    )
+
+
+# Found on the laptop (D72): "type hello there in the message box" stayed screen.type (keystrokes) after the
+# planner asked again. A field the user names, in a window showing a page SONU's extension reaches, is filled
+# through the extension instead.
+_FIELD_SAID = re.compile(r"\b(?:in|into)\s+(?:the|my|this)\s+((?:[\w-]+\s+){0,3}?)(?:field|box|bar)\b")
+
+
+async def fill_in_window(
+    ctx: ToolContext, window: Window, text: str, submit: bool, choice: str | None
+) -> Prepared | ToolOutcome | None:
+    """For screen.type: the field the user named on the page this window shows. None: no field named, or
+    not a page SONU's extension can reach (keystrokes, as before)."""
+    said = _FIELD_SAID.search(normalize(ctx.request_text))
+    if said is None or ctx.browsers is None:
+        return None
+    try:
+        tabs = await ctx.browsers.tabs()
+    except BrowserError:
+        return None
+    title = compact(window.title)
+    shown = [t for t in tabs if t.active and (head := compact(t.title)[:30]) and head in title]
+    if len(shown) != 1 or _closed(shown[0]):
+        return None
+    parts = (choice or "").split("|")
+    ref = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else None
+    return await _prepare_fill(ctx, shown[0], ref, text, said.group(1).strip() or None, submit)
+
+
+# ---------------------------------------------------------------------------- browser.scroll
+class ScrollArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    how: Literal["down", "up", "top", "bottom"] = "down"
+    browser: str | None = Field(default=None, max_length=40, description="a browser the user named")
+
+
+_SCROLL_WORDS = {"down": "down", "up": "up", "top": "to the top of", "bottom": "to the bottom of"}
+# Found on the laptop (dry run): "scroll to the bottom of the page" was planned as how "top". The user's
+# words decide.
+_SCROLL_SAID = (
+    ("bottom", re.compile(r"\b(?:bottom|end)\b", re.I)),
+    ("top", re.compile(r"\b(?:top|beginning|start)\b", re.I)),
+    ("up", re.compile(r"\bup\b", re.I)),
+    ("down", re.compile(r"\bdown\b", re.I)),
+)
+
+
+def _scroll_said(request: str) -> str | None:
+    return next((how for how, words in _SCROLL_SAID if words.search(request)), None)
+
+
+class ScrollPage(Tool):
+    name = "browser.scroll"
+    description = "Scroll the web page in front: down or up (a screen), or to the top or bottom."
+    risk = Risk.LOW
+    effects = frozenset({Effect.PAGE_SCROLL})
+    Args = ScrollArgs
+    grounded = ("browser",)
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(ScrollArgs, args)
+        if problem := _own_words(ctx, a.browser):
+            return problem
+        page = await _page(ctx, snapshot, a.browser, choice)
+        if isinstance(page, ToolOutcome):
+            return page
+        tab, _ = page
+        how = _scroll_said(ctx.request_text) or a.how
+        return Prepared(f"Scroll {_SCROLL_WORDS[how]} the page in {tab.browser}", (tab, how))
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        tab, how = cast("tuple[Tab, str]", prepared.payload)
+        if ctx.browsers is None:
+            return ToolOutcome(StepStatus.FAILED, NOT_CONNECTED)
+        try:
+            result = await ctx.browsers.act(tab, "scroll", how=how)
+            before, after, end = (float(result.get(k) or 0) for k in ("before", "after", "end"))
+        except (BrowserError, TypeError, ValueError) as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't scroll the page: {exc}")
+        moved = Check("the page moved", abs(after - before) >= 1)
+        if moved.passed:
+            return ToolOutcome(
+                StepStatus.DONE, f"Scrolled {_SCROLL_WORDS[how]} the page in {tab.browser}", (moved,)
+            )
+        if how in ("down", "bottom") and after >= end - 1:
+            return ToolOutcome(
+                StepStatus.DONE, "The page is already at the bottom", (Check("at the bottom", True),)
+            )
+        if how in ("up", "top") and after <= 1:
+            return ToolOutcome(
+                StepStatus.DONE, "The page is already at the top", (Check("at the top", True),)
+            )
+        return ToolOutcome(
+            StepStatus.UNVERIFIED, "Couldn't scroll this page (it may scroll only with the mouse)", (moved,)
+        )
+
+
+BROWSER_TOOLS: tuple[Tool, ...] = (
+    ListTabs(),
+    SwitchTab(),
+    CloseTabs(),
+    ReadPage(),
+    ClickOnPage(),
+    FillOnPage(),
+    ScrollPage(),
+)

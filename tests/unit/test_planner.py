@@ -486,3 +486,11 @@ def test_a_web_page_is_read_through_the_extension() -> None:
     assert _problems(looked, REGISTRY, "what does this window say?") == []
     read = _plan(("browser.read", {"question": "summarise this page"}))
     assert _problems(read, REGISTRY, "summarise this page") == []
+
+
+def test_a_field_on_a_page_is_browser_fill() -> None:
+    """Found on the laptop (dry run, D72): typing into the search box was planned as keystrokes."""
+    typed = _plan(("screen.type", {"text": "red shoes", "enter": True}))
+    [problem] = _problems(typed, REGISTRY, "type red shoes in the search box and press enter")
+    assert '"tool": "browser.fill"' in problem
+    assert _problems(typed, REGISTRY, "type red shoes") == []

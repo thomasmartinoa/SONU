@@ -1,5 +1,5 @@
-"""SONU's browser extension (D70, D71): the native messaging host, the setup, the tab tools and reading
-a page."""
+"""SONU's browser extension (D70, D71, D72): the native messaging host, the setup, the tab tools, reading a
+page and acting on it."""
 
 from __future__ import annotations
 
@@ -18,7 +18,15 @@ from typing import Any
 import pytest
 
 from sonu.browser.host import browser_of
-from sonu.browser.install import CHROMIUM_ID, GECKO_ID, extension_files, install, plan, uninstall
+from sonu.browser.install import (
+    CHROMIUM_ID,
+    GECKO_ID,
+    extension_files,
+    extension_version,
+    install,
+    plan,
+    uninstall,
+)
 from sonu.config.settings import AppsSettings, Settings, VerifySettings
 from sonu.core.engine import ConfirmRequest, Engine
 from sonu.core.page_reader import SYSTEM, PageReader, PageReaderError
@@ -28,9 +36,11 @@ from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.integrations.browser import Browsers, Page, Tab
 from sonu.llm.chat import ChatMessage, ChatResult
 from sonu.policy import Policy
-from sonu.testing.fake_browser import FakeBrowser, FakeTab
+from sonu.system import SystemControl
+from sonu.testing.fake_browser import FakeBrowser, FakeControl, FakeTab
 from sonu.testing.fake_hyprland import FakeHyprland, make_window
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
+from sonu.testing.fake_system import FakeSystem
 from sonu.testing.fake_vision import FakePageReader
 from sonu.tools.base import Risk
 from sonu.tools.browser_tools import matching
@@ -198,6 +208,8 @@ async def rig(fake_hypr: FakeHyprland, short_tmp: Path) -> AsyncIterator[Rig]:
             desktop,
             AppResolver(AppCatalog(())),
             Settings(apps=AppsSettings(launch_timeout_s=1.0), verify=VerifySettings(timeout_s=0.5)),
+            which=lambda name: None,  # never a real program (wtype would type into the real desktop)
+            system=SystemControl(FakeSystem(), home=short_tmp),
             browsers=Browsers(short_tmp / "browsers"),
         )
         yield Rig(fake_hypr, ctx, browser)
@@ -456,11 +468,11 @@ def test_status_names_an_older_extension(short_tmp: Path, xdg_env: dict[str, str
         assert "zen: connected · 1 tab · extension 0.1.0 — an older extension" in " ".join(
             result.output.split()
         )
-        browser.version = "0.2.0"
+        browser.version = extension_version()
         result = CliRunner().invoke(
             app, ["browser", "status"], env=xdg_env | {"XDG_RUNTIME_DIR": str(short_tmp)}
         )
-        assert result.output.strip() == "zen: connected · 1 tab · extension 0.2.0"
+        assert result.output.strip() == f"zen: connected · 1 tab · extension {extension_version()}"
     finally:
 
         async def stop() -> None:
@@ -472,3 +484,166 @@ def test_status_names_an_older_extension(short_tmp: Path, xdg_env: dict[str, str
         loop.call_soon_threadsafe(loop.stop)
         thread.join(5)
         loop.close()
+
+
+# ---------------------------------------------------------------------------- acting on a page (D72)
+def shop(rig: Rig) -> FakeTab:
+    tab = rig.browser.tabs[0]
+    tab.controls = [
+        FakeControl("Pricing", "link", goes_to="https://mail.google.com/pricing"),
+        FakeControl("Show more"),
+        FakeControl("Send me the newsletter", "checkbox"),
+        FakeControl("Delete account"),
+        FakeControl("Hidden thing", in_view=False),
+        FakeControl("Archive"),
+        FakeControl("Archive"),  # the same button twice (a toolbar and a menu)
+        FakeControl("Your name", "field"),
+        FakeControl("Password", "field", secret=True),
+        FakeControl("Search mail", "field", submits=True),
+    ]
+    return tab
+
+
+@pytest.mark.anyio
+async def test_a_link_is_clicked_without_asking(rig: Rig) -> None:
+    tab = shop(rig)
+    report = await rig.run("click pricing", "browser.click", {"control": "pricing"})
+    assert report.status == "done", summaries(report)
+    assert rig.confirmations == []  # a link: low risk
+    assert tab.url == "https://mail.google.com/pricing"
+    assert summaries(report) == ["Clicked “pricing” on the page in zen"]
+
+
+@pytest.mark.anyio
+async def test_buttons_ask_and_risky_ones_are_high(rig: Rig) -> None:
+    tab = shop(rig)
+    report = await rig.run("click show more", "browser.click", {"control": "show more"})
+    assert report.status == "done", summaries(report)
+    [asked] = rig.confirmations
+    assert (asked.risk, asked.details) == (Risk.MEDIUM, "Show more (button)")
+    assert asked.description == "Click “show more” on the page in zen"  # the user's words, not the page's
+    report = await rig.run(
+        "click delete account", "browser.click", {"control": "delete account"}, approve=False
+    )
+    assert report.status == "declined"
+    assert "Delete account done" not in tab.text
+    # "Send me the newsletter" is a checkbox: ticking it isn't sending anything.
+    report = await rig.run("tick the newsletter box", "browser.click", {"control": "newsletter"})
+    assert report.status == "done" and tab.controls[2].checked
+    assert [c.risk for c in rig.confirmations] == [Risk.MEDIUM, Risk.HIGH, Risk.MEDIUM]
+
+
+@pytest.mark.anyio
+async def test_a_click_nothing_shows_is_unverified(rig: Rig) -> None:
+    shop(rig).controls[1].inert = True
+    report = await rig.run("click show more", "browser.click", {"control": "show more"})
+    assert report.status == "unverified"
+    assert summaries(report) == ["Clicked “show more” on the page in zen, but couldn't see the page change"]
+
+
+@pytest.mark.anyio
+async def test_no_such_control_says_what_the_page_has_privately(rig: Rig) -> None:
+    shop(rig)
+    report = await rig.run("click frobnicate", "browser.click", {"control": "frobnicate"})
+    outcome = report.steps[0].outcome
+    assert report.status == "failed" and outcome.private
+    assert outcome.summary.startswith(
+        "No link or button “frobnicate” on the page — it has: Pricing, Show more"
+    )
+    assert "Hidden thing" not in outcome.summary
+    report = await rig.run("click archive", "browser.click", {"control": "archive"})
+    assert report.status == "done"  # alike buttons: one is enough
+
+
+@pytest.mark.anyio
+async def test_the_page_changed_before_the_user_said_yes(rig: Rig) -> None:
+    tab = shop(rig)
+
+    async def confirm(request: ConfirmRequest) -> bool:
+        tab.controls.insert(0, FakeControl("Cookie banner"))  # every number after it moves
+        return True
+
+    engine = Engine(
+        planner=ScriptedPlanner({"click show more": steps_plan(("browser.click", {"control": "show more"}))}),
+        registry=ToolRegistry(),
+        ctx=rig.ctx,
+        policy=Policy("confirm-risky"),
+    )
+    report = await engine.run("click show more", confirm=confirm)
+    assert report.status == "failed"
+    assert summaries(report) == ["The page changed before SONU clicked — ask again"]
+    assert "done" not in tab.text
+
+
+@pytest.mark.anyio
+async def test_type_into_a_field_and_press_enter(rig: Rig) -> None:
+    tab = shop(rig)
+    report = await rig.run(
+        "type red shoes in the search box and press enter",
+        "browser.fill",
+        {"text": "red shoes", "field": "search box", "submit": True},
+    )
+    assert report.status == "done", summaries(report)
+    [asked] = rig.confirmations
+    assert asked.risk is Risk.MEDIUM
+    assert asked.description == "Type “red shoes” into “search box” on the page in zen, then press Enter"
+    assert tab.title == "Results for red shoes"
+    assert summaries(report) == ["Typed “red shoes” on the page in zen and pressed Enter"]
+    report = await rig.run(
+        "type martin in the name field", "browser.fill", {"text": "martin", "field": "name"}
+    )
+    assert report.status == "done" and tab.controls[7].value == "martin"
+
+
+@pytest.mark.anyio
+async def test_never_a_password_or_words_the_user_didnt_say(rig: Rig) -> None:
+    tab = shop(rig)
+    report = await rig.run(
+        "type hunter2 in the password field", "browser.fill", {"text": "hunter2", "field": "password"}
+    )
+    assert summaries(report) == ["That's a password or card field — SONU never types into those"]
+    report = await rig.run(
+        "type my name in the name field", "browser.fill", {"text": "Martin", "field": "name"}
+    )
+    assert report.status == "failed"
+    assert [c.value for c in tab.controls] == [""] * len(tab.controls)
+    assert rig.confirmations == []
+
+
+@pytest.mark.anyio
+async def test_scroll_by_the_users_words(rig: Rig) -> None:
+    """Found on the laptop (dry run): "scroll to the bottom of the page" was planned as how "top"."""
+    tab = shop(rig)
+    report = await rig.run("scroll to the bottom of the page", "browser.scroll", {"how": "top"})
+    assert report.status == "done" and tab.scrolled == tab.height
+    assert summaries(report) == ["Scrolled to the bottom of the page in zen"]
+    report = await rig.run("scroll down", "browser.scroll", {})
+    assert summaries(report) == ["The page is already at the bottom"]
+    tab.height = tab.scrolled = 0
+    report = await rig.run("scroll up", "browser.scroll", {"how": "up"})
+    assert summaries(report) == ["The page is already at the top"]
+
+
+@pytest.mark.anyio
+async def test_an_extension_that_cant_act_yet(rig: Rig) -> None:
+    shop(rig)
+    rig.browser.version = "0.2.0"
+    report = await rig.run("click show more", "browser.click", {"control": "show more"})
+    assert "older version" in summaries(report)[0]
+
+
+@pytest.mark.anyio
+async def test_typing_into_a_named_field_of_a_page_uses_the_extension(rig: Rig) -> None:
+    """Found on the laptop: "type hello there in the message box" stayed screen.type (keystrokes into the
+    browser window) after the planner asked again."""
+    tab = shop(rig)
+    report = await rig.run(
+        "type martin in the name field", "screen.type", {"text": "martin", "window": {"app": "zen"}}
+    )
+    assert report.status == "done", summaries(report)
+    [asked] = rig.confirmations
+    assert asked.description == "Type “martin” into “name” on the page in zen"
+    assert tab.controls[7].value == "martin"
+    # No field named: keystrokes, as before (the test's context has no wtype).
+    report = await rig.run("type martin", "screen.type", {"text": "martin", "window": {"app": "zen"}})
+    assert summaries(report) == ["wtype isn't installed (it types the keys)"]

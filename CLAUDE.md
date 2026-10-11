@@ -56,7 +56,7 @@ src/sonu/
   cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config,
                   audit, desktop, daemon, voice (+ `sonu listen` through the daemon), journal, mcp, browser
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
-  browser/        extension/ (SONU's own, Chromium + Zen: tabs, a page's text), host.py (native messaging → a local socket), install.py
+  browser/        extension/ (SONU's own, Chromium + Zen: tabs, a page's text, clicks, fields, scrolling), host.py (native messaging → a local socket), install.py
   mcp/            server.py: SONU's tools for Claude Code over MCP (stdio, Engine.call_tool, asked on screen);
                   client.py + outside.py + schema.py: other MCP servers' tools for SONU (untrusted, D63)
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
@@ -66,8 +66,8 @@ src/sonu/
                   settings_tools.py, everyday_tools.py, file_tools.py, rice_tools.py, power_tools.py, obs_tools.py,
                   voice_tools.py, dev_tools.py (folders, Claude Code), project_tools.py (VS Code, a project's
                   commands, git, a terminal in a folder), layout_tools.py, message_tools.py, browser_tools.py,
-                  github_tools.py, package_tools.py, screen_tools.py, grounding.py, registry.py (plan schema),
-                  targets.py, context.py
+                  github_tools.py, package_tools.py, screen_tools.py, naming.py (a control by its name),
+                  grounding.py, registry.py (plan schema), targets.py, context.py
   system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …),
                   github.py (gh), packages.py (pacman, yay), projects.py (a project's commands), git.py
   desktop/        hyprland/ (IPC, events, Lua/hyprlang dialects, desktop adapter), apps/ (XDG catalog, resolver)

@@ -65,6 +65,8 @@ class Effect(StrEnum):
     UI_INPUT = "ui.input"  # presses a control in an app (accessibility; no mouse)
     OUTSIDE = "outside.tool"  # a tool of another program (an MCP server the user added, D63)
     RUN_COMMAND = "run.command"  # runs one of a project's own commands (its tests, build) in a SONU window
+    PAGE_INPUT = "page.input"  # clicks or types on a web page (SONU's browser extension, D72)
+    PAGE_SCROLL = "page.scroll"  # scrolls a web page
 
 
 class StepStatus(StrEnum):
