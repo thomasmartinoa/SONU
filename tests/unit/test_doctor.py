@@ -328,3 +328,44 @@ async def test_the_activity_journal_line(xdg_env: dict[str, str]) -> None:
         xdg_env, hypr=None, ollama=None, settings=Settings(journal=JournalSettings(enabled=False))
     )
     assert by_id(await check_sonu(off))["sonu.journal"].summary == "off in config"
+
+
+@pytest.mark.anyio
+async def test_the_cloud_models_line(xdg_env: dict[str, str]) -> None:
+    from sonu.config.settings import CloudSettings, PrivacySettings
+    from sonu.doctor.checks import check_ollama
+
+    async def line(settings: Settings, fake: FakeOllama) -> CheckResult:
+        results = await check_ollama(make_context(xdg_env, hypr=None, ollama=fake, settings=settings))
+        return by_id(results)["ollama.cloud"]
+
+    fake = authors_ollama()
+    fake.add_model("gpt-oss:120b-cloud", size_gib=60, capabilities=["completion", "tools", "thinking"])
+    fake.add_model("gemma4:31b-cloud", size_gib=20, capabilities=["completion", "vision"])
+    off = await line(Settings(), fake)
+    assert (off.status, off.summary) == ("info", "off — nothing leaves this laptop")
+    assert "POST /api/me" not in fake.requests  # off: not even asked who it's signed in as
+
+    allow = Settings(
+        privacy=PrivacySettings(cloud="allow"), cloud=CloudSettings(use_for=["prompts", "planning", "vision"])
+    )
+    not_signed_in = await line(allow, fake)
+    assert not_signed_in.status == "warn" and "isn't signed in" in not_signed_in.summary
+    assert "ollama signin" in (not_signed_in.hint or "")
+
+    fake.cloud_user = "martin"
+    ready = await line(allow, fake)
+    assert ready.status == "ok"
+    assert "signed in as martin" in ready.summary
+    assert "planning (no window titles)" in ready.summary
+    assert "gpt-oss:120b-cloud, gemma4:31b-cloud" in ready.summary
+
+    fake.retired.add("gemma4:31b-cloud")
+    retired = await line(allow, fake)
+    assert retired.status == "warn" and "gemma4:31b-cloud" in retired.summary and "retired" in retired.summary
+
+    asked = await line(Settings(privacy=PrivacySettings(cloud="ask")), fake)
+    assert asked.status == "warn" and "isn't built yet" in asked.summary
+
+    wrong = await line(Settings(models=ModelsSettings(planner=PlannerRole(model="gpt-oss:120b-cloud"))), fake)
+    assert wrong.status == "fail" and "window titles too" in wrong.summary

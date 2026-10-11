@@ -11,12 +11,13 @@ import httpx
 
 from sonu.audit.log import AuditLog
 from sonu.config.paths import SonuPaths
-from sonu.config.settings import OllamaSettings, Settings
+from sonu.config.settings import CloudUse, ModelRole, OllamaSettings, Settings
 from sonu.core.conversation import Conversation
 from sonu.core.engine import Engine
 from sonu.core.journal import Journal
 from sonu.core.memory import Memory
-from sonu.core.planner import LLMPlanner
+from sonu.core.planner import LLMPlanner, RoutedPlanner
+from sonu.core.planning import Planner
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.responder import Responder
 from sonu.core.screen_reader import ScreenReader
@@ -26,7 +27,8 @@ from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.instance import discover_instance
 from sonu.integrations.hypr_theme import detect_hypr_theme
-from sonu.llm.chat import OllamaChatModel
+from sonu.llm.chat import OllamaChatModel, TextModel
+from sonu.llm.cloud import CloudModel, CloudRefused, check_local_roles, cloud_allowed, is_cloud_model
 from sonu.llm.ollama import OllamaClient
 from sonu.policy.engine import Policy
 from sonu.tools.context import ToolContext
@@ -78,6 +80,67 @@ class SetupError(Exception):
     """SONU cannot start: something it depends on is missing or unreachable."""
 
 
+@dataclass(frozen=True)
+class ModelParts:
+    planner: Planner
+    local_planner: LLMPlanner  # sonud warms this one up
+    planner_model: str  # what the CLI shows
+    writer: PromptWriter
+    reader: ScreenReader
+
+
+def model_parts(
+    settings: Settings,
+    client: OllamaClient,
+    ollama: OllamaSettings,
+    audit: AuditLog | None,
+    *,
+    deep: bool = False,
+    model: str | None = None,
+) -> ModelParts:
+    """The planner, prompt writer and screen reader — local, or Ollama Cloud for the uses the user
+    allowed (D62). Shared by the CLI and sonud."""
+    try:
+        check_local_roles(settings)
+    except CloudRefused as exc:
+        raise SetupError(str(exc)) from exc
+    role = settings.models.planner_deep if deep else settings.models.planner
+    if model:
+        role = role.model_copy(update={"model": model})
+
+    def cloud(use: CloudUse, name: str) -> CloudModel:
+        cloud_role = ModelRole(model=name, think=settings.cloud.think)
+        return CloudModel(OllamaChatModel(client, cloud_role, ollama), use, audit)
+
+    local = LLMPlanner(OllamaChatModel(client, role, ollama))
+    planner: Planner = local
+    shown = role.model
+    if is_cloud_model(role.model):  # `sonu --model gpt-oss:120b-cloud …`
+        if not cloud_allowed(settings, "planning"):
+            raise SetupError(
+                f'{role.model} is a cloud model: set [privacy] cloud = "allow" and add "planning" to '
+                "[cloud] use_for"
+            )
+        local = LLMPlanner(OllamaChatModel(client, settings.models.planner, ollama))
+        planner = LLMPlanner(cloud("planning", role.model), include_titles=False)
+    elif cloud_allowed(settings, "planning"):
+        remote = LLMPlanner(cloud("planning", settings.cloud.model), include_titles=False)
+        if deep:  # the cloud one first; the local deep model if it can't
+            planner, shown = RoutedPlanner(local, remote, always=True), settings.cloud.model
+        else:
+            planner = RoutedPlanner(local, remote, always=settings.cloud.plan == "always")
+            shown = f"{role.model} (+ {settings.cloud.model} for harder requests)"
+    local_text = OllamaChatModel(client, settings.models.planner, ollama)
+    writer: TextModel = (
+        cloud("prompts", settings.cloud.model) if cloud_allowed(settings, "prompts") else local_text
+    )
+    if cloud_allowed(settings, "vision"):
+        reader = ScreenReader(cloud("vision", settings.cloud.vision_model), settings.ollama.host, cloud=True)
+    else:
+        reader = ScreenReader(local_text, settings.ollama.host)
+    return ModelParts(planner, local, shown, PromptWriter(writer), reader)
+
+
 @dataclass
 class Runtime:
     engine: Engine
@@ -119,21 +182,19 @@ async def build_runtime(
         journal=open_journal(settings, paths),
     )
 
-    role = settings.models.planner_deep if deep else settings.models.planner
-    if model:
-        role = role.model_copy(update={"model": model})
     client = OllamaClient(
         settings.ollama.host, timeout_s=settings.ollama.timeout_s, transport=ollama_transport
     )
-    planner = LLMPlanner(OllamaChatModel(client, role, settings.ollama))
-    ctx.writer = PromptWriter(OllamaChatModel(client, settings.models.planner, settings.ollama))
-    ctx.reader = ScreenReader(
-        OllamaChatModel(client, settings.models.planner, settings.ollama), settings.ollama.host
-    )
     audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
+    try:
+        parts = model_parts(settings, client, settings.ollama, audit, deep=deep, model=model)
+    except SetupError:
+        await client.aclose()
+        raise
+    ctx.writer, ctx.reader = parts.writer, parts.reader
     conversation, responder = assistant_parts(settings, paths, client, memory=memory)
     engine = Engine(
-        planner=planner,
+        planner=parts.planner,
         registry=ToolRegistry(),
         ctx=ctx,
         policy=Policy(settings.policy.autonomy),
@@ -141,4 +202,4 @@ async def build_runtime(
         conversation=conversation,
         responder=responder,
     )
-    return Runtime(engine=engine, ollama=client, planner_model=role.model)
+    return Runtime(engine=engine, ollama=client, planner_model=parts.planner_model)

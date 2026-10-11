@@ -69,7 +69,8 @@ src/sonu/
   world/          snapshot.py, origin.py (the terminal SONU runs in)
   voice/          audio.py (pw-record/pw-play, end of speech), engines.py (Whisper, Kokoro, Silero), session.py,
                   wake.py ("Hey Sonu")
-  verify/ policy/ audit/ llm/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS,
+  llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
+  verify/ policy/ audit/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS,
                   kitty = SONU-owned terminals, claude_code = reading its screen, a11y + a11y_helper = AT-SPI)
   testing/        FakeHyprland (simulates dispatch, apps, browsers), FakeOllama, sample apps, scripted planner
   evals/          cases.toml + runner

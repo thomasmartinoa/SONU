@@ -21,6 +21,10 @@ class FakeOllama:
         self.chat_responder: Callable[[dict[str, Any]], str] | None = None
         self.chat_requests: list[dict[str, Any]] = []
         self.keep_alive: dict[str, str] = {}  # /api/generate load/unload requests: model → keep_alive
+        # Ollama Cloud: who this Ollama is signed in as (None: not signed in → 401 for cloud models),
+        # and cloud models that were retired (410, as the real one answers).
+        self.cloud_user: str | None = None
+        self.retired: set[str] = set()
 
     def add_model(self, name: str, *, size_gib: float, capabilities: list[str]) -> None:
         self.models[name] = {"size": int(size_gib * GIB), "capabilities": capabilities}
@@ -56,9 +60,21 @@ class FakeOllama:
                 return httpx.Response(404, json={"error": f"model '{body.get('model')}' not found"})
             self.keep_alive[body["model"]] = str(body.get("keep_alive"))
             return httpx.Response(200, json={"model": body["model"], "response": "", "done": True})
+        if request.method == "POST" and path == "/api/me":
+            if self.cloud_user is None:
+                return httpx.Response(
+                    401, json={"error": "unauthorized", "signin_url": "https://ollama.com/connect"}
+                )
+            return httpx.Response(200, json={"name": self.cloud_user})
+        if request.method == "POST" and path in ("/api/chat", "/api/show"):
+            name = json.loads(request.content).get("model", "")
+            if name in self.retired:
+                return httpx.Response(410, json={"error": f"{name} was retired"})
         if request.method == "POST" and path == "/api/chat":
             body = json.loads(request.content)
             self.chat_requests.append(body)
+            if str(body.get("model", "")).endswith("cloud") and self.cloud_user is None:
+                return httpx.Response(401, json={"error": "Unauthorized"})
             if body.get("model") not in self.models:
                 return httpx.Response(404, json={"error": f"model '{body.get('model')}' not found"})
             content = self.chat_responder(body) if self.chat_responder else "{}"

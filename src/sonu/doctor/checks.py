@@ -26,6 +26,7 @@ from sonu.desktop.hyprland.instance import discover_instance
 from sonu.desktop.hyprland.ipc import HyprlandClient
 from sonu.doctor.model import CheckResult, DoctorContext, Status
 from sonu.integrations.hypr_theme import detect_hypr_theme
+from sonu.llm.cloud import CloudRefused, check_local_roles
 from sonu.llm.ollama import InstalledModel, ModelInfo, OllamaClient, OllamaError, same_model
 from sonu.system.commands import PACKAGES
 
@@ -631,7 +632,74 @@ async def check_ollama(ctx: DoctorContext) -> list[CheckResult]:
             else:
                 summary = "no models loaded right now"
             results.append(CheckResult("ollama.loaded", group, "Loaded now", "info", summary))
+        results.append(await _cloud_result(ctx, client))
     return results
+
+
+async def _cloud_result(ctx: DoctorContext, client: OllamaClient) -> CheckResult:
+    """Ollama Cloud (D62): off, or allowed for some uses — signed in, and the models still there?"""
+    group, title, check_id = "Ollama", "Cloud models", "ollama.cloud"
+    settings = ctx.settings
+    try:
+        check_local_roles(settings)
+    except CloudRefused as exc:
+        return CheckResult(check_id, group, title, "fail", str(exc))
+    if settings.privacy.cloud == "never":
+        return CheckResult(check_id, group, title, "info", "off — nothing leaves this laptop")
+    if settings.privacy.cloud == "ask":
+        return CheckResult(
+            check_id,
+            group,
+            title,
+            "warn",
+            '[privacy] cloud = "ask" isn\'t built yet — nothing is sent',
+            hint='Set [privacy] cloud = "allow" to use what [cloud] use_for lists, or "never".',
+        )
+    uses = [use for use in ("prompts", "planning", "vision") if use in settings.cloud.use_for]
+    if not uses:
+        return CheckResult(
+            check_id, group, title, "info", "allowed, but [cloud] use_for is empty — nothing is sent"
+        )
+    said = ", ".join("planning (no window titles)" if use == "planning" else use for use in uses)
+    try:
+        who = await client.signed_in()
+    except OllamaError as exc:
+        return CheckResult(check_id, group, title, "warn", f"for {said} · can't tell if signed in: {exc}")
+    if who is None:
+        return CheckResult(
+            check_id,
+            group,
+            title,
+            "warn",
+            f"for {said} — but Ollama isn't signed in to Ollama Cloud (SONU stays local until it is)",
+            hint="Run `ollama signin` and open the link it prints.",
+        )
+    needed = {settings.cloud.model: "completion"} if {"prompts", "planning"} & set(uses) else {}
+    if "vision" in uses:
+        needed[settings.cloud.vision_model] = "vision"
+    for model, capability in needed.items():
+        try:
+            info = await client.model_info(model)
+        except OllamaError as exc:
+            return CheckResult(
+                check_id,
+                group,
+                title,
+                "warn",
+                f"for {said} · {model}: {exc}",
+                hint="Pick another cloud model in [cloud] — see https://ollama.com/search?c=cloud",
+            )
+        if capability not in info.capabilities:
+            return CheckResult(
+                check_id, group, title, "warn", f"for {said} · {model} can't do {capability}", hint=None
+            )
+    return CheckResult(
+        check_id,
+        group,
+        title,
+        "ok",
+        f"Ollama Cloud for {said} · signed in as {who} · {', '.join(needed)} · every send in the audit log",
+    )
 
 
 # ---------------------------------------------------------------------------- desktop tools

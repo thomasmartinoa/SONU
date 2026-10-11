@@ -15,6 +15,7 @@ import typer
 
 from sonu.cli.state import env_snapshot, get_state
 from sonu.daemon.protocol import socket_path
+from sonu.llm.cloud import CloudRefused, check_local_roles
 
 app = typer.Typer(
     help="SONU in the background: the planner model stays loaded, requests answer in about a second.",
@@ -57,6 +58,11 @@ def daemon_run(ctx: typer.Context) -> None:
 
     state = get_state(ctx)
     state.require_valid_config()
+    try:
+        check_local_roles(state.settings)
+    except CloudRefused as exc:
+        typer.echo(f"✖ {exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
     async def main() -> None:
         task = asyncio.create_task(run_daemon(state.settings, state.paths, env_snapshot()))

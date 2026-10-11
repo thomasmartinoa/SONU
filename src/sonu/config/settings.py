@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 AutonomyMode = Literal["suggest", "confirm-each", "confirm-risky", "trusted"]
 CloudPolicy = Literal["never", "ask", "allow"]
+CloudUse = Literal["prompts", "planning", "vision"]
 
 
 class _Section(BaseModel):
@@ -127,6 +128,23 @@ class JournalSettings(_Section):
     exclude_apps: list[str] = Field(default_factory=list, max_length=50)
 
 
+_DEFAULT_CLOUD_USES: tuple[CloudUse, ...] = ("prompts", "planning")
+
+
+class CloudSettings(_Section):
+    # Ollama Cloud models (D62), reached through the local Ollama once it's signed in (`ollama signin`).
+    # Nothing is sent unless [privacy] cloud = "allow", and then only for the uses listed here.
+    model: str = Field(default="gpt-oss:120b-cloud", min_length=1)  # prompts and planning
+    vision_model: str = Field(default="gemma4:31b-cloud", min_length=1)
+    # prompts : your idea for Claude Code (your words) → a better prompt
+    # planning: harder requests, with window titles removed (only app names and workspaces go)
+    # vision  : screenshots for "what's on my screen?" and clicking by looking — anything visible goes
+    use_for: list[CloudUse] = Field(default_factory=lambda: list(_DEFAULT_CLOUD_USES), max_length=3)
+    # hard: requests with several parts, `sonu --deep`, and ones the local model couldn't plan; always: all
+    plan: Literal["hard", "always"] = "hard"
+    think: bool = False
+
+
 class AssistantSettings(_Section):
     # The name SONU answers to and uses for itself in replies.
     name: str = Field(default="Sonu", min_length=1, max_length=30)
@@ -151,6 +169,7 @@ class Settings(_Section):
     assistant: AssistantSettings = AssistantSettings()
     voice: VoiceSettings = VoiceSettings()
     journal: JournalSettings = JournalSettings()
+    cloud: CloudSettings = CloudSettings()
 
 
 class ConfigError(Exception):
@@ -222,7 +241,7 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # autonomy = "confirm-risky"
 
 [privacy]
-# Whether any data may be sent to cloud models: never | ask | allow
+# Whether any data may be sent to cloud models: never | allow ("ask" isn't built yet: it stays local)
 # cloud = "never"
 
 [hyprland]
@@ -271,4 +290,17 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # enabled = true
 # keep_days = 30
 # exclude_apps = []              # more apps never to record, e.g. ["signal"]
+
+[cloud]
+# Ollama Cloud models, reached through your local Ollama after `ollama signin`. Nothing is sent unless
+# [privacy] cloud = "allow" — then only for the uses below; every send is in the audit log (cloud.send).
+# Cloud models never go in [models]: SONU refuses to start if one does.
+# model = "gpt-oss:120b-cloud"          # prompts and planning
+# vision_model = "gemma4:31b-cloud"
+# prompts  : your idea for Claude Code (your own words) → a better prompt
+# planning : harder requests, window titles removed (app names and workspaces still go)
+# vision   : screenshots for "what's on my screen?" and clicking by looking — anything visible goes
+# use_for = ["prompts", "planning"]
+# plan = "hard"                         # hard (several parts, --deep, local failed) | always
+# think = false
 """

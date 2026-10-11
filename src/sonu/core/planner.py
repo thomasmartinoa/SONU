@@ -8,6 +8,7 @@ anything is wrong, the model gets one chance to repair its answer with the exact
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 from collections.abc import Mapping, Sequence
@@ -24,6 +25,8 @@ from sonu.tools.grounding import ungrounded_words
 from sonu.tools.registry import MAX_STEPS, MAX_UNSUPPORTED, ToolRegistry
 from sonu.tools.web_tools import sites_named_in
 from sonu.world.snapshot import WorldSnapshot
+
+logger = logging.getLogger(__name__)
 
 # Few-shot examples, rendered as compact JSON. Tests check every example against the real tools.
 EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
@@ -411,6 +414,8 @@ def build_system_prompt(
     app_labels: Mapping[str, str] | None = None,
     history: Sequence[Turn] = (),
     notes: Sequence[str] = (),
+    *,
+    include_titles: bool = True,
 ) -> str:
     return SYSTEM_TEMPLATE.format(
         tools=registry.describe_for_planner(),
@@ -418,7 +423,7 @@ def build_system_prompt(
         examples=render_examples(),
         memory=render_memory(notes),
         recent=render_recent(history),
-        desktop=snapshot.describe(include_titles=True, labels=app_labels),
+        desktop=snapshot.describe(include_titles=include_titles, labels=app_labels),
     )
 
 
@@ -548,9 +553,11 @@ def _clean(parts: list[str]) -> tuple[str, ...]:
 
 
 class LLMPlanner:
-    def __init__(self, model: ChatModel, *, max_attempts: int = 2) -> None:
+    def __init__(self, model: ChatModel, *, max_attempts: int = 2, include_titles: bool = True) -> None:
         self.model = model
         self.max_attempts = max_attempts
+        # False for a cloud model (D62): it sees app names and workspaces, never window titles.
+        self.include_titles = include_titles
 
     async def plan(
         self,
@@ -563,7 +570,12 @@ class LLMPlanner:
         notes: Sequence[str] = (),
     ) -> Plan:
         messages = [
-            ChatMessage("system", build_system_prompt(registry, snapshot, app_labels, history, notes)),
+            ChatMessage(
+                "system",
+                build_system_prompt(
+                    registry, snapshot, app_labels, history, notes, include_titles=self.include_titles
+                ),
+            ),
             ChatMessage("user", request),
         ]
         schema = registry.plan_schema()
@@ -604,3 +616,53 @@ class LLMPlanner:
                 ),
             ]
         raise PlanningError(f"the planner model ({self.model.name}) gave no usable plan: {last_problem}")
+
+
+# Where a request has several parts: "make a folder …, open Claude Code there and tell it …".
+_PARTS = re.compile(r"[,;]|\b(?:and|then|after that|also)\b", re.IGNORECASE)
+
+
+def is_hard(request: str) -> bool:
+    """A request worth the bigger (cloud) planner: three or more parts, or a long one."""
+    return len(_PARTS.findall(request)) >= 2 or len(request.split()) >= 25
+
+
+class RoutedPlanner:
+    """The local planner, and a cloud one (D62) for hard requests or when the local one fails.
+
+    If the cloud one fails (not signed in, offline, a retired model), the local one plans instead —
+    the request never fails just because the cloud is away.
+    """
+
+    def __init__(self, local: LLMPlanner, cloud: LLMPlanner, *, always: bool = False) -> None:
+        self.local, self.cloud, self.always = local, cloud, always
+
+    async def plan(
+        self,
+        request: str,
+        snapshot: WorldSnapshot,
+        registry: ToolRegistry,
+        *,
+        app_labels: Mapping[str, str] | None = None,
+        history: Sequence[Turn] = (),
+        notes: Sequence[str] = (),
+    ) -> Plan:
+        async def with_(planner: LLMPlanner) -> Plan:
+            return await planner.plan(
+                request, snapshot, registry, app_labels=app_labels, history=history, notes=notes
+            )
+
+        if self.always or is_hard(request):
+            try:
+                return await with_(self.cloud)
+            except PlanningError as exc:
+                logger.warning("the cloud planner failed, planning locally: %s", exc)
+                return await with_(self.local)
+        try:
+            return await with_(self.local)
+        except PlanningError as exc:
+            logger.warning("the local planner failed, asking the cloud one: %s", exc)
+            try:
+                return await with_(self.cloud)
+            except PlanningError:
+                raise exc from None

@@ -124,7 +124,7 @@ works:
 | "Press play in Spotify", "click Home in Thunar" — a button by its name | 🧪 M6 part 2 | accessibility (AT-SPI) via the system Python; asked; checked by what changed ([D56](DECISIONS.md)) |
 | Click a button in an app that exposes nothing, by looking; type words into an app | 🧪 M6 part 3 | vision (0–1000 scale) + `wlrctl` pointer; `wtype` keys; high risk, checked by a fresh picture ([D58](DECISIONS.md)) | vision model (local `qwen3.5`/`gemma4` or opt-in cloud) + input; high risk, confirmed |
 | Claude Code using SONU's tools (MCP): "open kitty on 3", "what's my battery?", "search the arch wiki for …" from a Claude Code session | 🧪 M5 part 1 | `sonu mcp serve` (`sonu mcp setup` prints the `claude mcp add` line); SONU's policy and checks; SONU asks on screen for words, links, typing, writing; window titles and other personal content never go to Claude ([D61](DECISIONS.md)) |
-| Cloud models (free tiers) | 🗺 M5 | opt-in; an egress guard shows what leaves the laptop |
+| Ollama Cloud models for prompts, harder requests (no window titles) and vision — opt-in | 🧪 M5 part 2 | `[privacy] cloud = "allow"` + `[cloud] use_for`; `ollama signin`; falls back to local; every send in the audit log (`cloud.send`); `sonu doctor` shows it ([D62](DECISIONS.md)) |
 
 ## Batches
 

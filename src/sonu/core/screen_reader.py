@@ -2,8 +2,10 @@
 error in this window".
 
 The picture goes only to a model on this laptop — if Ollama is configured on another machine, SONU
-refuses. What the model says comes from the screen: it's shown to the user (and, by voice, read out
-without another model), never fed into SONU's planning. Measured on the laptop with ``qwen3.5:4b``:
+refuses — unless the user allowed vision in the cloud (D62: ``[cloud] use_for`` has "vision"), when it
+goes to their Ollama Cloud vision model, each send in the audit log. What the model says comes from the
+screen: it's shown to the user (and, by voice, read out without another model), never fed into SONU's
+planning. Measured on the laptop with ``qwen3.5:4b``:
 a 1584×853 window read in 1.2 s (9 s the first time, while the vision part loads); it quoted the
 window's last line exactly.
 """
@@ -15,6 +17,7 @@ import json
 from urllib.parse import urlparse
 
 from sonu.llm.chat import ChatMessage, ChatModelError, TextModel
+from sonu.llm.cloud import is_cloud_model
 
 SYSTEM = """\
 You look at a screenshot of the user's screen and answer their question about it. Answer from what \
@@ -43,14 +46,23 @@ def is_local(host: str) -> bool:
 
 
 class ScreenReader:
-    def __init__(self, model: TextModel, host: str) -> None:
+    def __init__(self, model: TextModel, host: str, *, cloud: bool = False) -> None:
         self.model, self.host = model, host
+        self.cloud = cloud  # the user allowed screenshots to go to a cloud model (D62)
 
-    async def read(self, png: bytes, question: str, what: str) -> str:
+    def _check_where(self) -> None:
         if not is_local(self.host):
             raise ScreenReaderError(
                 f"your screen is only read by a model on this laptop, and Ollama is set to {self.host}"
             )
+        if is_cloud_model(self.model.name) and not self.cloud:
+            raise ScreenReaderError(
+                f"{self.model.name} is a cloud model, and screenshots may only go to one when vision is "
+                "allowed in [cloud]"
+            )
+
+    async def read(self, png: bytes, question: str, what: str) -> str:
+        self._check_where()
         messages = [
             ChatMessage("system", SYSTEM),
             ChatMessage(
@@ -75,10 +87,7 @@ class ScreenReader:
         controls; asked on its native 0–1000 scale, it hit 4 of 5 within 5–12 px (the miss pointed
         at the look-alike button next to it) — so the answer is never trusted without asking.
         """
-        if not is_local(self.host):
-            raise ScreenReaderError(
-                f"your screen is only read by a model on this laptop, and Ollama is set to {self.host}"
-            )
+        self._check_where()
         complete_json = getattr(self.model, "complete_json", None)
         if complete_json is None:
             raise ScreenReaderError("the vision model can't point at things")

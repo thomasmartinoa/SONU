@@ -20,7 +20,7 @@ _Last update: 2026-10-11_
 | M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)) |
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
 | M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); part 3 🧪 **clicking by looking + typing** (#37, [D58](DECISIONS.md)) |
-| M5 Connect | 🚧 part 1 🧪 **Claude Code uses SONU's tools (MCP)**: `sonu mcp serve`, SONU's policy, asked on screen, personal content kept back (#45, [D61](DECISIONS.md)); next: cloud models (opt-in) |
+| M5 Connect | 🚧 part 1 🧪 **Claude Code uses SONU's tools (MCP)**: `sonu mcp serve`, SONU's policy, asked on screen, personal content kept back (#45, [D61](DECISIONS.md)); part 2 🧪 **Ollama Cloud, opt-in**: prompts, harder requests (no window titles), vision; every send audited (#46, [D62](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
 
@@ -168,8 +168,12 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    **real Claude Code** (2.1.296, `claude -p` with `--mcp-config`, the owner's settings untouched) found the tools and
    answered "Battery is 80% (not charging) and power mode is balanced" through `mcp__sonu__system_status`; "what's
    open?" (`desktop_describe`) → the window list shown in a notification, the client told only that it's personal;
-   the audit log names the caller (`mcp:claude-code`). Next: cloud models (opt-in, free tiers) — needs the owner's
-   choice of provider and keys.
+   the audit log names the caller (`mcp:claude-code`). ~~Part 2, cloud models~~ (#46) — the owner chose Ollama
+   Cloud for prompts, planning without titles, and vision. On the laptop (not signed in yet): `sonu doctor` → "for
+   prompts, planning (no window titles), vision — but Ollama isn't signed in"; a three-part request with planning
+   allowed was offered to `gpt-oss:120b-cloud` (`cloud.send` audited, 19,958 characters, no titles), refused
+   ("run `ollama signin`") and planned locally — 2.9 s in all; `[models.planner] = gpt-oss:120b-cloud` → sonud, `sonu
+   --deep` and `sonu ask` refuse to start. Waiting on the owner's `ollama signin` for the real cloud answers.
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
@@ -247,7 +251,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #39 | 2026-10-04 | The rice renamed Orrery: theme and wallpaper through `orrery-theme` / `orrery-wall` (falling back to `hypr-theme` / `hypr-wall`), backgrounds from `~/.config/orrery`; "next wallpaper" in a one-picture theme says so; doctor says "Orrery rice" |
 | #41 | 2026-10-11 | Removing software by voice (`packages.remove`, [D59](DECISIONS.md)): the exact package and what only it needed shown and asked; refused when other software or the system needs it; the install window shared (password typed or said); verified with `pacman -Q`; eval suite v23 (116) |
 | #44 | 2026-10-11 | The activity journal (M2 part 4, [D60](DECISIONS.md)): sonud records which window has the focus (local SQLite, 30 days, password managers and private windows never); "what was I doing yesterday / this morning?", "when did I last use …?", pause/resume, delete (asks); `sonu journal`; eval suite v24 (120) |
-| #45 | open | M5 part 1: SONU as an MCP server ([D61](DECISIONS.md)) — `sonu mcp serve` / `tools` / `setup`; every tool but `voice.wake` and `dev.prompt`; `Engine.call_tool` (policy, checks, audit); asked on screen for words, links, typing, writing; private results shown to the user, never sent to the client |
+| #45 | 2026-10-11 | M5 part 1: SONU as an MCP server ([D61](DECISIONS.md)) — `sonu mcp serve` / `tools` / `setup`; every tool but `voice.wake` and `dev.prompt`; `Engine.call_tool` (policy, checks, audit); asked on screen for words, links, typing, writing; private results shown to the user, never sent to the client |
+| #46 | open | M5 part 2: Ollama Cloud, opt-in ([D62](DECISIONS.md)) — `[cloud]` (model, vision_model, use_for, plan); prompts, harder requests without window titles (falls back to local), vision; `[models]` refuses cloud models; every send audited first (`cloud.send`); `sonu doctor` checks sign-in and retired models; `sonu eval --cloud` |
 
 ### Found on real hardware → fixed
 
