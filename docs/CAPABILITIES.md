@@ -88,7 +88,7 @@ works:
 |---|---|---|
 | Open a folder: "open my downloads", "open dev_works", "open the SONU folder" (`files.open`) | ✅ | XDG user folders, your screenshots folder, a path you typed, or a folder of that name in your home (3 levels) — found by SONU; opened in the rice's file manager (`fileManager` in `binds.lua`, Thunar) and confirmed by its window title |
 | Open the newest file in a folder with its app | ✅ | see Downloads |
-| Open a file by name; find files; recent files | ⏭ | `fd`/`locate`, `recently-used.xbel` |
+| Open a file by name; find files; recent files: "open my resume", "where is my invoice pdf?", "what files did I open yesterday?" | 🧪 #62 | the home tree by your words (hidden folders and dependencies skipped), `recently-used.xbel`; private lists; programs never opened ([D74](DECISIONS.md)) |
 | Move, rename | ⏭ | medium risk, asks first |
 | Delete | ⏭ | **to the trash only** (`gio trash`: undoable), asks first; never permanent deletion |
 

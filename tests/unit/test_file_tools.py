@@ -143,7 +143,7 @@ async def test_several_folders_with_that_name_ask(rig: Rig) -> None:
 @pytest.mark.anyio
 async def test_a_folder_that_isnt_there(rig: Rig) -> None:
     report = await rig.run("open recipes", ("files.open", {"place": "recipes"}))
-    assert report.lines() == ["✖ There's no folder called 'recipes' in your home"]
+    assert report.lines() == ["✖ There's no folder or file called 'recipes' in your home"]
     assert rig.fake.launched == []
 
 
@@ -202,3 +202,91 @@ async def test_last_download_in_the_request_even_if_the_place_dropped_it(rig: Ri
     touch(rig.home / "Downloads" / "cat.png")
     report = await rig.run("open my last download", ("files.open", {"place": "my downloads"}))
     assert report.lines() == ["✔ Opened 'cat.png' in imv"]
+
+
+# ---------------------------------------------------------------------------- a file by its name (D74)
+@pytest.mark.anyio
+async def test_open_a_file_by_its_name(rig: Rig) -> None:
+    touch(rig.home / "Pictures" / "kestrel lake.png", age_s=500)
+    touch(rig.home / "dev_works" / "node_modules" / "kestrel-lake.png")  # dependencies aren't searched
+    report = await rig.run("open my kestrel lake picture", ("files.open", {"place": "kestrel lake picture"}))
+    assert report.lines() == ["✔ Opened 'kestrel lake.png' in imv"]
+    assert rig.fake.launched[-1] == ["imv", str(rig.home / "Pictures" / "kestrel lake.png")]
+
+
+@pytest.mark.anyio
+async def test_several_files_are_asked_about_and_programs_never_opened(rig: Rig) -> None:
+    touch(rig.home / "Downloads" / "invoice march.png", age_s=100)
+    touch(rig.home / "Pictures" / "invoice april.png", age_s=50)
+    report = await rig.run("open the invoice", ("files.open", {"place": "invoice"}))
+    assert report.status == "needs-input"
+    outcome = report.steps[0].outcome
+    assert outcome.private and outcome.choices is not None
+    assert [o.label for o in outcome.choices.options] == [
+        "invoice april.png — ~/Pictures",
+        "invoice march.png — ~/Downloads",
+    ]
+    script = touch(rig.home / "Downloads" / "setup.sh")
+    script.chmod(0o755)
+    report = await rig.run("open setup.sh", ("files.open", {"place": "setup.sh"}))
+    assert report.lines() == [
+        "✖ 'setup.sh' is a program or script — SONU doesn't open those (it could run it)"
+    ]
+    assert len(rig.fake.launched) == 0
+
+
+def test_file_words_and_kinds(tmp_path: Path) -> None:
+    from sonu.tools.file_tools import file_words, files_named
+
+    assert file_words("my invoice pdf") == (["invoice"], frozenset({".pdf"}))
+    assert file_words("notes.txt") == (["notes", "txt"], None)
+    touch(tmp_path / "a" / "notes.txt", age_s=10)
+    touch(tmp_path / "b" / "old notes.txt", age_s=5)
+    touch(tmp_path / ".hidden" / "notes.txt")
+    # The file the words name exactly first, then the newest ones that contain them.
+    assert [p.name for p in files_named(tmp_path, ["notes"], None)] == ["notes.txt", "old notes.txt"]
+
+
+@pytest.mark.anyio
+async def test_find_files_privately(rig: Rig) -> None:
+    touch(rig.home / "Downloads" / "Invoice March.pdf", age_s=100)
+    touch(rig.home / "Documents" / "invoice notes.txt", age_s=50)
+    report = await rig.run("where is my invoice pdf?", ("files.find", {"name": "invoice pdf"}))
+    outcome = report.steps[0].outcome
+    assert report.status == "done" and outcome.private
+    assert outcome.summary.startswith("1 file matches “invoice pdf”: Invoice March.pdf — ~/Downloads (")
+    assert report.steps[0].description == "Look for files matching “invoice pdf”"
+    report = await rig.run(
+        "find invoice in documents", ("files.find", {"name": "invoice", "place": "documents"})
+    )
+    assert report.steps[0].outcome.summary.startswith(
+        "1 file matches “invoice”: invoice notes.txt — ~/Documents"
+    )
+    report = await rig.run("find my tax return", ("files.find", {"name": "tax return"}))
+    assert report.lines() == ["✔ No file matches “tax return”"]
+
+
+@pytest.mark.anyio
+async def test_recent_files(rig: Rig) -> None:
+    report_pdf = touch(rig.home / "Documents" / "report.pdf")
+    gone = rig.home / "Documents" / "deleted.pdf"
+    share = rig.home / ".local" / "share"
+    share.mkdir(parents=True)
+    used = 'modified="2026-09-19T18:02:42Z" visited="2026-09-19T18:02:42Z"'
+    later = 'modified="2026-09-21T10:00:00Z" visited="2026-09-21T10:00:00Z"'
+    okular = '<bookmark:application name="Okular" modified="2026-09-20T09:00:00Z" count="2"/>'
+    (share / "recently-used.xbel").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<xbel version="1.0" xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks">\n'
+        f'<bookmark href="file://{report_pdf.as_posix()}" {used}><info><metadata>'
+        f"<bookmark:applications>{okular}</bookmark:applications></metadata></info></bookmark>\n"
+        f'<bookmark href="file://{gone.as_posix()}" {later}/>\n'
+        "</xbel>\n"
+    )
+    report = await rig.run("what files did I open recently?", ("files.recent", {}))
+    outcome = report.steps[0].outcome
+    assert outcome.private
+    assert outcome.summary.startswith("Files you opened: report.pdf — ~/Documents (")
+    assert outcome.summary.endswith(", Okular)")  # the deleted file isn't listed
+    report = await rig.run("what files did I open in the last hour?", ("files.recent", {"when": "last_hour"}))
+    assert report.lines() == ["✔ No recent files in the last hour"]
