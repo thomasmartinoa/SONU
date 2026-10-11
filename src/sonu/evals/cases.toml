@@ -1282,3 +1282,24 @@ expect_status = ["done"]
 expect_reply_contains = "invoice march.pdf"
 require_tools = ["files.find"]
 forbid_tools = ["files.open", "web.search", "browser.history"]
+
+# ---- moving, renaming, the trash (v36)
+[[case]]
+id = "move-a-file"
+request = "move my invoice to downloads"
+expect_status = ["done"]
+expect_confirmed = ["files.move"]
+forbid_tools = ["files.open", "apps.launch"]
+
+[[case]]
+id = "rename-a-file"
+request = "rename my kestrel lake photo to lake view"
+expect_status = ["done"]
+expect_confirmed = ["files.rename"]
+
+[[case]]
+id = "delete-the-last-download"
+request = "delete my last download"
+expect_status = ["done"]
+expect_confirmed = ["files.trash"]
+forbid_tools = ["files.open"]

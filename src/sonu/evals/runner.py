@@ -373,6 +373,7 @@ async def run_case(
                 (workdir / name).write_text(text)
             desktop = await HyprlandDesktop.connect(fake.instance)
             system = FakeSystem(**case.system)
+            system.trash_dir = workdir / ".local" / "share" / "Trash"  # gio trash (D75)
             fake.on_url = system.page_opened
             fake.on_exec = system.kitty.launched
             fake.proc = workdir / "proc"

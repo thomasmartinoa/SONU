@@ -9,12 +9,13 @@ power mode that may be unavailable.
 from __future__ import annotations
 
 import json
+import shutil
 import zlib
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 from sonu.system.commands import CommandError, CommandResult, ProgramMissing
 from sonu.testing.fake_github import FakeGitHub
@@ -53,6 +54,7 @@ ALL_PROGRAMS = frozenset(
         "wlrctl",
         "wtype",
         "git",
+        "gio",
     }
 )
 # A repository for `git` in the fake home's projects: on a branch with one commit not pushed, two files
@@ -68,6 +70,7 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 @dataclass
 class FakeSystem:
     installed: set[str] = field(default_factory=lambda: set(ALL_PROGRAMS))
+    trash_dir: Path | None = None  # gio trash's trash (D75); None: gio trash fails
     speaker: float = 0.5
     speaker_muted: bool = False
     mic: float = 0.8
@@ -609,6 +612,44 @@ class FakeSystem:
             title, artist = self.spotify_results.get(query, (query.title(), "Some Artist"))
             player[:] = [title, "Playing"]
             self.song_details[name] = (artist, f"/com/spotify/track/{zlib.crc32(query.encode()):08x}")
+        return 0, "", ""
+
+    def _gio(self, args: list[str]) -> tuple[int, str, str]:
+        """gio trash: into ``trash_dir`` (files/ + info/, like the real one), --list, --restore."""
+        if args[:1] != ["trash"] or self.trash_dir is None:
+            return 1, "", "gio: not faked"
+        files, info = self.trash_dir / "files", self.trash_dir / "info"
+        if args[1:2] == ["--list"]:
+            lines = []
+            for entry in sorted(info.glob("*.trashinfo")) if info.is_dir() else []:
+                original = entry.read_text().split("Path=", 1)[1].splitlines()[0]
+                lines.append(f"trash:///{quote(entry.stem)}\t{unquote(original)}\n")
+            return 0, "".join(lines), ""
+        if args[1:2] == ["--restore"]:
+            name = unquote(args[2].removeprefix("trash:///"))
+            note = info / f"{name}.trashinfo"
+            if not note.is_file():
+                return 1, "", "gio: no such file in the trash"
+            back = Path(unquote(note.read_text().split("Path=", 1)[1].splitlines()[0]))
+            if back.exists():
+                return 1, "", f"gio: {back}: file exists"
+            back.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(files / name, back)
+            note.unlink()
+            return 0, "", ""
+        path = Path(args[-1])
+        if not path.exists():
+            return 1, "", f"gio: {path}: No such file or directory"
+        files.mkdir(parents=True, exist_ok=True)
+        info.mkdir(parents=True, exist_ok=True)
+        name, n = path.name, 1
+        while (files / name).exists():
+            n += 1
+            name = f"{path.stem}.{n}{path.suffix}"
+        shutil.move(path, files / name)
+        (info / f"{name}.trashinfo").write_text(
+            f"[Trash Info]\nPath={quote(str(path))}\nDeletionDate=2026-10-11T12:00:00\n"
+        )
         return 0, "", ""
 
     def _xdg_mime(self, args: list[str]) -> tuple[int, str, str]:

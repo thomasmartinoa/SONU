@@ -57,7 +57,8 @@ class Effect(StrEnum):
     FILE_READ = "file.read"  # looks at the user's folders (names, dates, types; never contents)
     POWER = "power"  # suspend, reboot, shut down, log out
     WINDOW_STATE = "window.state"  # fullscreen, floating, pinned, tiled next to another window
-    FILE_WRITE = "file.write"  # creates folders (never changes or deletes what exists)
+    # Creates folders; moves or renames files, or puts them in the trash (D75) — never overwrites or deletes.
+    FILE_WRITE = "file.write"
     TERMINAL_INPUT = "terminal.input"  # types into a terminal SONU opened (e.g. a prompt for Claude Code)
     GITHUB_WRITE = "github.write"  # changes something on GitHub (merges a pull request)
     INSTALL = "install"  # installs software (root, through the system's own password prompt)

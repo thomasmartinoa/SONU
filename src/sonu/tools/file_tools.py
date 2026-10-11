@@ -133,7 +133,7 @@ def user_dirs(home: Path) -> dict[str, Path]:
     return found
 
 
-def _inside(path: Path, home: Path) -> bool:
+def inside_home(path: Path, home: Path) -> bool:
     try:
         path.resolve().relative_to(home.resolve())
     except ValueError:
@@ -177,10 +177,10 @@ def find_folders(place: str, home: Path, screenshots: Path | None = None) -> lis
     text = place.strip()
     if text.startswith(("~/", "/")) or text == "~":
         path = Path(text.replace("~", str(home), 1)).expanduser()
-        return [path] if path.is_dir() and _inside(path, home) else []
+        return [path] if path.is_dir() and inside_home(path, home) else []
     if "/" in text.strip("/"):  # "dev_works/SONU": a path from the home folder
         path = home / text
-        return [path] if path.is_dir() and _inside(path, home) else []
+        return [path] if path.is_dir() and inside_home(path, home) else []
     words = [word for word in normalize(_NEWEST.sub(" ", text)).split() if word not in _FILLERS]
     if not words or words == ["home"]:
         return [home]
@@ -314,7 +314,7 @@ def files_named(folder: Path, words: list[str], kinds: frozenset[str] | None) ->
     return (exact + [p for _, p in found if p not in exact])[:MAX_FOUND]
 
 
-def _home_relative(path: Path, home: Path) -> str:
+def home_relative(path: Path, home: Path) -> str:
     try:
         rest = path.relative_to(home)
     except ValueError:
@@ -378,7 +378,7 @@ class OpenFiles(Tool):
                     question=f"Which '{a.place}'?",
                     choices=Choices(
                         f"Which '{a.place}'?",
-                        tuple(Choice(_file_label(f, home), str(f)) for f in shown),
+                        tuple(Choice(file_label(f, home), str(f)) for f in shown),
                     ),
                     private=True,
                 )
@@ -391,10 +391,10 @@ class OpenFiles(Tool):
             return ToolOutcome(
                 StepStatus.NEEDS_INPUT,
                 f"several folders are called '{a.place}'",
-                question=f"Which one: {', '.join(_home_relative(f, home) for f in shown)}?",
+                question=f"Which one: {', '.join(home_relative(f, home) for f in shown)}?",
                 choices=Choices(
                     f"Which '{a.place}' folder?",
-                    tuple(Choice(_home_relative(folder, home), str(folder)) for folder in shown),
+                    tuple(Choice(home_relative(folder, home), str(folder)) for folder in shown),
                 ),
             )
         folder = folders[0]
@@ -405,11 +405,11 @@ class OpenFiles(Tool):
             argv = ctx.launch_argv(manager)
             if argv is None:
                 return ToolOutcome(StepStatus.FAILED, f"{manager.name} can't be started")
-            label = _home_relative(folder, home)
+            label = home_relative(folder, home)
             return Prepared(
                 f"Open {label} in {manager.name}", _OpenPlan(manager, (*argv, str(folder)), folder, label)
             )
-        where = _home_relative(folder, home)
+        where = home_relative(folder, home)
         file = newest_file(folder)
         if file is None:
             return ToolOutcome(StepStatus.FAILED, f"There are no files in {where}")
@@ -426,18 +426,18 @@ def _files_for(place: str, home: Path) -> list[Path]:
         path = Path(text.replace("~", str(home), 1)) if text.startswith("~") else home / text
         if text.startswith("/"):
             path = Path(text)
-        return [path] if path.is_file() and _inside(path, home) else []
+        return [path] if path.is_file() and inside_home(path, home) else []
     words, kinds = file_words(text)
     return files_named(home, words, kinds)
 
 
 def _picked_file(choice: str, home: Path) -> Path | None:
     path = Path(choice)
-    return path if path.is_file() and _inside(path, home) else None
+    return path if path.is_file() and inside_home(path, home) else None
 
 
-def _file_label(path: Path, home: Path) -> str:
-    return f"{path.name} — {_home_relative(path.parent, home)}"
+def file_label(path: Path, home: Path) -> str:
+    return f"{path.name} — {home_relative(path.parent, home)}"
 
 
 async def _prepare_open(file: Path, ctx: ToolContext, why: str = "") -> Prepared | ToolOutcome:
@@ -549,14 +549,14 @@ class FindFiles(Tool):
                     question=f"Which '{a.place}' folder?",
                     choices=Choices(
                         f"Which '{a.place}' folder?",
-                        tuple(Choice(_home_relative(f, home), str(f)) for f in shown),
+                        tuple(Choice(home_relative(f, home), str(f)) for f in shown),
                     ),
                 )
             folder = folders[0]
         words, kinds = file_words(a.name)
         if not words and not kinds:
             return ToolOutcome(StepStatus.FAILED, "Which file? Say a word from its name")
-        where = f" in {_home_relative(folder, home)}" if folder != home else ""
+        where = f" in {home_relative(folder, home)}" if folder != home else ""
         return Prepared(f"Look for files matching “{a.name}”{where}", (folder, words, kinds, a.name))
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
@@ -569,7 +569,7 @@ class FindFiles(Tool):
             return ToolOutcome(StepStatus.DONE, f"No file matches “{said}”", checked)
         home = ctx.system.home
         listed = "; ".join(
-            f"{_file_label(f, home)} ({_when(f.stat().st_mtime, ctx)})" for f in found[:MAX_LISTED]
+            f"{file_label(f, home)} ({_when(f.stat().st_mtime, ctx)})" for f in found[:MAX_LISTED]
         )
         more = f"; and {len(found) - MAX_LISTED} more" if len(found) > MAX_LISTED else ""
         count = "1 file matches" if len(found) == 1 else f"{len(found)} files match"
@@ -674,7 +674,7 @@ class RecentFiles(Tool):
         if not found:
             return ToolOutcome(StepStatus.DONE, f"No recent files{said}", checked)
         listed = "; ".join(
-            f"{_file_label(r.path, home)} ({_when(r.when, ctx)}{', ' + r.app if r.app else ''})"
+            f"{file_label(r.path, home)} ({_when(r.when, ctx)}{', ' + r.app if r.app else ''})"
             for r in found[:MAX_LISTED]
         )
         more = f"; and {len(found) - MAX_LISTED} more" if len(found) > MAX_LISTED else ""

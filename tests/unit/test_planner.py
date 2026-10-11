@@ -504,3 +504,13 @@ def test_bookmarks_and_history_arent_the_web() -> None:
     opened = _plan(("web.open", {"site": "arch wiki"}))
     assert _problems(opened, REGISTRY, "open my arch wiki bookmark") != []
     assert _problems(opened, REGISTRY, "open the arch wiki") == []
+
+
+def test_a_part_a_step_does_isnt_unsupported() -> None:
+    """Found on the laptop (D75): a move was planned and also listed as something SONU can't do."""
+    plan = _plan(("files.move", {"name": "invoice.pdf", "to": "documents"}))
+    plan.unsupported = ["move invoice.pdf"]
+    [problem] = _problems(plan, REGISTRY, "move invoice.pdf to documents")
+    assert "remove it from unsupported" in problem
+    plan.unsupported = ["print invoice.pdf"]
+    assert _problems(plan, REGISTRY, "move invoice.pdf to documents and print it") == []

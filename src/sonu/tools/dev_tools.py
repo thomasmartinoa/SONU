@@ -37,7 +37,7 @@ from sonu.tools.base import (
     outcome_from_checks,
 )
 from sonu.tools.context import ToolContext
-from sonu.tools.file_tools import _home_relative, _inside, find_folders
+from sonu.tools.file_tools import find_folders, home_relative, inside_home
 from sonu.tools.grounding import ungrounded_words
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
@@ -58,7 +58,7 @@ def _not_the_users(ctx: ToolContext, name: str, value: str | None) -> ToolOutcom
 
 
 def _where(ctx: ToolContext, path: Path) -> str:
-    return _home_relative(path, ctx.system.home)
+    return home_relative(path, ctx.system.home)
 
 
 def _names(folder: Path, place: str) -> bool:
@@ -76,7 +76,7 @@ def _pick_folder(ctx: ToolContext, place: str | None, choice: str | None) -> Pat
         path = Path(choice)
         return (
             path
-            if path.is_dir() and _inside(path, home)
+            if path.is_dir() and inside_home(path, home)
             else ToolOutcome(StepStatus.FAILED, "That folder is gone")
         )
     task = ctx.task_folder  # made by an earlier step of this request (in a dry run: would be)
@@ -171,7 +171,7 @@ class MakeFolder(Tool):
         if isinstance(parent, ToolOutcome):
             return parent
         target = parent / name
-        if not _inside(target, ctx.system.home):
+        if not inside_home(target, ctx.system.home):
             return ToolOutcome(StepStatus.FAILED, "SONU only makes folders inside your home folder")
         ctx.task_folder = target  # "…and open Claude Code there" (also in a dry run)
         return Prepared(f"Make the folder {_where(ctx, target)}", target)
