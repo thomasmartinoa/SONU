@@ -15,7 +15,9 @@ import contextlib
 import html
 import json
 import logging
+import os
 import re
+import signal
 import time
 from collections import deque
 from collections.abc import Iterable, Mapping
@@ -124,6 +126,7 @@ async def watch(log: NotificationLog, env: Mapping[str, str], retry_s: float = 1
                 stderr=asyncio.subprocess.DEVNULL,
                 env=dict(env),
                 limit=1024 * 1024,
+                start_new_session=True,  # stopped as a group: nothing it started keeps the pipe open
             )
         except OSError as exc:
             logger.warning("notifications: couldn't start busctl: %s", exc)
@@ -137,7 +140,10 @@ async def watch(log: NotificationLog, env: Mapping[str, str], retry_s: float = 1
             logger.info("notifications: %s", exc)
         finally:
             if process.returncode is None:
-                with contextlib.suppress(ProcessLookupError):
-                    process.kill()
+                with contextlib.suppress(ProcessLookupError, PermissionError):
+                    os.killpg(process.pid, signal.SIGKILL)
             await process.wait()
+            if stdout is not None:
+                with contextlib.suppress(Exception):
+                    await stdout.read()  # to the end: the pipe closes with the process
         await asyncio.sleep(retry_s)

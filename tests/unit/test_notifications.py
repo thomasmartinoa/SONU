@@ -72,6 +72,7 @@ def test_old_ones_are_dropped() -> None:
 async def test_watch_reads_busctl(tmp_path: Path) -> None:
     """A stand-in busctl on PATH prints what the real one did; the watcher keeps it."""
     busctl = tmp_path / "busctl"
+    # A child keeping the pipe open (sleep) must not outlive the watcher either: found in CI on 3.13.
     busctl.write_text("#!/bin/sh\nprintf '%s\\n' \"$LINE\"\nsleep 30\n")
     busctl.chmod(busctl.stat().st_mode | stat.S_IEXEC)
     log = NotificationLog()
