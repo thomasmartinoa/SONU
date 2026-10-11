@@ -290,3 +290,17 @@ async def test_recent_files(rig: Rig) -> None:
     assert outcome.summary.endswith(", Okular)")  # the deleted file isn't listed
     report = await rig.run("what files did I open in the last hour?", ("files.recent", {"when": "last_hour"}))
     assert report.lines() == ["✔ No recent files in the last hour"]
+
+
+@pytest.mark.anyio
+async def test_by_voice_a_long_list_is_cut_short(rig: Rig) -> None:
+    """D79: private lists are read out as they are — by voice only their first three, then "and N more".
+    "invoices" finds files named "invoice …" (it found nothing before)."""
+    from sonu.daemon.server import spoken_reply
+
+    for n in range(5):
+        touch(rig.home / "Documents" / f"invoice {n}.pdf", age_s=n)
+    report = await rig.run("where are my invoices?", ("files.find", {"name": "invoices"}))
+    said = spoken_reply(report)
+    assert said.startswith("5 files match “invoices”: ") and said.endswith("; and 2 more")
+    assert said.count("~/Documents") == 3

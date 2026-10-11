@@ -57,6 +57,8 @@ missing.
 - [ ] on a file you don't need: "move <it> to documents" · "rename <it> to <new name>" · "delete <it>" (it goes to
   the trash) · "restore <it>"
 - [ ] "copy the path of <a file>" · "copy my last screenshot" · "copy hello from sonu", then paste somewhere
+- [ ] by voice: "where are my <files>?" — SONU says the first three with their folders ("… in Documents"), then
+  "and N more" (#68)
 
 ### Music (#65)
 - [ ] "play my music" · "shuffle my music" · "play <artist> from my music" · "pause" · "next song" · "what's
