@@ -21,7 +21,7 @@ from pathlib import Path
 
 from sonu.audit.log import AuditError, AuditLog
 from sonu.browser.host import socket_folder
-from sonu.browser.install import plan
+from sonu.browser.install import extension_version, plan
 from sonu.config.settings import ModelRole
 from sonu.core.journal import Journal
 from sonu.desktop.hyprland.errors import HyprlandError, HyprlandNotFound
@@ -33,6 +33,8 @@ from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.cloud import PAUSE_FILE, CloudPause, CloudRefused, check_local_roles, cloud_usage, staying_local
 from sonu.llm.ollama import InstalledModel, ModelInfo, OllamaClient, OllamaError, same_model
 from sonu.system.commands import PACKAGES
+from sonu.tools.file_tools import home_relative, user_dirs
+from sonu.tools.music_tools import songs_in
 
 MIN_PYTHON = (3, 12)
 LUA_ERA_HYPRLAND = (0, 55)
@@ -818,7 +820,10 @@ SETTINGS_PROGRAMS: tuple[tuple[str, str], ...] = (
     ("yt-dlp", "playing songs and videos from YouTube"),
     ("pw-dump", "hearing that a video plays when the browser isn't in the media controls"),
     ("slurp", "screenshots of an area"),
-    ("wl-copy", "copying screenshots"),
+    ("wl-copy", "copying to the clipboard"),
+    ("wl-paste", "checking what was copied"),
+    ("gio", "delete to the trash, restore"),
+    ("mpv", "playing your own music"),
     ("systemd-run", "reminders and timers"),
     ("qs", "night light, keep awake, do-not-disturb, lock (the rice's switches)"),
 )
@@ -897,14 +902,50 @@ async def _browser_result(ctx: DoctorContext) -> CheckResult:
             "set up; no browser connected",
             hint="Add the extension in the browser (`sonu browser install` says how) and keep it open.",
         )
-    return CheckResult(
-        check_id, group, title, "ok", "connected: " + ", ".join(sorted({link.browser for link in links}))
+    current = extension_version()
+    names = ", ".join(sorted(f"{link.browser} ({link.version or '?'})" for link in links))
+    old = sorted({link.browser for link in links if link.version != current})
+    if old:
+        # An older extension can't read pages or click (D71, D72): updating it is the user's step.
+        return CheckResult(
+            check_id,
+            group,
+            title,
+            "warn",
+            f"connected: {names} — {', '.join(old)} has an older extension than {current}",
+            hint="Run `sonu browser install`, then reload SONU in chrome://extensions or install the .xpi "
+            "again in Zen.",
+        )
+    return CheckResult(check_id, group, title, "ok", f"connected: {names}")
+
+
+# Where the mpv-mpris plugin puts itself so every mpv loads it (Arch: /etc/mpv/scripts/mpris.so).
+_MPRIS_PLUGIN = ("/etc/mpv/scripts/mpris.so", ".config/mpv/scripts/mpris.so")
+
+
+def _music_result(ctx: DoctorContext) -> CheckResult:
+    """Local music (D77): mpv, how many songs are in the music folder, and the optional media-keys plugin."""
+    check_id, group, title = "integration.music", "Integrations", "Local music"
+    if not ctx.which("mpv"):
+        return CheckResult(check_id, group, title, "info", "mpv isn't installed", hint="sudo pacman -S mpv")
+    folder = user_dirs(ctx.home)["XDG_MUSIC_DIR"]
+    count = len(songs_in(folder, [])) if folder.is_dir() else 0
+    where = home_relative(folder, ctx.home)
+    songs = f"{count} song{'s' if count != 1 else ''} in {where}" if count else f"no songs in {where} yet"
+    plugin = any((ctx.home / p if not p.startswith("/") else Path(p)).exists() for p in _MPRIS_PLUGIN)
+    keys = "media keys: on (mpv-mpris)" if plugin else "media keys: off"
+    hint = (
+        None
+        if plugin
+        else "Optional: `sudo pacman -S mpv-mpris` so the rice's media keys control SONU's music."
     )
+    return CheckResult(check_id, group, title, "ok" if count else "info", f"{songs} · {keys}", hint=hint)
 
 
 async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
     mcp = _mcp_result(ctx)
     browser = await _browser_result(ctx)
+    music = _music_result(ctx)
     info = detect_hypr_theme(ctx.home)
     if not info.detected:
         return [
@@ -917,6 +958,7 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
             ),
             mcp,
             browser,
+            music,
         ]
     parts = []
     if info.theme_dir_present:
@@ -955,6 +997,7 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
         ),
         mcp,
         browser,
+        music,
     ]
 
 

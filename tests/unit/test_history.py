@@ -228,12 +228,12 @@ async def test_declined_opens_nothing_and_words_must_be_the_users(rig: Rig) -> N
 async def test_a_search_uses_this_requests_words(rig: Rig) -> None:
     """Found on the laptop: "what pages did I visit today?" after a lentil soup search was planned with words
     "lentil soup" (the earlier request's)."""
-    first, second = "find the page about lentil soup", "what pages did I visit today?"
+    first, second = "find the page about lentil soup", "what pages did I visit in the last hour?"
     engine = Engine(
         planner=ScriptedPlanner(
             {
                 first: steps_plan(("browser.history", {"words": "lentil soup"})),
-                second: steps_plan(("browser.history", {"words": "lentil soup", "when": "today"})),
+                second: steps_plan(("browser.history", {"words": "lentil soup", "when": "last_hour"})),
             }
         ),
         registry=ToolRegistry(),
@@ -248,4 +248,7 @@ async def test_a_search_uses_this_requests_words(rig: Rig) -> None:
     await engine.run(first, confirm=confirm)
     report = await engine.run(second, confirm=confirm)
     assert report.status == "done", summaries(report)
-    assert summaries(report)[0].startswith("2 pages in your history (today): Inbox (3) — mail.example")
+    # (the last hour, not "today": true at any time of day)
+    assert summaries(report)[0].startswith(
+        "2 pages in your history (in the last hour): Inbox (3) — mail.example"
+    )

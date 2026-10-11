@@ -40,6 +40,8 @@ PACKAGES: dict[str, str] = {
     "xdg-mime": "xdg-utils",
     "qs": "quickshell",
     "nvidia-smi": "nvidia-utils",
+    "mpv": "mpv",
+    "gio": "glib2",
 }
 
 
