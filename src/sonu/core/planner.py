@@ -784,6 +784,20 @@ def _clean(parts: list[str]) -> tuple[str, ...]:
     return tuple(seen[:MAX_UNSUPPORTED])
 
 
+def context_full(prompt_tokens: int, num_ctx: int) -> bool:
+    """Warn when the prompt nearly fills the model's context: Ollama then has no room for the plan, or drops
+    the start of the prompt — the rules — without saying so (measured 2026-10-12 at 8,192 tokens with ~40
+    windows). Nothing fails; the log says to raise ``[ollama] num_ctx``."""
+    full = bool(num_ctx) and prompt_tokens > num_ctx * 0.85
+    if full:
+        logger.warning(
+            "the planner's prompt used %d of %d tokens — plans may get worse; raise [ollama] num_ctx",
+            prompt_tokens,
+            num_ctx,
+        )
+    return full
+
+
 class LLMPlanner:
     def __init__(self, model: ChatModel, *, max_attempts: int = 2, include_titles: bool = True) -> None:
         self.model = model
@@ -818,6 +832,7 @@ class LLMPlanner:
                 result = await self.model.complete_json(messages, schema)
             except ChatModelError as exc:
                 raise PlanningError(f"the planner model ({self.model.name}) failed: {exc}") from exc
+            context_full(result.prompt_tokens, getattr(getattr(self.model, "settings", None), "num_ctx", 0))
             try:
                 parsed = _PlanModel.model_validate_json(result.content)
             except ValidationError as exc:

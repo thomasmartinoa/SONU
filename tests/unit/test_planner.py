@@ -538,3 +538,16 @@ def test_own_music_and_page_reading_need_the_users_cue() -> None:
     [problem] = _problems(read, REGISTRY, "what is open in zen?")
     assert "screen.read" in problem
     assert _problems(read, REGISTRY, "summarise it") == []
+
+
+def test_the_instructions_leave_room_in_the_context() -> None:
+    """Measured 2026-10-12: the instructions were ~7,000 tokens of an 8,192-token context; with ~40 windows
+    Ollama had no room left for the plan, and with more it dropped the start of the prompt. They must stay
+    under half the default context (~4 characters a token), leaving room for the desktop, the conversation
+    and the plan."""
+    from sonu.config.settings import OllamaSettings
+    from sonu.core.planner import build_system_prompt, context_full
+
+    prompt = build_system_prompt(REGISTRY, WorldSnapshot(windows=()))
+    assert len(prompt) / 4 < OllamaSettings().num_ctx * 0.5, len(prompt)
+    assert context_full(15_000, 16_384) and not context_full(9_000, 16_384) and not context_full(9_000, 0)
