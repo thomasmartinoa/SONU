@@ -41,7 +41,7 @@ from sonu.testing.fake_browser import FakeBrowser, FakeTab
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_obs import FakeObs, FakeObsState
 from sonu.testing.fake_system import FakeSystem
-from sonu.testing.fake_vision import FakeScreenReader
+from sonu.testing.fake_vision import FakePageReader, FakeScreenReader
 from sonu.testing.fake_wake import FakeWake
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
@@ -374,7 +374,10 @@ async def run_case(
             notifications = NotificationLog()  # as if the user turned it on
             browsers = Browsers(runtime_dir / "browsers")  # never the user's real browser
             if case.tabs:
-                tabs = [FakeTab(i + 1, title, url, active=i == 0) for i, (title, url) in enumerate(case.tabs)]
+                tabs = [
+                    FakeTab(i + 1, title, url, active=i == 0, text=f"{title}. Some text on the page.")
+                    for i, (title, url) in enumerate(case.tabs)
+                ]
 
                 def shown(tab: FakeTab) -> None:
                     for window in fake.windows:
@@ -403,6 +406,7 @@ async def run_case(
                 terminals=SonuTerminals(workdir / "run" / "terminals", system),
                 writer=PromptWriter(cast(TextModel, model)) if hasattr(model, "complete_text") else None,
                 reader=FakeScreenReader(),
+                pages=FakePageReader(),
                 journal=journal,
                 layouts=Layouts(workdir / "data" / "layouts.json"),
                 notifications=notifications,

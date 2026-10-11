@@ -9,14 +9,14 @@ import typer
 from rich.markup import escape
 
 from sonu.browser import host
+from sonu.browser.install import extension_version, plan
 from sonu.browser.install import install as do_install
-from sonu.browser.install import plan
 from sonu.browser.install import uninstall as do_uninstall
 from sonu.cli.state import get_state
 from sonu.integrations.browser import BrowserError, Browsers
 
 app = typer.Typer(
-    help="SONU's browser extension: list, switch and close tabs by voice (local only).",
+    help="SONU's browser extension: list, switch and close tabs, read a page — by voice, local only.",
     no_args_is_help=True,
 )
 
@@ -53,7 +53,11 @@ def browser_install(ctx: typer.Context) -> None:
             f"{escape(str(setup.xpi))}\n"
             "    (or, until the browser restarts: about:debugging → This Zen → Load Temporary Add-on)"
         )
-    out.print("\nThen `sonu browser status` shows the browsers SONU can reach.")
+    out.print(
+        "\nAlready added? Update it: Chromium → the reload button on SONU's card in chrome://extensions; "
+        "Zen / Firefox → install the .xpi again."
+    )
+    out.print("Then `sonu browser status` shows the browsers SONU can reach.")
 
 
 @app.command("status")
@@ -61,14 +65,14 @@ def browser_status(ctx: typer.Context) -> None:
     """Which browsers have the extension connected now, and how many tabs each has."""
     state = get_state(ctx)
 
-    async def look() -> list[tuple[str, int | None]]:
+    async def look() -> list[tuple[str, int | None, str]]:
         browsers = Browsers()
-        rows: list[tuple[str, int | None]] = []
+        rows: list[tuple[str, int | None, str]] = []
         for link in await browsers.links():
             try:
-                rows.append((link.browser, len(await browsers.tabs([link]))))
+                rows.append((link.browser, len(await browsers.tabs([link])), link.version))
             except BrowserError:
-                rows.append((link.browser, None))
+                rows.append((link.browser, None, link.version))
         return rows
 
     rows = asyncio.run(look())
@@ -77,9 +81,15 @@ def browser_status(ctx: typer.Context) -> None:
             "No browser is connected. `sonu browser install`, add the extension, and keep the browser open."
         )
         raise typer.Exit(code=1)
-    for name, count in rows:
+    current = extension_version()
+    for name, count, version in rows:
         tabs = "didn't answer" if count is None else f"{count} tab{'s' if count != 1 else ''}"
-        state.console.print(f"{name}: connected · {tabs}")
+        old = (
+            f" — an older extension ({version}): `sonu browser install`, then update it in {name}"
+            if version != current
+            else ""
+        )
+        state.console.print(f"{name}: connected · {tabs} · extension {version or '?'}{old}")
 
 
 @app.command("uninstall")

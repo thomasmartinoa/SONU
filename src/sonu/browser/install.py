@@ -51,6 +51,11 @@ def extension_files() -> dict[str, bytes]:
     return {name: (folder / name).read_bytes() for name in ("manifest.json", "background.js")}
 
 
+def extension_version() -> str:
+    """The version of the extension this SONU brings (a browser may still run an older one)."""
+    return str(json.loads(extension_files()["manifest.json"])["version"])
+
+
 def plan(home: Path, data_dir: Path) -> Setup:
     base = data_dir / "browser"
     manifests = [

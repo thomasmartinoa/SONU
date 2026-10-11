@@ -185,6 +185,10 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "switch-to-a-tab": steps(("browser.tab", {"words": "youtube"})),
     "close-a-tab": steps(("browser.close_tabs", {"words": "youtube"})),
     "list-tabs": steps(("browser.tabs", {})),
+    "summarise-this-page": steps(("browser.read", {"question": "summarise this page"})),
+    "ask-about-a-tab": steps(
+        ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
+    ),
     "folder-and-a-terminal-there": steps(
         ("files.make_folder", {"name": "demo", "inside": "dev_works"}), ("dev.terminal", {"workspace": 4})
     ),

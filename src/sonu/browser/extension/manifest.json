@@ -1,12 +1,16 @@
 {
   "manifest_version": 3,
   "name": "SONU",
-  "version": "0.1.0",
-  "description": "Lets SONU, your local assistant, list, switch and close your tabs. Talks only to SONU on this computer.",
+  "version": "0.2.0",
+  "description": "Lets SONU, your local assistant, list, switch and close your tabs, and read a page when you ask. Talks only to SONU on this computer.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs/Zaa5NBG2EE3oEH7Oc1nYEuqUBrYiHxhSH3N1y0dGBkdpAxhMwkqGeplq4zGua0sbQaYPJFF5y9H/jZ9crigce/v9knAeKBhYTVGkE0oC+RngY545mk/lKYe5T8/DKed6o/TuuKvU1BaSgJcWXOP7z8mvaZ1w8tzbhHcsxy0KdgGpqdRgCJpCcs1x/NsRBMkyJFUnrUHkS54gtXMGintLuQVHW9WzL0yZ96vZL5im+Yda+g0U8hU839dcM9tgwwq5e96mgxcdBY5t+/zfgWgqneopLPHCFFMahGhT+3ZE3rP9A7mCxXfH4ywvJUYbwnPLZkj5UTze0Y/FES46SE7QIDAQAB",
   "permissions": [
     "nativeMessaging",
-    "tabs"
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js",

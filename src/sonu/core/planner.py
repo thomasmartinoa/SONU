@@ -362,7 +362,9 @@ notifications.read (which "recent" for more than one); "forget my notifications"
 clearing the notifications on screen stays desktop.shell clear_notifications.
 - Browser tabs (SONU's extension): "what tabs do I have open?" is browser.tabs; "switch / go to the \
 <words> tab" is browser.tab with words = the user's words for it; "close the <words> tab(s)" is \
-browser.close_tabs (all only for "all / every"). A website that isn't open is web.open, not browser.tab.
+browser.close_tabs (all only for "all / every"). A website that isn't open is web.open, not browser.tab. \
+"Summarise this page / what does this article say about …?" is browser.read with question = the user's \
+question (words only for a tab they name) — not screen.read.
 - "Do I have new / unread messages?", "any WhatsApp messages?", "how many unread emails?" is \
 messages.unread (app only if they named one) — not screen.read, not system.status.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \
@@ -472,6 +474,7 @@ _OFF_AND_DND = re.compile(r"\boff\b.*\band (?:the )?(?:do not disturb|dnd)\b(?! 
 _PAIR = re.compile(r"\bpair\b")
 _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 # The words that point at the focused window ("close this", "close it", "close the window").
+_WEB_PAGE = re.compile(r"\b(?:(?:web ?)?page|webpage|article|website|tab)\b")
 _THIS_WINDOW = re.compile(r"\b(?:this|that|it|here|focused|current|active|window)\b")
 # What makes "open SONU" an editor's job (dev.open_project) rather than the file manager's.
 _EDITOR_WORDS = re.compile(
@@ -659,6 +662,16 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 f"step {index + 1} (dev.open_project) is for opening a project in an editor, and the user "
                 f"named no editor or project — to open the folder plan exactly: {wanted}"
             )
+    # A web page's text is read through SONU's extension (D71): exact, and the page in a background tab too.
+    if _WEB_PAGE.search(said):
+        for index, step in enumerate(plan.steps):
+            if step.tool == "screen.read":
+                question = str(step.args.get("question") or request)
+                wanted = json.dumps({"tool": "browser.read", "args": {"question": question}})
+                problems.append(
+                    f"step {index + 1} (screen.read): the user asked about a web page — plan {wanted} "
+                    "instead (add words only for a tab they named)"
+                )
     # Found on real hardware: "press the frobnicate button in thunar" was listed as unsupported; SONU
     # looks the button up itself and says what the app has.
     if not any(step.tool == "screen.press" for step in plan.steps):

@@ -19,6 +19,7 @@ from sonu.core.engine import Engine
 from sonu.core.journal import Journal
 from sonu.core.layouts import Layouts
 from sonu.core.memory import Memory
+from sonu.core.page_reader import PageReader
 from sonu.core.planner import LLMPlanner, RoutedPlanner
 from sonu.core.planning import Planner
 from sonu.core.prompt_writer import PromptWriter
@@ -108,6 +109,7 @@ class ModelParts:
     planner_model: str  # what the CLI shows
     writer: PromptWriter
     reader: ScreenReader
+    pages: PageReader  # always the local model (D71)
 
 
 def model_parts(
@@ -165,7 +167,8 @@ def model_parts(
         reader = ScreenReader(vision, settings.ollama.host, cloud=True)
     else:
         reader = ScreenReader(local_text, settings.ollama.host)
-    return ModelParts(planner, local, shown, PromptWriter(writer), reader)
+    pages = PageReader(local_text, settings.ollama.host)
+    return ModelParts(planner, local, shown, PromptWriter(writer), reader, pages)
 
 
 async def outside_tools(settings: Settings, registry: ToolRegistry) -> OutsideServers | None:
@@ -238,7 +241,7 @@ async def build_runtime(
     except SetupError:
         await client.aclose()
         raise
-    ctx.writer, ctx.reader = parts.writer, parts.reader
+    ctx.writer, ctx.reader, ctx.pages = parts.writer, parts.reader, parts.pages
     conversation, responder = assistant_parts(settings, paths, client, memory=memory)
     registry = ToolRegistry()
     servers = await outside_tools(settings, registry) if outside else None

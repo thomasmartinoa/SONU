@@ -1,5 +1,5 @@
-"""A fake browser with SONU's extension (D70), for tests and evals: a socket like the native
-messaging host's, answering the same JSON lines about its tabs."""
+"""A fake browser with SONU's extension (D70, D71), for tests and evals: a socket like the native
+messaging host's, answering the same JSON lines about its tabs and their pages."""
 
 from __future__ import annotations
 
@@ -19,6 +19,9 @@ class FakeTab:
     url: str
     window: int = 1
     active: bool = False
+    text: str = ""  # the page's visible text
+    selection: str = ""
+    readable: bool = True  # False: a page browsers keep extensions out of (settings, the add-on store)
 
 
 @dataclass
@@ -28,6 +31,7 @@ class FakeBrowser:
     tabs: list[FakeTab] = field(default_factory=list)
     on_activate: Callable[[FakeTab], None] | None = None  # e.g. the fake desktop's window title changes
     requests: list[dict[str, Any]] = field(default_factory=list)
+    version: str = "0.2.0"  # "0.1.0": the first extension, which can't read pages
     _server: asyncio.Server | None = None
 
     @property
@@ -49,7 +53,7 @@ class FakeBrowser:
     def _answer(self, request: dict[str, Any]) -> dict[str, Any]:
         op = request.get("op")
         if op == "hello":
-            return {"browser": self.name, "version": "0.1.0"}
+            return {"browser": self.name, "version": self.version}
         if op == "tabs":
             return {
                 "tabs": [
@@ -75,6 +79,18 @@ class FakeBrowser:
         if op == "close":
             self.tabs = [t for t in self.tabs if t.id not in request["tabs"]]
             return {"closed": len(request["tabs"])}
+        if op == "page" and self.version != "0.1.0":
+            tab = next(t for t in self.tabs if t.id == request["tab"])
+            if not tab.readable:
+                raise ValueError("Cannot access contents of the page")
+            limit = int(request.get("limit") or 20000)
+            return {
+                "title": tab.title,
+                "url": tab.url,
+                "text": tab.text[:limit],
+                "length": len(tab.text),
+                "selection": tab.selection,
+            }
         raise ValueError(f"unknown op {op}")
 
     async def _serve(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

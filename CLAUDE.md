@@ -56,12 +56,12 @@ src/sonu/
   cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config,
                   audit, desktop, daemon, voice (+ `sonu listen` through the daemon), journal, mcp, browser
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
-  browser/        extension/ (SONU's own, Chromium + Zen), host.py (native messaging → a local socket), install.py
+  browser/        extension/ (SONU's own, Chromium + Zen: tabs, a page's text), host.py (native messaging → a local socket), install.py
   mcp/            server.py: SONU's tools for Claude Code over MCP (stdio, Engine.call_tool, asked on screen);
                   client.py + outside.py + schema.py: other MCP servers' tools for SONU (untrusted, D63)
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
                   responder.py (replies), conversation.py, memory.py, layouts.py, notifications.py,
-                  prompt_writer.py, screen_reader.py
+                  prompt_writer.py, screen_reader.py, page_reader.py (a page's text → the local model)
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py, rice_tools.py, power_tools.py, obs_tools.py,
                   voice_tools.py, dev_tools.py (folders, Claude Code), project_tools.py (VS Code, a project's

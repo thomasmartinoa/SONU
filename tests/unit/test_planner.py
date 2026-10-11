@@ -476,3 +476,13 @@ def test_a_terminal_in_a_folder_doesnt_open_the_file_manager_too() -> None:
     [problem] = _problems(both, REGISTRY, "open a terminal in downloads")
     assert "remove this step" in problem
     assert _problems(both, REGISTRY, "open downloads in the file manager and a terminal in downloads") == []
+
+
+def test_a_web_page_is_read_through_the_extension() -> None:
+    """D71: a question about a page is browser.read, not a picture of the screen."""
+    looked = _plan(("screen.read", {"question": "summarise this page"}))
+    [problem] = _problems(looked, REGISTRY, "summarise this page")
+    assert '"tool": "browser.read"' in problem
+    assert _problems(looked, REGISTRY, "what does this window say?") == []
+    read = _plan(("browser.read", {"question": "summarise this page"}))
+    assert _problems(read, REGISTRY, "summarise this page") == []

@@ -12,6 +12,7 @@ from sonu.core.journal import Journal
 from sonu.core.layouts import Layouts
 from sonu.core.memory import Memory
 from sonu.core.notifications import NotificationLog
+from sonu.core.page_reader import PageReader
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.screen_reader import ScreenReader
 from sonu.desktop.apps.entry import AppEntry
@@ -93,6 +94,8 @@ class ToolContext:
     writer: PromptWriter | None = None
     # Reads the screen with the local vision model (M6); None: not available.
     reader: ScreenReader | None = None
+    # Answers questions about a web page's text with the local model (D71); None: not available.
+    pages: PageReader | None = None
     # A spoken request with "password by voice" on: says the prompt, returns what was said (never
     # shown, logged or kept). None: not available — the user types it.
     ask_secret: Callable[[str], Awaitable[str | None]] | None = None
