@@ -17,6 +17,27 @@ class OllamaError(Exception):
     """Ollama is unreachable or answered unexpectedly."""
 
 
+class OllamaLimited(OllamaError):
+    """HTTP 429: a usage or concurrency limit (Ollama Cloud). ``retry_after_s`` when Ollama said."""
+
+    def __init__(self, message: str, retry_after_s: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_s = retry_after_s
+
+
+def _error_text(response: httpx.Response) -> str:
+    try:
+        error = response.json().get("error")
+    except (ValueError, AttributeError):
+        error = None
+    return str(error)[:200] if error else f"HTTP {response.status_code} (a usage limit)"
+
+
+def _retry_after(response: httpx.Response) -> float | None:
+    value = response.headers.get("retry-after", "").strip()
+    return float(value) if value.isdigit() else None  # seconds; a date is left to SONU's own wait
+
+
 class OllamaNotFound(OllamaError):
     """The endpoint or model does not exist (HTTP 404)."""
 
@@ -184,6 +205,8 @@ class OllamaClient:
             raise OllamaError(f"cannot reach Ollama at {self.host}: {exc.__class__.__name__}: {exc}") from exc
         if response.status_code == 404:
             raise OllamaNotFound(f"model '{model}' is not installed — run `ollama pull {model}`")
+        if response.status_code == 429:
+            raise OllamaLimited(f"{model}: {_error_text(response)}", _retry_after(response))
         if response.is_error:
             raise OllamaError(f"/api/chat: HTTP {response.status_code} — {response.text[:300]}")
         try:

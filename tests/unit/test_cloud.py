@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -20,8 +22,18 @@ from sonu.core.planning import PlanningError
 from sonu.core.screen_reader import ScreenReader, ScreenReaderError
 from sonu.desktop.hyprland import Monitor, Window
 from sonu.llm import OllamaClient
-from sonu.llm.chat import ChatMessage, ChatModelError, OllamaChatModel
-from sonu.llm.cloud import CloudModel, CloudRefused, check_local_roles, cloud_allowed, is_cloud_model
+from sonu.llm.chat import ChatMessage, ChatModelError, ChatModelLimited, OllamaChatModel
+from sonu.llm.cloud import (
+    CloudModel,
+    CloudPause,
+    CloudRefused,
+    CloudUsage,
+    LocalFallback,
+    check_local_roles,
+    cloud_allowed,
+    cloud_usage,
+    is_cloud_model,
+)
 from sonu.runtime import SetupError, model_parts
 from sonu.testing.fake_hyprland import make_monitor, make_window
 from sonu.testing.fake_ollama import FakeOllama
@@ -119,11 +131,19 @@ async def test_each_send_is_audited_before_it_goes(tmp_path: Path) -> None:
     client = OllamaClient(transport=fake.transport)
     model = CloudModel(OllamaChatModel(client, PlannerRole(model=CLOUD), OllamaSettings()), "prompts", audit)
     await model.complete_text([ChatMessage("user", "a todo app")], temperature=0.2, max_tokens=50)
-    [record] = list(audit.records())
+    record, answer = list(audit.records())
     assert record.kind == "cloud.send"
     assert record.data["use"] == "prompts" and record.data["model"] == CLOUD
     assert record.data["chars"] == len("a todo app") and record.data["images"] == 0
     assert "todo" not in json.dumps(record.data)  # how much and a fingerprint, not the text
+    assert answer.kind == "cloud.answer"  # and what came back, counted
+    assert answer.data == {
+        "use": "prompts",
+        "model": CLOUD,
+        "tokens_in": 900,
+        "tokens_out": 40,
+        "seconds": 0.25,
+    }
 
 
 async def test_no_audit_log_means_nothing_is_sent(tmp_path: Path) -> None:
@@ -229,11 +249,12 @@ def test_off_by_default_everything_is_local() -> None:
 def test_each_use_is_its_own_choice() -> None:
     client = OllamaClient(transport=fake_ollama().transport)
     prompts = model_parts(allowed("prompts"), client, OllamaSettings(), None)
-    assert isinstance(prompts.writer.model, CloudModel) and prompts.writer.model.use == "prompts"
+    writer = prompts.writer.model
+    assert isinstance(writer, LocalFallback) and writer.cloud.use == "prompts" and writer.local.name == LOCAL
     assert prompts.planner_model == LOCAL and prompts.reader.model.name == LOCAL
     vision = model_parts(allowed("vision"), client, OllamaSettings(), None)
     assert vision.reader.model.name == VISION and vision.reader.cloud is True
-    assert not isinstance(vision.writer.model, CloudModel)
+    assert not isinstance(vision.writer.model, LocalFallback | CloudModel)
 
 
 async def test_screenshots_go_to_the_cloud_only_when_vision_is_allowed(tmp_path: Path) -> None:
@@ -241,7 +262,7 @@ async def test_screenshots_go_to_the_cloud_only_when_vision_is_allowed(tmp_path:
     client = OllamaClient(transport=fake.transport)
     parts = model_parts(allowed("vision"), client, OllamaSettings(), audit)
     assert await parts.reader.read(b"png", "what's this?", "the screen") == "A terminal."
-    [record] = list(audit.records())
+    record, _ = list(audit.records())
     assert record.data["use"] == "vision" and record.data["images"] == 1
     # A cloud model handed to the reader without that choice is refused.
     sneaky = ScreenReader(
@@ -264,3 +285,57 @@ async def test_a_cloud_answer_in_a_code_block_is_still_read(tmp_path: Path) -> N
     client = OllamaClient(transport=fake.transport)
     parts = model_parts(allowed("vision"), client, OllamaSettings(), AuditLog(tmp_path / "audit.jsonl"))
     assert await parts.reader.locate(b"png", "the blue circle") == (0.711, 0.492)
+
+
+# ---------------------------------------------------------------- usage limits
+def cloud_chats(fake: FakeOllama) -> int:
+    return sum(body["model"].endswith("cloud") for body in fake.chat_requests)
+
+
+async def test_a_usage_limit_pauses_the_cloud_and_sonu_stays_local(tmp_path: Path) -> None:
+    fake, audit = fake_ollama(), AuditLog(tmp_path / "audit.jsonl")
+    fake.cloud_limited = True  # HTTP 429, no Retry-After
+    client = OllamaClient(transport=fake.transport)
+    parts = model_parts(allowed("planning", "prompts"), client, OllamaSettings(), audit, state_dir=tmp_path)
+    assert (await parts.planner.plan(HARD, SNAPSHOT, REGISTRY)).model == LOCAL  # planned anyway
+    assert cloud_chats(fake) == 1
+    limited = [record.data for record in audit.records() if record.kind == "cloud.limited"]
+    assert len(limited) == 1 and limited[0]["use"] == "planning"
+    saved = json.loads((tmp_path / "cloud-pause.json").read_text())  # sonud, `sonu` and the doctor see it
+    assert 14 * 60 < saved["until"] - time.time() <= 15 * 60
+    # Paused: nothing more is sent, and nothing waits on the cloud.
+    assert (await parts.planner.plan(HARD, SNAPSHOT, REGISTRY)).model == LOCAL
+    idea = [ChatMessage("user", "a todo app")]
+    reply = await parts.writer.model.complete_text(idea, temperature=0, max_tokens=9)
+    assert reply.model == LOCAL  # the prompt is written locally instead
+    assert cloud_chats(fake) == 1
+    assert [record.kind for record in audit.records()].count("cloud.send") == 1
+
+
+async def test_the_pause_lasts_as_long_as_ollama_says(tmp_path: Path) -> None:
+    fake, now = fake_ollama(), [1000.0]
+    fake.cloud_limited, fake.retry_after = True, 60
+    pause = CloudPause(tmp_path / "pause.json", clock=lambda: now[0])
+    client = OllamaClient(transport=fake.transport)
+    inner = OllamaChatModel(client, PlannerRole(model=CLOUD), OllamaSettings())
+    model = CloudModel(inner, "prompts", None, pause)
+    with pytest.raises(ChatModelLimited, match=r"usage limit was reached .*hourly usage limit.* stays local"):
+        await model.complete_text([ChatMessage("user", "x")], temperature=0, max_tokens=5)
+    assert pause.until() == 1060.0
+    now[0] = 1059.0
+    with pytest.raises(ChatModelLimited, match="stays local until"):
+        await model.complete_text([ChatMessage("user", "x")], temperature=0, max_tokens=5)
+    assert cloud_chats(fake) == 1
+    now[0], fake.cloud_limited = 1061.0, False
+    assert (await model.complete_text([ChatMessage("user", "x")], temperature=0, max_tokens=5)).model == CLOUD
+
+
+def test_use_is_counted_from_the_audit_log(tmp_path: Path) -> None:
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    audit.append("cloud.send", {"use": "planning"})
+    audit.append("cloud.answer", {"tokens_in": 900, "tokens_out": 40})
+    audit.append("task.start", {"request": "x"})
+    assert cloud_usage(audit, timedelta(days=1)) == CloudUsage(sends=1, tokens=940)
+    later = datetime.now(UTC) + timedelta(days=2)
+    assert cloud_usage(audit, timedelta(days=1), now=later) == CloudUsage()
+    assert cloud_usage(audit, timedelta(days=7), now=later).sends == 1

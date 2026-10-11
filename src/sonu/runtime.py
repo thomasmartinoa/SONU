@@ -29,7 +29,16 @@ from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.instance import discover_instance
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.chat import OllamaChatModel, TextModel
-from sonu.llm.cloud import CloudModel, CloudRefused, check_local_roles, cloud_allowed, is_cloud_model
+from sonu.llm.cloud import (
+    PAUSE_FILE,
+    CloudModel,
+    CloudPause,
+    CloudRefused,
+    LocalFallback,
+    check_local_roles,
+    cloud_allowed,
+    is_cloud_model,
+)
 from sonu.llm.ollama import OllamaClient
 from sonu.mcp.outside import OutsideServers, start_servers
 from sonu.policy.engine import Policy
@@ -101,6 +110,7 @@ def model_parts(
     *,
     deep: bool = False,
     model: str | None = None,
+    state_dir: Path | None = None,  # where a usage-limit pause is kept (None: in memory)
 ) -> ModelParts:
     """The planner, prompt writer and screen reader — local, or Ollama Cloud for the uses the user
     allowed (D62). Shared by the CLI and sonud."""
@@ -112,9 +122,11 @@ def model_parts(
     if model:
         role = role.model_copy(update={"model": model})
 
+    pause = CloudPause(state_dir / PAUSE_FILE if state_dir is not None else None)
+
     def cloud(use: CloudUse, name: str) -> CloudModel:
         cloud_role = ModelRole(model=name, think=settings.cloud.think)
-        return CloudModel(OllamaChatModel(client, cloud_role, ollama), use, audit)
+        return CloudModel(OllamaChatModel(client, cloud_role, ollama), use, audit, pause)
 
     local = LLMPlanner(OllamaChatModel(client, role, ollama))
     planner: Planner = local
@@ -136,10 +148,13 @@ def model_parts(
             shown = f"{role.model} (+ {settings.cloud.model} for harder requests)"
     local_text = OllamaChatModel(client, settings.models.planner, ollama)
     writer: TextModel = (
-        cloud("prompts", settings.cloud.model) if cloud_allowed(settings, "prompts") else local_text
+        LocalFallback(cloud("prompts", settings.cloud.model), local_text)
+        if cloud_allowed(settings, "prompts")
+        else local_text
     )
     if cloud_allowed(settings, "vision"):
-        reader = ScreenReader(cloud("vision", settings.cloud.vision_model), settings.ollama.host, cloud=True)
+        vision = LocalFallback(cloud("vision", settings.cloud.vision_model), local_text)
+        reader = ScreenReader(vision, settings.ollama.host, cloud=True)
     else:
         reader = ScreenReader(local_text, settings.ollama.host)
     return ModelParts(planner, local, shown, PromptWriter(writer), reader)
@@ -207,7 +222,9 @@ async def build_runtime(
     )
     audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
     try:
-        parts = model_parts(settings, client, settings.ollama, audit, deep=deep, model=model)
+        parts = model_parts(
+            settings, client, settings.ollama, audit, deep=deep, model=model, state_dir=paths.state_dir
+        )
     except SetupError:
         await client.aclose()
         raise

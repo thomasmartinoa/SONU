@@ -239,7 +239,9 @@ class Daemon:
         self.model = settings.models.planner.model
         self.audit = AuditLog(paths.audit_file) if settings.audit.enabled else None
         # Local, or Ollama Cloud for what the user allowed (D62); a cloud model in [models] stops here.
-        self.models = model_parts(settings, self.ollama, self.ollama_settings, self.audit)
+        self.models = model_parts(
+            settings, self.ollama, self.ollama_settings, self.audit, state_dir=paths.state_dir
+        )
         self.planner = self.models.planner
         self.registry = ToolRegistry()
         self.outside: OutsideServers | None = None  # the MCP servers the user added (D63), started in warm_up
