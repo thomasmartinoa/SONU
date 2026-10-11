@@ -54,8 +54,9 @@ sonu eval                               # real planner model on the eval suite (
 ```
 src/sonu/
   cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config,
-                  audit, desktop, daemon, voice (+ `sonu listen` through the daemon)
+                  audit, desktop, daemon, voice (+ `sonu listen` through the daemon), journal, mcp
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
+  mcp/            server.py: SONU's tools for Claude Code over MCP (stdio, Engine.call_tool, asked on screen)
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
                   responder.py (replies), conversation.py, memory.py, prompt_writer.py, screen_reader.py
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,

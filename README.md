@@ -74,6 +74,7 @@ sonu desktop windows                # windows as SONU sees them (--no-titles for
 sonu desktop events                 # live Hyprland events
 sonu audit tail                     # everything SONU did; `sonu audit verify` checks the hash chain
 sonu journal show yesterday         # the activity journal (local); also pause, resume, forget
+sonu mcp setup                      # let Claude Code use SONU's tools (MCP); SONU asks you on screen
 sonu config init                    # write a commented ~/.config/sonu/config.toml
 ```
 

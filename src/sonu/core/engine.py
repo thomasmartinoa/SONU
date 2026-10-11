@@ -20,7 +20,7 @@ from sonu.core.planning import Plan, Planner, PlanningError
 from sonu.core.report import StepRecord, TaskReport
 from sonu.core.responder import Responder
 from sonu.desktop.hyprland.errors import HyprlandError
-from sonu.policy.engine import Policy
+from sonu.policy.engine import Policy, outside_caller_risk
 from sonu.tools.base import Choices, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import MAX_STEPS, ToolRegistry
@@ -185,6 +185,63 @@ class Engine:
 
         return await self._finish(report, history)
 
+    async def call_tool(
+        self,
+        tool_name: str,
+        raw_args: dict[str, Any],
+        *,
+        caller: str,
+        confirm: Confirmer,
+        choose: Chooser | None = None,
+    ) -> StepRecord:
+        """One tool step asked for by another program (Claude Code over MCP, D61), not by the user.
+
+        The same path as a planned step — arguments checked, resolved on a fresh snapshot, the policy,
+        verified — but there are no user's words: a step using words (a search, a name) or one that
+        leaves the laptop, types or writes is asked on screen (``outside_caller_risk``).
+        """
+
+        def failed(summary: str) -> StepRecord:
+            return StepRecord(0, tool_name, raw_args, tool_name, ToolOutcome(StepStatus.FAILED, summary))
+
+        if self.audit is not None:
+            verification = self.audit.verify()
+            if not verification.ok:
+                return failed(
+                    f"the audit log is damaged (line {verification.line}: {verification.error}); "
+                    "SONU won't act until it's fixed — see `sonu audit verify`"
+                )
+        self._audit("call.start", {"caller": caller, "tool": tool_name, "args": raw_args})
+        self.ctx.request_text = ""
+        # What grounding checks text against: the caller's own arguments — the step is asked instead.
+        self.ctx.user_words = " ".join(
+            str(value) for value in raw_args.values() if isinstance(value, str | int)
+        )
+        self.ctx.recent_windows = ()
+        self.ctx.task_browser = None
+        self.ctx.task_folder = None
+        self.ctx.task_windows = ()
+        tool = self.registry.get(tool_name)
+        try:
+            snapshot = await self.ctx.desktop.snapshot()
+            origin = find_origin(snapshot.windows, self.ctx.ancestors(), snapshot.active_address)
+            self.ctx.desktop.origin_address = origin
+        except HyprlandError as exc:
+            record = failed(f"couldn't read the desktop: {exc}")
+        else:
+            record = await self._run_step(
+                0,
+                tool_name,
+                raw_args,
+                confirm=confirm,
+                choose=choose,
+                dry_run=False,
+                observer=None,
+                least_risk=outside_caller_risk(tool, raw_args) if tool is not None else None,
+            )
+        self._audit("step.result", record.audit_data())
+        return record
+
     async def _finish(self, report: TaskReport, history: list[Turn]) -> TaskReport:
         """The natural reply, and this request's place in the conversation."""
         if self.responder is not None:
@@ -209,6 +266,7 @@ class Engine:
         choose: Chooser | None,
         dry_run: bool,
         observer: Observer | None,
+        least_risk: Risk | None = None,
     ) -> StepRecord:
         chosen: str | None = None
 
@@ -254,6 +312,10 @@ class Engine:
                 prepared = replace(prepared, choices=None)
         if isinstance(prepared, ToolOutcome):
             return record(prepared)
+        if least_risk is not None:
+            prepared = replace(
+                prepared, risk=max(prepared.risk or least_risk, least_risk, key=lambda r: r.rank)
+            )
         return await self._decide_and_execute(
             index, tool, prepared, record, confirm=confirm, dry_run=dry_run, observer=observer
         )

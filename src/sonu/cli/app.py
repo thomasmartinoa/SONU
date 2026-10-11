@@ -21,6 +21,7 @@ from sonu.cli import (
     desktop_cmd,
     eval_cmd,
     journal_cmd,
+    mcp_cmd,
     voice_cmd,
 )
 from sonu.cli.state import AppState, env_snapshot, get_state
@@ -45,6 +46,7 @@ app.add_typer(desktop_cmd.app, name="desktop")
 app.add_typer(daemon_cmd.app, name="daemon")
 app.add_typer(voice_cmd.app, name="voice")
 app.add_typer(journal_cmd.app, name="journal")
+app.add_typer(mcp_cmd.app, name="mcp")
 
 
 def _version_callback(value: bool) -> None:
@@ -113,6 +115,7 @@ COMMANDS = {
     "voice",
     "listen",
     "journal",
+    "mcp",
 }
 _GLOBAL_FLAGS = {"-v", "-vv", "-vvv", "--verbose"}
 # `sonu ask` options that may come before a bare request: `sonu --dry-run open kitty`.
