@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,9 +31,12 @@ from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.chat import OllamaChatModel, TextModel
 from sonu.llm.cloud import CloudModel, CloudRefused, check_local_roles, cloud_allowed, is_cloud_model
 from sonu.llm.ollama import OllamaClient
+from sonu.mcp.outside import OutsideServers, start_servers
 from sonu.policy.engine import Policy
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 
 def load_memory(paths: SonuPaths) -> Memory:
@@ -141,13 +145,28 @@ def model_parts(
     return ModelParts(planner, local, shown, PromptWriter(writer), reader)
 
 
+async def outside_tools(settings: Settings, registry: ToolRegistry) -> OutsideServers | None:
+    """Start the MCP servers the user added (D63) and give the planner their tools. None: there are none."""
+    if not any(server.enabled for server in settings.mcp.servers.values()):
+        return None
+    outside = await start_servers(settings.mcp)
+    for name in registry.add(outside.tools):
+        logger.warning("an outside tool has the name of another one: %s (left out)", name)
+    for name, problem in outside.problems.items():
+        logger.warning("MCP server %s: %s", name, problem)
+    return outside
+
+
 @dataclass
 class Runtime:
     engine: Engine
     ollama: OllamaClient
     planner_model: str
+    outside: OutsideServers | None = None
 
     async def aclose(self) -> None:
+        if self.outside is not None:
+            await self.outside.aclose()
         await self.ollama.aclose()
         if self.engine.ctx.journal is not None:
             self.engine.ctx.journal.close()
@@ -160,6 +179,7 @@ async def build_runtime(
     *,
     deep: bool = False,
     model: str | None = None,
+    outside: bool = True,  # the MCP servers the user added (not for `sonu mcp serve`)
     ollama_transport: httpx.AsyncBaseTransport | None = None,  # tests plug in a fake Ollama here
 ) -> Runtime:
     try:
@@ -193,13 +213,15 @@ async def build_runtime(
         raise
     ctx.writer, ctx.reader = parts.writer, parts.reader
     conversation, responder = assistant_parts(settings, paths, client, memory=memory)
+    registry = ToolRegistry()
+    servers = await outside_tools(settings, registry) if outside else None
     engine = Engine(
         planner=parts.planner,
-        registry=ToolRegistry(),
+        registry=registry,
         ctx=ctx,
         policy=Policy(settings.policy.autonomy),
         audit=audit,
         conversation=conversation,
         responder=responder,
     )
-    return Runtime(engine=engine, ollama=client, planner_model=parts.planner_model)
+    return Runtime(engine=engine, ollama=client, planner_model=parts.planner_model, outside=servers)

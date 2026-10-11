@@ -77,6 +77,16 @@ class ToolRegistry:
     ) -> None:
         self._tools = {tool.name: tool for tool in tools}
 
+    def add(self, tools: Iterable[Tool]) -> list[str]:
+        """Add tools (an MCP server's, D63); a name SONU already has is skipped. Returns the skipped names."""
+        skipped = []
+        for tool in tools:
+            if tool.name in self._tools:
+                skipped.append(tool.name)
+            else:
+                self._tools[tool.name] = tool
+        return skipped
+
     def get(self, name: str) -> Tool | None:
         return self._tools.get(name)
 
@@ -85,7 +95,7 @@ class ToolRegistry:
         return tuple(self._tools.values())
 
     def args_schema(self, tool: Tool) -> dict[str, Any]:
-        return _inline_refs(tool.Args.model_json_schema())
+        return _inline_refs(tool.args_json_schema())
 
     def plan_schema(self) -> dict[str, Any]:
         step_variants = [

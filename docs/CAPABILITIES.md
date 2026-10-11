@@ -125,6 +125,7 @@ works:
 | Click a button in an app that exposes nothing, by looking; type words into an app | 🧪 M6 part 3 | vision (0–1000 scale) + `wlrctl` pointer; `wtype` keys; high risk, checked by a fresh picture ([D58](DECISIONS.md)) | vision model (local `qwen3.5`/`gemma4` or opt-in cloud) + input; high risk, confirmed |
 | Claude Code using SONU's tools (MCP): "open kitty on 3", "what's my battery?", "search the arch wiki for …" from a Claude Code session | 🧪 M5 part 1 | `sonu mcp serve` (`sonu mcp setup` prints the `claude mcp add` line); SONU's policy and checks; SONU asks on screen for words, links, typing, writing; window titles and other personal content never go to Claude ([D61](DECISIONS.md)) |
 | Ollama Cloud models for prompts, harder requests (no window titles) and vision — opt-in | 🧪 M5 part 2 | `[privacy] cloud = "allow"` + `[cloud] use_for`; `ollama signin`; falls back to local; every send in the audit log (`cloud.send`); `sonu doctor` shows it ([D62](DECISIONS.md)) |
+| Other programs' tools through MCP — local (files, notes), web (fetch, search), accounts (GitHub, …): "fetch https://example.com", "read note.txt with the files server", "list the open pull requests in thomasmartinoa/SONU" | 🧪 M5 part 3 | `[mcp.servers.<name>]` (argv, `reaches`, `read_only`, `tools`, `env`, `env_commands`); `sonu mcp check`; high risk and asked with every argument shown, unless listed read-only; answers shown to you, never to a model ([D63](DECISIONS.md)) |
 
 ## Batches
 

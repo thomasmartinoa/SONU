@@ -40,7 +40,7 @@ class FakePicker(Picker):
     gate: asyncio.Event | None = None  # when set: waits for it before answering
     asking: asyncio.Event = field(default_factory=asyncio.Event)
 
-    async def confirm(self, question: str) -> bool:
+    async def confirm(self, question: str, details: str | None = None) -> bool:
         self.asked.append(question)
         self.asking.set()
         if self.gate is not None:

@@ -62,7 +62,11 @@ def mcp_name(tool_name: str) -> str:
 
 def offered_tools(registry: ToolRegistry) -> dict[str, Tool]:
     """The tools a client gets, by their MCP names."""
-    return {mcp_name(tool.name): tool for tool in registry.tools if tool.name not in NOT_OFFERED}
+    return {
+        mcp_name(tool.name): tool
+        for tool in registry.tools
+        if tool.name not in NOT_OFFERED and Effect.OUTSIDE not in tool.effects  # not another server's
+    }
 
 
 def asks_first(tool: Tool) -> bool:

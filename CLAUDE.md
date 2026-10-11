@@ -56,7 +56,8 @@ src/sonu/
   cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config,
                   audit, desktop, daemon, voice (+ `sonu listen` through the daemon), journal, mcp
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
-  mcp/            server.py: SONU's tools for Claude Code over MCP (stdio, Engine.call_tool, asked on screen)
+  mcp/            server.py: SONU's tools for Claude Code over MCP (stdio, Engine.call_tool, asked on screen);
+                  client.py + outside.py + schema.py: other MCP servers' tools for SONU (untrusted, D63)
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
                   responder.py (replies), conversation.py, memory.py, prompt_writer.py, screen_reader.py
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
@@ -72,7 +73,8 @@ src/sonu/
   llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
   verify/ policy/ audit/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS,
                   kitty = SONU-owned terminals, claude_code = reading its screen, a11y + a11y_helper = AT-SPI)
-  testing/        FakeHyprland (simulates dispatch, apps, browsers), FakeOllama, sample apps, scripted planner
+  testing/        FakeHyprland (simulates dispatch, apps, browsers), FakeOllama, sample apps, scripted planner,
+                  a fake MCP server
   evals/          cases.toml + runner
 tests/unit, tests/integration
 ```

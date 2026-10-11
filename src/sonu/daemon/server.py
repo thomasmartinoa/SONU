@@ -50,8 +50,16 @@ from sonu.desktop.hyprland.instance import HyprlandInstance, discover_instance
 from sonu.desktop.hyprland.ipc import HyprlandClient
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.llm.ollama import OllamaClient, OllamaError
+from sonu.mcp.outside import OutsideServers
 from sonu.policy.engine import Policy
-from sonu.runtime import app_aliases, assistant_parts, load_memory, model_parts, open_journal
+from sonu.runtime import (
+    app_aliases,
+    assistant_parts,
+    load_memory,
+    model_parts,
+    open_journal,
+    outside_tools,
+)
 from sonu.tools.base import Choices, Risk, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
@@ -234,6 +242,7 @@ class Daemon:
         self.models = model_parts(settings, self.ollama, self.ollama_settings, self.audit)
         self.planner = self.models.planner
         self.registry = ToolRegistry()
+        self.outside: OutsideServers | None = None  # the MCP servers the user added (D63), started in warm_up
         self.policy = Policy(settings.policy.autonomy)
         self._ids = itertools.count(1)
         self._server: asyncio.Server | None = None
@@ -305,6 +314,8 @@ class Daemon:
         (the desktop part comes last in the prompt, so every real request reuses the rest).
         """
         async with self.lock:
+            # First, so the practice plan below already has their tools (a server that fails is left out).
+            self.outside = await outside_tools(self.settings, self.registry)
             try:
                 await self.ollama.load(self.model, keep_alive=KEEP_LOADED)
                 await self.models.local_planner.plan(
@@ -337,6 +348,8 @@ class Daemon:
                 await self._journaling
         if self.journal is not None:
             self.journal.close()
+        if self.outside is not None:
+            await self.outside.aclose()
         await self.wake.stop()
         self.echo.close()
         if self._server is not None:
@@ -545,7 +558,7 @@ class Daemon:
 
         async def confirm(request: ConfirmRequest) -> bool:
             if request.details:
-                await session.send({"type": "show", "title": "SONU wrote this", "text": request.details})
+                await session.send({"type": "show", "title": "Read this first", "text": request.details})
             if request.risk is Risk.HIGH:
                 await voice.say(f"This one needs your OK on screen: {request.description}.")
                 return bool(await physical(request))

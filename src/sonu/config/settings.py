@@ -6,12 +6,13 @@ fails loudly instead of silently falling back to a default.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 AutonomyMode = Literal["suggest", "confirm-each", "confirm-risky", "trusted"]
 CloudPolicy = Literal["never", "ask", "allow"]
@@ -145,6 +146,42 @@ class CloudSettings(_Section):
     think: bool = False
 
 
+McpReach = Literal["local", "web", "account"]
+SERVER_NAME = r"^[a-z][a-z0-9_]{0,23}$"
+
+
+class McpServerSettings(_Section):
+    """One outside MCP server (D63): SONU starts it (argv, no shell) and offers its tools to the planner."""
+
+    command: list[str] = Field(min_length=1)  # e.g. ["uvx", "mcp-server-fetch"]; ~ is your home folder
+    # What it can reach — SONU can't tell, so you say: local (stays on this laptop), web (sends what it's
+    # given to the internet) or account (acts on an online account of yours).
+    reaches: McpReach
+    tools: list[str] = Field(default_factory=list)  # only these tools (empty: all, up to 32)
+    # Tools you trust to only read. They run without asking — on web and account servers only when
+    # every word they send is yours. Every other tool is high risk: asked each time, arguments shown.
+    read_only: list[str] = Field(default_factory=list)
+    # Environment for the server; it gets no other secrets of yours.
+    env: dict[str, str] = Field(default_factory=dict)
+    # Environment read from a command when the server starts, so a token stays out of this file:
+    # { GITHUB_PERSONAL_ACCESS_TOKEN = ["gh", "auth", "token"] }. Never logged.
+    env_commands: dict[str, list[str]] = Field(default_factory=dict)
+    timeout_s: float = Field(default=60.0, gt=0, le=600)
+    enabled: bool = True
+
+
+class McpSettings(_Section):
+    servers: dict[str, McpServerSettings] = Field(default_factory=dict)
+
+    @field_validator("servers")
+    @classmethod
+    def _names(cls, servers: dict[str, McpServerSettings]) -> dict[str, McpServerSettings]:
+        for name in servers:
+            if not re.match(SERVER_NAME, name):
+                raise ValueError(f"server name {name!r}: lowercase letters, digits and _ (up to 24)")
+        return servers
+
+
 class AssistantSettings(_Section):
     # The name SONU answers to and uses for itself in replies.
     name: str = Field(default="Sonu", min_length=1, max_length=30)
@@ -170,6 +207,7 @@ class Settings(_Section):
     voice: VoiceSettings = VoiceSettings()
     journal: JournalSettings = JournalSettings()
     cloud: CloudSettings = CloudSettings()
+    mcp: McpSettings = McpSettings()
 
 
 class ConfigError(Exception):
@@ -303,4 +341,17 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # use_for = ["prompts", "planning"]
 # plan = "hard"                         # hard (several parts, --deep, local failed) | always
 # think = false
+
+# Outside MCP servers (D63): SONU starts each one and can use its tools. Their tools are high risk —
+# asked every time, with the arguments shown — except the ones you list as read_only. What they
+# answer is shown to you and never given to a model (it could carry instructions).
+# For example:
+#   [mcp.servers.fetch]
+#   command = ["uvx", "mcp-server-fetch"]
+#   reaches = "web"                     # local | web | account — what it can reach
+#   read_only = ["fetch"]               # runs without asking when every word it sends is yours
+#   tools = []                          # only these (empty: all)
+#   env = {}                            # environment for it (it gets no other secrets of yours)
+#   env_commands = {}                   # e.g. { GITHUB_PERSONAL_ACCESS_TOKEN = ["gh", "auth", "token"] }
+#   timeout_s = 60
 """
