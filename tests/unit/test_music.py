@@ -137,3 +137,11 @@ async def test_stop_means_stop(rig: Rig) -> None:
     await rig.run("play my music", ("media.play_local", {}))
     report = await rig.run("stop the music", ("media.control", {"action": "pause"}))
     assert lines(report) == ["Stopped the music"] and not rig.mpv.running
+
+
+@pytest.mark.anyio
+async def test_my_own_music_is_all_of_it(rig: Rig) -> None:
+    """Found on the laptop: "can you play my own music?" looked for songs named "own"."""
+    report = await rig.run("can you play my own music?", ("media.play_local", {"words": "my own music"}))
+    assert report.status == "done", lines(report)
+    assert len(rig.mpv.songs) == 4
