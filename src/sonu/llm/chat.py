@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
 from sonu.config.settings import ModelRole, OllamaSettings
-from sonu.llm.ollama import OllamaClient, OllamaError
+from sonu.llm.ollama import OllamaClient, OllamaError, OllamaLimited
 
 Role = Literal["system", "user", "assistant"]
 
@@ -38,6 +38,20 @@ class ChatResult:
 
 class ChatModelError(Exception):
     """The model could not be reached or did not answer."""
+
+
+class ChatModelLimited(ChatModelError):
+    """A usage limit was reached (Ollama Cloud, HTTP 429)."""
+
+    def __init__(self, message: str, retry_after_s: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_s = retry_after_s
+
+
+def _chat_error(exc: OllamaError) -> ChatModelError:
+    if isinstance(exc, OllamaLimited):
+        return ChatModelLimited(str(exc), exc.retry_after_s)
+    return ChatModelError(str(exc))
 
 
 class ChatModel(Protocol):
@@ -88,7 +102,7 @@ class OllamaChatModel:
                 timeout_s=self.settings.chat_timeout_s,
             )
         except OllamaError as exc:
-            raise ChatModelError(str(exc)) from exc
+            raise _chat_error(exc) from exc
         return ChatResult(
             content=reply.content,
             model=self.name,
@@ -116,7 +130,7 @@ class OllamaChatModel:
                 timeout_s=self.settings.chat_timeout_s,
             )
         except OllamaError as exc:
-            raise ChatModelError(str(exc)) from exc
+            raise _chat_error(exc) from exc
         return ChatResult(
             content=reply.content.strip(),
             model=self.name,

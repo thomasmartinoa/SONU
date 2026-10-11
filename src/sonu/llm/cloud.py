@@ -7,20 +7,31 @@
   removed) and ``vision`` (screenshots). Every local role (``[models]``) must be a local model: SONU
   refuses to start otherwise, because those roles see window titles and the screen.
 * Every send is in the audit log (``cloud.send``: what for, which model, how much, a fingerprint) —
-  written *before* sending; if it can't be written, nothing is sent.
+  written *before* sending; if it can't be written, nothing is sent. What came back is counted too
+  (``cloud.answer``: tokens, seconds), so `sonu doctor` can show the day's and the week's use.
+* A usage limit (HTTP 429) pauses the cloud — for as long as Ollama says, else 15 minutes — and SONU
+  stays local meanwhile: nothing is sent, nothing waits on it (``cloud.limited``; a file in SONU's
+  state folder, so sonud, `sonu` and `sonu doctor` all know). Prompts and vision fall back to the
+  local model too, like planning: a request never fails because of the cloud.
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import json
 import logging
 import re
-from dataclasses import replace
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from sonu.audit.log import AuditError, AuditLog
 from sonu.config.settings import CloudUse, Settings
-from sonu.llm.chat import ChatMessage, ChatModelError, ChatResult, OllamaChatModel
+from sonu.llm.chat import ChatMessage, ChatModelError, ChatModelLimited, ChatResult, OllamaChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +89,83 @@ def fingerprint(messages: list[ChatMessage]) -> tuple[int, int, str]:
     return chars, images, digest.hexdigest()[:16]
 
 
+DEFAULT_PAUSE_S = 15 * 60  # a 429 without Retry-After: try again after this
+PAUSE_FILE = "cloud-pause.json"  # in SONU's state folder
+
+
+@dataclass
+class CloudPause:
+    """Until when the cloud is paused after a usage limit (a small JSON file; None: in memory only)."""
+
+    path: Path | None = None
+    clock: Callable[[], float] = time.time
+    _until: float = 0.0
+
+    def until(self) -> float | None:
+        until = self._until
+        if self.path is not None:
+            with contextlib.suppress(OSError, ValueError, TypeError, AttributeError):
+                until = max(until, float(json.loads(self.path.read_text())["until"]))
+        return until if until > self.clock() else None
+
+    def start(self, seconds: float, why: str) -> float:
+        self._until = self.clock() + seconds
+        if self.path is not None:
+            try:
+                self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+                self.path.write_text(json.dumps({"until": self._until, "why": why[:200]}))
+            except OSError as exc:
+                logger.warning("couldn't save the cloud pause: %s", exc)
+        return self._until
+
+
+def staying_local(until: float) -> str:
+    return f"SONU stays local until {datetime.fromtimestamp(until).strftime('%H:%M')}"
+
+
 class CloudModel:
     """A cloud model for one use: each send is audited first, and a failure says what to do."""
 
-    def __init__(self, inner: OllamaChatModel, use: CloudUse, audit: AuditLog | None) -> None:
+    def __init__(
+        self,
+        inner: OllamaChatModel,
+        use: CloudUse,
+        audit: AuditLog | None,
+        pause: CloudPause | None = None,
+    ) -> None:
         self.inner, self.use, self.audit = inner, use, audit
+        self.pause = pause or CloudPause()
         self.name = inner.name
+
+    def _audit(self, kind: str, data: dict[str, Any]) -> None:
+        if self.audit is None:
+            logger.info("%s %s", kind, data)
+            return
+        with contextlib.suppress(OSError, AuditError):
+            self.audit.append(kind, data)
+
+    def _check_pause(self) -> None:
+        until = self.pause.until()
+        if until is not None:
+            raise ChatModelLimited(f"Ollama Cloud's usage limit was reached — {staying_local(until)}")
+
+    def _done(self, result: ChatResult) -> None:
+        self._audit(
+            "cloud.answer",
+            {
+                "use": self.use,
+                "model": self.name,
+                "tokens_in": result.prompt_tokens,
+                "tokens_out": result.output_tokens,
+                "seconds": round(result.duration_s, 2),
+            },
+        )
+
+    def _limited(self, exc: ChatModelLimited) -> ChatModelLimited:
+        until = self.pause.start(exc.retry_after_s or DEFAULT_PAUSE_S, str(exc))
+        until_text = datetime.fromtimestamp(until).isoformat(timespec="minutes")
+        self._audit("cloud.limited", {"use": self.use, "model": self.name, "until": until_text})
+        return ChatModelLimited(f"Ollama Cloud's usage limit was reached ({exc}) — {staying_local(until)}")
 
     def _record(self, messages: list[ChatMessage]) -> None:
         chars, images, digest = fingerprint(messages)
@@ -106,18 +188,78 @@ class CloudModel:
         return exc
 
     async def complete_json(self, messages: list[ChatMessage], schema: dict[str, Any]) -> ChatResult:
+        self._check_pause()
         self._record(messages)
         try:
             result = await self.inner.complete_json(messages, schema)
+        except ChatModelLimited as exc:
+            raise self._limited(exc) from exc
         except ChatModelError as exc:
             raise self._explain(exc) from exc
+        self._done(result)
         return replace(result, content=unfenced(result.content))
 
     async def complete_text(
         self, messages: list[ChatMessage], *, temperature: float, max_tokens: int
     ) -> ChatResult:
+        self._check_pause()
         self._record(messages)
         try:
-            return await self.inner.complete_text(messages, temperature=temperature, max_tokens=max_tokens)
+            result = await self.inner.complete_text(messages, temperature=temperature, max_tokens=max_tokens)
+        except ChatModelLimited as exc:
+            raise self._limited(exc) from exc
         except ChatModelError as exc:
             raise self._explain(exc) from exc
+        self._done(result)
+        return result
+
+
+class LocalFallback:
+    """The cloud model, or the local one when the cloud can't answer (not signed in, offline, a usage
+    limit): prompts and vision never fail because of the cloud (D62)."""
+
+    def __init__(self, cloud: CloudModel, local: OllamaChatModel) -> None:
+        self.cloud, self.local = cloud, local
+        self.name = cloud.name
+
+    async def complete_json(self, messages: list[ChatMessage], schema: dict[str, Any]) -> ChatResult:
+        try:
+            return await self.cloud.complete_json(messages, schema)
+        except ChatModelError as exc:
+            logger.info("%s: %s — using %s", self.cloud.use, exc, self.local.name)
+        return await self.local.complete_json(messages, schema)
+
+    async def complete_text(
+        self, messages: list[ChatMessage], *, temperature: float, max_tokens: int
+    ) -> ChatResult:
+        try:
+            return await self.cloud.complete_text(messages, temperature=temperature, max_tokens=max_tokens)
+        except ChatModelError as exc:
+            logger.info("%s: %s — using %s", self.cloud.use, exc, self.local.name)
+        return await self.local.complete_text(messages, temperature=temperature, max_tokens=max_tokens)
+
+
+@dataclass(frozen=True, slots=True)
+class CloudUsage:
+    sends: int = 0
+    tokens: int = 0  # in and out, as Ollama counted them
+
+
+def cloud_usage(audit: AuditLog, since: timedelta, now: datetime | None = None) -> CloudUsage:
+    """What SONU sent to the cloud in the last ``since`` (from the audit log)."""
+    start = (now or datetime.now(UTC)) - since
+    sends = tokens = 0
+    for record in audit.records():
+        if record.kind not in ("cloud.send", "cloud.answer"):
+            continue
+        try:
+            when = datetime.fromisoformat(record.ts.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if when < start:
+            continue
+        if record.kind == "cloud.send":
+            sends += 1
+        else:
+            tokens += int(record.data.get("tokens_in", 0)) + int(record.data.get("tokens_out", 0))
+    return CloudUsage(sends, tokens)

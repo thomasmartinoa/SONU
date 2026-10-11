@@ -25,6 +25,9 @@ class FakeOllama:
         # and cloud models that were retired (410, as the real one answers).
         self.cloud_user: str | None = None
         self.retired: set[str] = set()
+        # A usage limit reached: cloud chats answer 429 (with this Retry-After, if any).
+        self.cloud_limited = False
+        self.retry_after: int | None = None
 
     def add_model(self, name: str, *, size_gib: float, capabilities: list[str]) -> None:
         self.models[name] = {"size": int(size_gib * GIB), "capabilities": capabilities}
@@ -75,6 +78,10 @@ class FakeOllama:
             self.chat_requests.append(body)
             if str(body.get("model", "")).endswith("cloud") and self.cloud_user is None:
                 return httpx.Response(401, json={"error": "Unauthorized"})
+            if str(body.get("model", "")).endswith("cloud") and self.cloud_limited:
+                headers = {"Retry-After": str(self.retry_after)} if self.retry_after is not None else {}
+                error = {"error": "you've reached your hourly usage limit"}
+                return httpx.Response(429, json=error, headers=headers)
             if body.get("model") not in self.models:
                 return httpx.Response(404, json={"error": f"model '{body.get('model')}' not found"})
             content = self.chat_responder(body) if self.chat_responder else "{}"

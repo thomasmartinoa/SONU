@@ -369,3 +369,27 @@ async def test_the_cloud_models_line(xdg_env: dict[str, str]) -> None:
 
     wrong = await line(Settings(models=ModelsSettings(planner=PlannerRole(model="gpt-oss:120b-cloud"))), fake)
     assert wrong.status == "fail" and "window titles too" in wrong.summary
+
+
+@pytest.mark.anyio
+async def test_the_cloud_line_counts_use_and_says_when_a_limit_was_reached(xdg_env: dict[str, str]) -> None:
+    from sonu.audit.log import AuditLog
+    from sonu.config.settings import CloudSettings, PrivacySettings
+    from sonu.doctor.checks import check_ollama
+    from sonu.llm.cloud import PAUSE_FILE, CloudPause
+
+    fake = authors_ollama()
+    fake.add_model("gpt-oss:120b-cloud", size_gib=60, capabilities=["completion", "tools", "thinking"])
+    fake.cloud_user = "martin"
+    allow = Settings(privacy=PrivacySettings(cloud="allow"), cloud=CloudSettings(use_for=["planning"]))
+    ctx = make_context(xdg_env, hypr=None, ollama=fake, settings=allow)
+    audit = AuditLog(ctx.paths.audit_file)
+    for _ in range(3):
+        audit.append("cloud.send", {"use": "planning", "model": "gpt-oss:120b-cloud", "chars": 9000})
+        audit.append("cloud.answer", {"use": "planning", "tokens_in": 4000, "tokens_out": 100})
+    ready = by_id(await check_ollama(ctx))["ollama.cloud"]
+    assert ready.status == "ok" and "last 24 h: 3 sends (12k tokens) · 7 days: 3" in ready.summary
+
+    CloudPause(ctx.paths.state_dir / PAUSE_FILE).start(600, "hourly usage limit")
+    paused = by_id(await check_ollama(ctx))["ollama.cloud"]
+    assert paused.status == "warn" and "usage limit reached — SONU stays local until" in paused.summary

@@ -16,6 +16,7 @@ import re
 import sqlite3
 import stat
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from pathlib import Path
 
 from sonu.audit.log import AuditError, AuditLog
@@ -26,7 +27,7 @@ from sonu.desktop.hyprland.instance import discover_instance
 from sonu.desktop.hyprland.ipc import HyprlandClient
 from sonu.doctor.model import CheckResult, DoctorContext, Status
 from sonu.integrations.hypr_theme import detect_hypr_theme
-from sonu.llm.cloud import CloudRefused, check_local_roles
+from sonu.llm.cloud import PAUSE_FILE, CloudPause, CloudRefused, check_local_roles, cloud_usage, staying_local
 from sonu.llm.ollama import InstalledModel, ModelInfo, OllamaClient, OllamaError, same_model
 from sonu.system.commands import PACKAGES
 
@@ -693,13 +694,32 @@ async def _cloud_result(ctx: DoctorContext, client: OllamaClient) -> CheckResult
             return CheckResult(
                 check_id, group, title, "warn", f"for {said} · {model} can't do {capability}", hint=None
             )
-    return CheckResult(
-        check_id,
-        group,
-        title,
-        "ok",
-        f"Ollama Cloud for {said} · signed in as {who} · {', '.join(needed)} · every send in the audit log",
-    )
+    summary = f"Ollama Cloud for {said} · signed in as {who} · {', '.join(needed)}"
+    usage = _cloud_usage_text(ctx)
+    until = CloudPause(ctx.paths.state_dir / PAUSE_FILE).until()
+    if until is not None:
+        return CheckResult(
+            check_id,
+            group,
+            title,
+            "warn",
+            f"{summary} · usage limit reached — {staying_local(until)}{usage}",
+            hint="Ollama's free plan has hourly and weekly limits: see your use on ollama.com/settings.",
+        )
+    return CheckResult(check_id, group, title, "ok", f"{summary}{usage} · every send in the audit log")
+
+
+def _cloud_usage_text(ctx: DoctorContext) -> str:
+    """ " · last 24 h: 12 sends (48k tokens) · 7 days: 40" — counted from the audit log."""
+    if not ctx.settings.audit.enabled or not ctx.paths.audit_file.exists():
+        return ""
+    audit = AuditLog(ctx.paths.audit_file)
+    try:
+        day, week = cloud_usage(audit, timedelta(days=1)), cloud_usage(audit, timedelta(days=7))
+    except (OSError, AuditError):
+        return ""
+    tokens = f" ({day.tokens / 1000:.0f}k tokens)" if day.tokens >= 1000 else f" ({day.tokens} tokens)"
+    return f" · last 24 h: {day.sends} sends{tokens if day.tokens else ''} · 7 days: {week.sends}"
 
 
 # ---------------------------------------------------------------------------- desktop tools
