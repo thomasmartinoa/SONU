@@ -40,6 +40,7 @@ _NOT_A_NAME = {
     "everything",
     "play",
     "my",
+    "own",  # found on the laptop: "can you play my own music?" looked for songs named "own"
     "the",
     "shuffle",
     "random",

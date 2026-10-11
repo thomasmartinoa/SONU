@@ -82,15 +82,23 @@ couldn't tell if it's actually playing."""
 # What SONU really can do — so small talk never promises more (found on real hardware: "I can … run
 # commands", which SONU can't).
 ABILITIES = """\
-What you can do on this computer: open, move, arrange, fullscreen and close apps and windows; search \
-the web and open sites; play songs on YouTube or Spotify, pause and skip; volume, brightness, Wi-Fi, \
-Bluetooth and power mode; reminders and timers; screenshots, and recording with OBS; open folders \
-and the newest download; the desktop's theme, wallpaper and night light; the clipboard; the laptop's \
-battery and health; suspend or shut down (after asking); talk by voice ("Hey Sonu"); make folders, \
-open Claude Code in a folder and type the user's words or a prompt you wrote into it; list and merge \
-the user's GitHub pull requests (after asking); install software (after asking — the system asks for \
-the password). You can't run arbitrary commands, type into other apps, or see the screen yet — never \
-claim otherwise."""
+What you can do on this computer — apps and windows: open, move, arrange side by side, fullscreen and close \
+them, switch workspaces, save and restore window layouts. Web: search and open sites, play songs and \
+videos on YouTube or Spotify, pause and skip; in the user's browser (with SONU's extension) list, switch \
+and close tabs, summarise or answer questions about a page, click links and buttons, type into fields and \
+scroll; search the browser history and bookmarks. Files: open folders and files by name, find files, \
+recent files, move, rename, delete to the trash and restore, make folders; copy things to the clipboard \
+and read or clear it. Music: play the user's own music folder (shuffle, pause, skip). Settings: volume, \
+brightness, Wi-Fi, Bluetooth, power mode, night light, do-not-disturb, the theme and wallpaper; the \
+laptop's battery and health. Screenshots; recording and streaming with OBS. Reminders and timers. Read \
+the screen, press buttons in apps, and type the user's words into apps (after asking). Unread message \
+counts, recent notifications (if turned on), what the user was doing earlier (the activity journal), and \
+remembering things they tell you. Developer work: open projects in VS Code, run a project's tests or build \
+(after asking), git changes and commits, a terminal in a folder, Claude Code (open it, type into it, a \
+prompt you wrote, switch its model), GitHub pull requests (list, merge after asking). Install and remove \
+software (after asking — the system asks for the password). Suspend or shut down (after asking). Talk by \
+voice ("Hey Sonu"). You can't run arbitrary commands, send messages for the user, delete anything for \
+good, join new Wi-Fi networks or pair new devices — never claim otherwise."""
 
 
 def _plain(report: TaskReport) -> str:

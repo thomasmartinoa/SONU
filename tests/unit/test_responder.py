@@ -256,3 +256,105 @@ def test_a_reply_never_claims_an_earlier_press() -> None:
     allowed = "No frobnicate in thunar it has Back Home"
     assert not acceptable("I pressed Back in Thunar, but there's no Frobnicate button.", partial, allowed)
     assert acceptable("Thunar has no Frobnicate button — it has Back and Home.", partial, allowed)
+
+
+# Every tool, and words in ABILITIES that say SONU can do it. A new tool fails this test until the list (what
+# small talk says SONU can do) mentions it. Found 2026-10-12: the list still said SONU couldn't see the screen
+# or type into apps, months after it could, and left out files, music, the browser, projects and more.
+_SAID = {
+    "apps.launch": "open",
+    "browser.click": "click links",
+    "browser.close_tabs": "close tabs",
+    "browser.fill": "type into fields",
+    "browser.history": "browser history",
+    "browser.open_saved": "bookmarks",
+    "browser.read": "summarise",
+    "browser.scroll": "scroll",
+    "browser.tab": "switch",
+    "browser.tabs": "list, switch",
+    "clipboard.clear": "clear it",
+    "clipboard.copy": "copy things to the clipboard",
+    "clipboard.read": "read or clear",
+    "desktop.describe": "apps and windows",
+    "desktop.shell": "night light",
+    "desktop.theme": "theme",
+    "desktop.wallpaper": "wallpaper",
+    "dev.claude_model": "switch its model",
+    "dev.claude_open": "Claude Code",
+    "dev.git": "git changes",
+    "dev.open_project": "VS Code",
+    "dev.prompt": "a prompt you wrote",
+    "dev.read": "Claude Code",
+    "dev.run": "run a project's tests",
+    "dev.run_result": "run a project's tests",
+    "dev.terminal": "a terminal in a folder",
+    "dev.type": "type into it",
+    "files.find": "find files",
+    "files.make_folder": "make folders",
+    "files.move": "move",
+    "files.open": "open folders and files",
+    "files.recent": "recent files",
+    "files.rename": "rename",
+    "files.restore": "restore",
+    "files.trash": "delete to the trash",
+    "github.merge": "merge after asking",
+    "github.prs": "GitHub pull requests",
+    "journal.forget": "activity journal",
+    "journal.read": "what the user was doing earlier",
+    "journal.recording": "activity journal",
+    "layouts.forget": "layouts",
+    "layouts.list": "layouts",
+    "layouts.restore": "restore window layouts",
+    "layouts.save": "save and restore window layouts",
+    "media.control": "pause and skip",
+    "media.play": "YouTube or Spotify",
+    "media.play_local": "own music folder",
+    "memory.forget": "remembering",
+    "memory.list": "remembering",
+    "memory.remember": "remembering things",
+    "messages.unread": "Unread message counts",
+    "notifications.forget": "notifications",
+    "notifications.read": "recent notifications",
+    "obs.control": "streaming with OBS",
+    "obs.mute": "OBS",
+    "obs.record": "recording",
+    "obs.scene": "OBS",
+    "packages.install": "Install",
+    "packages.remove": "remove software",
+    "reminders.cancel": "Reminders",
+    "reminders.list": "Reminders",
+    "reminders.set": "Reminders and timers",
+    "screen.capture": "Screenshots",
+    "screen.press": "press buttons in apps",
+    "screen.read": "Read the screen",
+    "screen.type": "type the user's words into apps",
+    "settings.bluetooth": "Bluetooth",
+    "settings.bluetooth_device": "Bluetooth",
+    "settings.brightness": "brightness",
+    "settings.power_mode": "power mode",
+    "settings.volume": "volume",
+    "settings.wifi": "Wi-Fi",
+    "settings.wifi_connect": "Wi-Fi",
+    "system.power": "Suspend or shut down",
+    "system.status": "battery and health",
+    "voice.wake": "Hey Sonu",
+    "web.open": "open sites",
+    "web.search": "search",
+    "windows.close": "close them",
+    "windows.focus": "switch",
+    "windows.move": "move",
+    "windows.side_by_side": "side by side",
+    "windows.state": "fullscreen",
+    "workspaces.show": "switch workspaces",
+}
+
+
+def test_small_talk_knows_every_tool() -> None:
+    from sonu.core.responder import ABILITIES
+    from sonu.tools.registry import ToolRegistry
+
+    text = " ".join(ABILITIES.split())
+    names = {tool.name for tool in ToolRegistry().tools}
+    assert names - _SAID.keys() == set(), "new tools: add them to ABILITIES and to _SAID"
+    assert [name for name, words in _SAID.items() if words not in text] == []
+    assert "see the screen yet" not in text and "type into other apps" not in text
