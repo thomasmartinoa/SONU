@@ -133,3 +133,11 @@ def test_the_journal_command(runner: CliRunner, env: dict[str, str]) -> None:
     assert not (data / "journal-paused").exists()
     result = runner.invoke(app, ["journal", "forget", "--all"], env=env)
     assert result.exit_code == 0 and "Deleted 1 entries." in result.output
+
+
+def test_help_texts_lose_no_words(runner: CliRunner) -> None:
+    # Found on the laptop: `sonu eval --help` said "Also score your  model" — rich took "[cloud]" as markup.
+    result = runner.invoke(app, ["eval", "--help"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0
+    assert "  model" not in result.output
+    assert "cloud section" in result.output

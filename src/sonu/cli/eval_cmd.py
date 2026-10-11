@@ -27,7 +27,7 @@ _DEEP = typer.Option(False, "--deep", help="Use the deep-planner role settings (
 _CLOUD = typer.Option(
     False,
     "--cloud",
-    help="Also score your [cloud] model (Ollama Cloud; only the made-up eval desktop is sent).",
+    help="Also score the model in the config's cloud section (Ollama Cloud; only made-up eval data goes).",
 )
 
 
