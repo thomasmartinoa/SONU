@@ -7,6 +7,7 @@ several), stores it, and reads it back from disk before saying it's remembered.
 
 from __future__ import annotations
 
+import re
 from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -67,6 +68,11 @@ def _stored(ctx: ToolContext, item: MemoryItem) -> bool:
 
 
 # ---------------------------------------------------------------------------- memory.remember
+# "When I say editor I mean VS Code", "VS Code means Code OSS": an alias. Anything else is a note.
+_MEANS = re.compile(r"\b(?:mean|means|meant|is short for|stands for)\b", re.I)
+_REMEMBER = re.compile(r"^(?:please\s+)?remember\s+(?:that\s+)?(.+?)[.!?]*$", re.I)
+
+
 class RememberArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -107,6 +113,12 @@ class Remember(Tool):
         text = " ".join(a.text.split())
         if a.kind == "name":
             return Prepared(f"Remember your name: {text}", MemoryItem("name", text))
+        if a.kind == "alias" and not _MEANS.search(ctx.request_text):
+            # Found in the evals (v33): "remember that the shop project is in dev_works/shop-app" was planned
+            # as an alias for the app "dev_works/shop-app". Without "mean", it's a note in the user's words.
+            said = _REMEMBER.match(" ".join(ctx.request_text.split()))
+            text = said.group(1) if said else f"{text} {a.app}"
+            return Prepared(f"Remember: {text}", MemoryItem("note", text))
         if a.kind == "note":
             return Prepared(f"Remember: {text}", MemoryItem("note", text))
         words = normalize(text)

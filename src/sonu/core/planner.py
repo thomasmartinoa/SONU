@@ -364,7 +364,11 @@ clearing the notifications on screen stays desktop.shell clear_notifications.
 <words> tab" is browser.tab with words = the user's words for it; "close the <words> tab(s)" is \
 browser.close_tabs (all only for "all / every"). A website that isn't open is web.open, not browser.tab. \
 "Summarise this page / what does this article say about …?" is browser.read with question = the user's \
-question (words only for a tab they name) — not screen.read.
+question (words only for a tab they name) — not screen.read. On the web page: "click <words>" / "press \
+the <words> link / button" is browser.click (control = the user's words for it); "type / search for \
+<text> in the <field>" is browser.fill (text = exactly their words; field = their words for the field; \
+submit for "and press enter / and search / and send"); "scroll down / up / to the top / bottom" is \
+browser.scroll.
 - "Do I have new / unread messages?", "any WhatsApp messages?", "how many unread emails?" is \
 messages.unread (app only if they named one) — not screen.read, not system.status.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \
@@ -474,6 +478,7 @@ _OFF_AND_DND = re.compile(r"\boff\b.*\band (?:the )?(?:do not disturb|dnd)\b(?! 
 _PAIR = re.compile(r"\bpair\b")
 _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 # The words that point at the focused window ("close this", "close it", "close the window").
+_IN_A_FIELD = re.compile(r"\b(?:in|into)\s+(?:the|my|this)\s+(?:[\w-]+\s+){0,3}(?:field|box|bar)\b")
 _WEB_PAGE = re.compile(r"\b(?:(?:web ?)?page|webpage|article|website|tab)\b")
 _THIS_WINDOW = re.compile(r"\b(?:this|that|it|here|focused|current|active|window)\b")
 # What makes "open SONU" an editor's job (dev.open_project) rather than the file manager's.
@@ -671,6 +676,19 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 problems.append(
                     f"step {index + 1} (screen.read): the user asked about a web page — plan {wanted} "
                     "instead (add words only for a tab they named)"
+                )
+    # Found on the laptop (dry run, D72): "type red shoes in the search box and press enter" was planned as
+    # keystrokes into the browser window (named by a title the model copied). A page's field is browser.fill.
+    if _IN_A_FIELD.search(said):
+        for index, step in enumerate(plan.steps):
+            if step.tool == "screen.type":
+                text = str(step.args.get("text") or "")
+                wanted = json.dumps(
+                    {"tool": "browser.fill", "args": {"text": text, "field": "<their words>"}}
+                )
+                problems.append(
+                    f"step {index + 1} (screen.type): the user named a field on the page — plan {wanted} "
+                    "(submit true if they said press enter / search / send)"
                 )
     # Found on real hardware: "press the frobnicate button in thunar" was listed as unsupported; SONU
     # looks the button up itself and says what the app has.

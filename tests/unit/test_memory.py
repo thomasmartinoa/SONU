@@ -143,3 +143,16 @@ async def test_name_note_list_and_forget(rig: Rig) -> None:
     report = await rig.run("forget everything", ("memory.forget", {"all": True}), approve=False)
     assert report.status == "declined" and rig.asked[-1].risk is Risk.MEDIUM
     assert rig.ctx.memory.name() == "Martin"
+
+
+@pytest.mark.anyio
+async def test_an_alias_without_mean_is_a_note(rig: Rig) -> None:
+    """Found in the evals (v33): a note about a folder was planned as an alias for an app."""
+    report = await rig.run(
+        "remember that the shop project is in dev_works/shop-app",
+        ("memory.remember", {"kind": "alias", "text": "shop project", "app": "dev_works/shop-app"}),
+    )
+    assert report.lines() == ["✔ I'll remember: the shop project is in dev_works/shop-app"]
+    assert [(i.kind, i.text) for i in rig.ctx.memory.items] == [
+        ("note", "the shop project is in dev_works/shop-app")
+    ]

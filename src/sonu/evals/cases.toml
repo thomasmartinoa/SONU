@@ -1220,3 +1220,30 @@ expect_status = ["done"]
 require_tools = ["browser.read"]
 forbid_tools = ["screen.read", "web.open", "web.search"]
 
+# ---- clicking, typing and scrolling on a page (v33)
+[[case]]
+id = "click-a-link-on-the-page"
+request = "click the pricing link"
+windows = [{ class = "zen", title = "Shop — Zen Browser", workspace = 2, focused = true }]
+tabs = [["Shop", "https://example.com/"]]
+expect_status = ["done"]
+require_tools = ["browser.click"]
+forbid_tools = ["screen.press", "web.open", "web.search"]
+
+[[case]]
+id = "search-on-the-page"
+request = "type red shoes in the search box and press enter"
+windows = [{ class = "zen", title = "Shop — Zen Browser", workspace = 2, focused = true }]
+tabs = [["Shop", "https://example.com/"]]
+expect_status = ["done"]
+expect_confirmed = ["browser.fill"]
+forbid_tools = ["screen.type", "web.search"]
+
+[[case]]
+id = "scroll-the-page"
+request = "scroll down"
+windows = [{ class = "zen", title = "Shop — Zen Browser", workspace = 2, focused = true }]
+tabs = [["Shop", "https://example.com/"]]
+expect_status = ["done"]
+require_tools = ["browser.scroll"]
+

@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import re
 import secrets
-from difflib import SequenceMatcher
+from dataclasses import replace
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -32,8 +31,10 @@ from sonu.tools.base import (
     ToolOutcome,
     outcome_from_checks,
 )
+from sonu.tools.browser_tools import FillOnPage, fill_in_window
 from sonu.tools.context import ToolContext
 from sonu.tools.grounding import ungrounded_words
+from sonu.tools.naming import RISKY_NAMES, name_score
 from sonu.tools.targets import WindowTarget, find_windows
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
@@ -170,52 +171,6 @@ class ReadScreen(Tool):
 
 
 # ---------------------------------------------------------------------------- screen.press
-# Buttons whose press can't be taken back: asked like other high-risk steps (by voice: on screen).
-_RISKY = re.compile(
-    r"\b(delete|remove|erase|format|send|submit|post|publish|buy|pay|purchase|order|checkout|confirm|"
-    r"merge|uninstall|install|sign out|log ?out|shut ?down|restart|discard|overwrite|transfer)\b",
-    re.I,
-)
-
-
-# What people add to a button's name ("the home button"); found on the laptop: "home button" didn't
-# match Thunar's "Home".
-_KIND_WORDS = {
-    "the",
-    "a",
-    "button",
-    "buttons",
-    "icon",
-    "tab",
-    "menu",
-    "link",
-    "item",
-    "toggle",
-    "switch",
-    "key",
-    "option",
-}
-
-
-def _words(text: str) -> list[str]:
-    return [w for w in re.split(r"[^a-z0-9]+", text.lower()) if w]
-
-
-def _score(control: Control, wanted: str) -> int:
-    name = control.name.lower().strip()
-    words = [w for w in _words(wanted) if w not in _KIND_WORDS] or _words(wanted)
-    wanted = " ".join(words)
-    if name == wanted or _words(name) == words:
-        return 100
-    if words and _words(name)[: len(words)] == words:
-        return 60
-    if words and all(w in _words(name) for w in words):
-        return 40
-    if SequenceMatcher(None, name, wanted.lower()).ratio() >= 0.8:
-        return 30
-    return 0
-
-
 class PressArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -267,7 +222,7 @@ class PressControl(Tool):
             picked = [c for c in usable if c.path == choice]
         else:
             scored = sorted(
-                ((_score(c, a.control), c) for c in usable), key=lambda i: (-i[0], not i[1].showing)
+                ((name_score(c.name, a.control), c) for c in usable), key=lambda i: (-i[0], not i[1].showing)
             )
             best = scored[0][0] if scored else 0
             picked = [c for s, c in scored if s == best and best > 0]
@@ -291,7 +246,7 @@ class PressControl(Tool):
                 StepStatus.NEEDS_INPUT, question, question=question, choices=Choices(question, options)
             )
         control = picked[0]
-        risky = bool(_RISKY.search(control.name))
+        risky = bool(RISKY_NAMES.search(control.name))
         return Prepared(
             f"Press {control.label} in {window.window_class}",
             ("a11y", window, control),
@@ -401,11 +356,12 @@ class TypeText(Tool):
             return ToolOutcome(
                 StepStatus.FAILED, f"What to type must be your words ({', '.join(missing)} isn't)"
             )
-        if not ctx.which("wtype"):
-            return ToolOutcome(StepStatus.FAILED, "wtype isn't installed (it types the keys)")
+        no_wtype = ToolOutcome(StepStatus.FAILED, "wtype isn't installed (it types the keys)")
         opened = [w for a_ in reversed(ctx.task_windows) for w in snapshot.windows if w.address == a_]
         into_new = a.window is None or (a.window.focused and not a.window.app)
         if into_new and not opened and ctx.task_would_open:
+            if not ctx.which("wtype"):
+                return no_wtype
             # Found on the laptop: the dry run of "open a terminal on 3 and type hello" said "into zen".
             then = " and press Enter" if a.enter else ""
             step = ctx.task_would_open[-1]
@@ -419,6 +375,13 @@ class TypeText(Tool):
                     StepStatus.FAILED, f"Can't type there: {match.problem or 'no such window'}"
                 )
             window = match.windows[0]
+        page = await fill_in_window(ctx, window, a.text, a.enter, choice)
+        if isinstance(page, Prepared):
+            return replace(page, payload=("page", page.payload))
+        if page is not None:
+            return page
+        if not ctx.which("wtype"):
+            return no_wtype
         then = " and press Enter" if a.enter else ""
         return Prepared(
             f"Type “{a.text}” into {window.window_class} as keystrokes{then}",
@@ -427,6 +390,8 @@ class TypeText(Tool):
         )
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        if prepared.payload and prepared.payload[0] == "page":  # a field on a page, through the extension
+            return await FillOnPage().execute(replace(prepared, payload=prepared.payload[1]), ctx)
         window, text, enter = cast("tuple[Window, str, bool]", prepared.payload)
         shown = await _show(ctx, window)
         if isinstance(shown, ToolOutcome):
