@@ -37,6 +37,8 @@ from sonu.config.paths import SonuPaths
 from sonu.config.settings import Settings
 from sonu.core.engine import ConfirmRequest, Engine, Observer
 from sonu.core.journal import FocusTracker
+from sonu.core.notifications import NotificationLog
+from sonu.core.notifications import watch as watch_notifications
 from sonu.core.planning import Plan, PlanningError
 from sonu.core.report import ICONS, StepRecord, TaskReport
 from sonu.daemon.client import Notice, Progress
@@ -261,6 +263,11 @@ class Daemon:
         self.journal = open_journal(settings, paths)
         self._journaling: asyncio.Task[None] | None = None
         self.journal_retry_s = 5.0  # Hyprland restarted or isn't up yet: try again this often
+        notes = settings.notifications
+        self.notifications = (
+            NotificationLog(notes.keep_minutes, notes.exclude_apps) if notes.remember else None
+        )
+        self._watching: asyncio.Task[None] | None = None
 
     # -------------------------------------------------------------- lifetime
     async def start(self, path: Path | None = None) -> Path:
@@ -275,6 +282,8 @@ class Daemon:
         self._warming = asyncio.create_task(self.warm_up())
         if self.journal is not None:
             self._journaling = asyncio.create_task(self.keep_journal())
+        if self.notifications is not None:
+            self._watching = asyncio.create_task(watch_notifications(self.notifications, self.env))
         return path
 
     def _journal_instance(self) -> HyprlandInstance:
@@ -345,10 +354,11 @@ class Daemon:
     async def stop(self) -> None:
         if self._warming is not None:
             self._warming.cancel()
-        if self._journaling is not None:
-            self._journaling.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._journaling
+        for task in (self._journaling, self._watching):
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
         if self.journal is not None:
             self.journal.close()
         if self.outside is not None:
@@ -646,6 +656,7 @@ class Daemon:
             layouts=load_layouts(self.paths),
             wake=self.wake,
             journal=self.journal,
+            notifications=self.notifications,
             writer=self.models.writer,
             reader=self.models.reader,
         )

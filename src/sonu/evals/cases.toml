@@ -1153,3 +1153,21 @@ expect_status = ["done"]
 require_tools = ["messages.unread"]
 forbid_tools = ["screen.read", "apps.launch"]
 
+# ---- the latest notifications (v30)
+
+[[case]]
+id = "what-was-that-notification"
+request = "what was that notification?"
+notifications = [[3, "Telegram", "Bob", "lunch?"], [1, "WhatsApp", "Alice", "see you at 6"]]
+expect_status = ["done"]
+require_tools = ["notifications.read"]
+forbid_tools = ["screen.read", "messages.unread", "desktop.shell"]
+
+[[case]]
+id = "read-my-notifications"
+request = "read my notifications"
+notifications = [[3, "Telegram", "Bob", "lunch?"], [1, "WhatsApp", "Alice", "see you at 6"]]
+expect_status = ["done"]
+require_tools = ["notifications.read"]
+forbid_tools = ["desktop.shell", "screen.read"]
+

@@ -102,6 +102,31 @@ def _private_dir_result(path: Path) -> tuple[str, str] | None:
     return "ok", f"{path} (mode {mode:o})"
 
 
+def _notifications_result(ctx: DoctorContext, group: str) -> CheckResult:
+    """The notifications sonud keeps (D69): off, or kept in memory — busctl watches the bus."""
+    settings = ctx.settings.notifications
+    name = "Notifications kept"
+    if not settings.remember:
+        return CheckResult(
+            "sonu.notifications",
+            group,
+            name,
+            "info",
+            "off — “what was that notification?” needs [notifications] remember = true",
+        )
+    if not ctx.which("busctl"):
+        return CheckResult(
+            "sonu.notifications", group, name, "warn", "on, but busctl (systemd) isn't installed"
+        )
+    return CheckResult(
+        "sonu.notifications",
+        group,
+        name,
+        "ok",
+        f"the latest, in memory only for {settings.keep_minutes} min, while sonud runs",
+    )
+
+
 def _journal_result(ctx: DoctorContext, group: str) -> CheckResult:
     """The activity journal (D60): on, paused or off, and how much it holds."""
     settings = ctx.settings.journal
@@ -244,6 +269,7 @@ async def check_sonu(ctx: DoctorContext) -> list[CheckResult]:
                 )
 
     results.append(_journal_result(ctx, group))
+    results.append(_notifications_result(ctx, group))
     policy = ctx.settings.policy.autonomy
     cloud = ctx.settings.privacy.cloud
     results.append(

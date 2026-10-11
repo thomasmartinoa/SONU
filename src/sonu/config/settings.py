@@ -129,6 +129,15 @@ class JournalSettings(_Section):
     exclude_apps: list[str] = Field(default_factory=list, max_length=50)
 
 
+class NotificationsSettings(_Section):
+    # "What was that notification?" (D69): sonud keeps the latest notifications in memory only (never on
+    # disk), shown and said only to you. Off unless turned on: notifications can carry message previews.
+    remember: bool = False
+    keep_minutes: int = Field(default=60, ge=1, le=24 * 60)
+    # Apps never kept (names or parts of them), e.g. ["signal"]; password managers never are.
+    exclude_apps: list[str] = Field(default_factory=list, max_length=50)
+
+
 _DEFAULT_CLOUD_USES: tuple[CloudUse, ...] = ("prompts", "planning")
 
 
@@ -206,6 +215,7 @@ class Settings(_Section):
     assistant: AssistantSettings = AssistantSettings()
     voice: VoiceSettings = VoiceSettings()
     journal: JournalSettings = JournalSettings()
+    notifications: NotificationsSettings = NotificationsSettings()
     cloud: CloudSettings = CloudSettings()
     mcp: McpSettings = McpSettings()
 
@@ -328,6 +338,13 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # enabled = true
 # keep_days = 30
 # exclude_apps = []              # more apps never to record, e.g. ["signal"]
+
+[notifications]
+# "What was that notification?": sonud keeps the latest ones in memory only (never on disk) and shows
+# or says them only to you. Off by default — notifications can carry message previews.
+# remember = false
+# keep_minutes = 60
+# exclude_apps = []              # apps never kept, e.g. ["signal"]
 
 [cloud]
 # Ollama Cloud models, reached through your local Ollama after `ollama signin`. Nothing is sent unless

@@ -180,6 +180,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "list-layouts": steps(("layouts.list", {})),
     "unread-messages": steps(("messages.unread", {})),
     "unread-in-one-app": steps(("messages.unread", {"app": "telegram"})),
+    "what-was-that-notification": steps(("notifications.read", {})),
+    "read-my-notifications": steps(("notifications.read", {"which": "recent"})),
     "folder-and-a-terminal-there": steps(
         ("files.make_folder", {"name": "demo", "inside": "dev_works"}), ("dev.terminal", {"workspace": 4})
     ),

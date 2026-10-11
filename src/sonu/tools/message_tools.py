@@ -9,11 +9,13 @@ has no window to read: SONU says so instead of counting it as zero. Nothing is o
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
-from typing import cast
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sonu.core.notifications import NotificationLog
 from sonu.desktop.apps.classes import window_matches
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import normalize
@@ -46,6 +48,7 @@ _CHAT_NAMES = {
 }
 # Where apps put their count: "(3) WhatsApp" / "(3) Discord | …", "Telegram (3)", "Inbox (12) - …".
 _LEADING = re.compile(r"^\s*\((\d{1,5})\)")
+MAX_READ = 5
 _DOT = re.compile(r"^\s*[•●]")  # Discord: unread, no number
 
 
@@ -154,4 +157,102 @@ class UnreadMessages(Tool):
         return ToolOutcome(StepStatus.DONE, "; ".join(parts), (check,))
 
 
-MESSAGE_TOOLS: tuple[Tool, ...] = (UnreadMessages(),)
+# ---------------------------------------------------------------------------- notifications (D69)
+NOT_KEPT = (
+    "I'm not keeping notifications — to have SONU remember the latest ones (in memory only, while sonud "
+    "runs), add [notifications] remember = true to ~/.config/sonu/config.toml"
+)
+
+
+def _log(ctx: ToolContext) -> NotificationLog | ToolOutcome:
+    if ctx.notifications is None:
+        return ToolOutcome(StepStatus.FAILED, NOT_KEPT)
+    return ctx.notifications
+
+
+class ReadNotificationsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    app: str | None = Field(default=None, max_length=40, description="only this app's, if the user named one")
+    which: Literal["latest", "recent"] = Field(
+        default="latest", description="latest: 'what was that notification?'; recent: 'read my notifications'"
+    )
+
+
+class ReadNotifications(Tool):
+    name = "notifications.read"
+    description = (
+        "Read the latest notification ('what was that notification?') or the recent ones ('read my "
+        "notifications', 'any notifications from WhatsApp?'), as SONU kept them."
+    )
+    risk = Risk.READ_ONLY
+    effects = frozenset({Effect.SYSTEM_READ})
+    Args = ReadNotificationsArgs
+    grounded = ("app",)
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(ReadNotificationsArgs, args)
+        if a.app and (missing := ungrounded_words(a.app, ctx.user_words or ctx.request_text)):
+            return ToolOutcome(
+                StepStatus.FAILED, f"The app must be your own word ({', '.join(missing)} isn't)"
+            )
+        log = _log(ctx)
+        if isinstance(log, ToolOutcome):
+            return log
+        what = "the latest notification" if a.which == "latest" else "the recent notifications"
+        return Prepared(f"Read {what}{f' from {a.app}' if a.app else ''}", (log, a))
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        log, a = cast("tuple[NotificationLog, ReadNotificationsArgs]", prepared.payload)
+        now = time.time()
+        items = log.recent(now)
+        if a.app:
+            wanted = set(normalize(a.app).split()) - {"the", "my", "app"}
+            items = [n for n in items if wanted & set(normalize(n.app).split())]
+        read = (Check("read the notifications SONU kept", True),)
+        if not items:
+            minutes = log.keep_s // 60
+            source = f" from {a.app}" if a.app else ""
+            return ToolOutcome(
+                StepStatus.DONE, f"No notifications{source} in the last {minutes} minutes", read
+            )
+        shown = items[:1] if a.which == "latest" else items[:MAX_READ]
+        text = "; ".join(n.describe(now) for n in shown)
+        more = len(items) - len(shown)
+        if more and a.which == "recent":
+            text += f" (and {more} older)"
+        # What apps and people wrote: shown and said to the user, never given to a model or the audit log.
+        return ToolOutcome(StepStatus.DONE, text, read, private=True)
+
+
+class ForgetNotificationsArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ForgetNotifications(Tool):
+    name = "notifications.forget"
+    description = "Forget the notifications SONU kept ('forget my notifications'). The shell's own stay."
+    risk = Risk.LOW
+    effects = frozenset({Effect.SETTINGS_CHANGE})
+    Args = ForgetNotificationsArgs
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        log = _log(ctx)
+        return log if isinstance(log, ToolOutcome) else Prepared("Forget the notifications SONU kept", log)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        log = cast(NotificationLog, prepared.payload)
+        count = log.forget()
+        gone = Check("none kept now", not log.recent())
+        return ToolOutcome(
+            StepStatus.DONE if gone.passed else StepStatus.FAILED,
+            f"Forgot {count} notification{'s' if count != 1 else ''}",
+            (gone,),
+        )
+
+
+MESSAGE_TOOLS: tuple[Tool, ...] = (UnreadMessages(), ReadNotifications(), ForgetNotifications())

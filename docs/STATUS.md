@@ -21,7 +21,7 @@ _Last update: 2026-10-11_
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
 | M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); part 3 🧪 **clicking by looking + typing** (#37, [D58](DECISIONS.md)) |
 | M5 Connect | 🚧 part 1 🧪 **Claude Code uses SONU's tools (MCP)**: `sonu mcp serve`, SONU's policy, asked on screen, personal content kept back (#45, [D61](DECISIONS.md)); part 2 🧪 **Ollama Cloud, opt-in**: prompts, harder requests (no window titles), vision; every send audited (#46, [D62](DECISIONS.md)); part 3 🧪 **other MCP servers' tools**: local, web and account servers, high risk unless listed read-only, answers shown only to you (#49, [D63](DECISIONS.md)); 🧪 **cloud usage limits**: a 429 pauses the cloud and SONU stays local, use counted in `sonu doctor` (#50, [D64](DECISIONS.md)) — **M5 is complete** |
-| M7 Beyond the desktop | 🚧 part 1 🧪 **unread messages**: "do I have new messages?" — the counts open chat and mail apps show, nothing else of their titles (#55, [D68](DECISIONS.md)) |
+| M7 Beyond the desktop | 🚧 part 1 🧪 **unread messages**: "do I have new messages?" — the counts open chat and mail apps show, nothing else of their titles (#55, [D68](DECISIONS.md)); part 2 🧪 **"what was that notification?"**, opt-in: the latest kept in memory only, shown and said only to you (#56, [D69](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
 
@@ -45,9 +45,9 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **135 / 135** on the v29 suite, twice (2026-10-11, the laptop's GPU, ~1.2 s mean planning), including
-nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts and two
-for unread messages; the M1 example (VSCodium + Chromium
+`qwen3.5:4b`: **137 / 137** on the v30 suite, twice (2026-10-11, the laptop's GPU, ~1.2 s mean planning), including
+nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts and four
+for messages and notifications; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -225,7 +225,12 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    chat app open; the owner away, so none was opened — WhatsApp, Telegram, Discord and a Gmail web app are installed):
    "do I have any new messages?" → "Gmail, Discord, Telegram and WhatsApp Desktop aren't open, so I can't see their
    count"; "how many unread emails do I have?" → only Gmail (it read every app before: fixed, see the findings). With
-   an app open it's the owner's to try. Next in M7: opening a chat; sending only ever after asking.
+   an app open it's the owner's to try. ~~"What was that notification?"~~ (#56, [D69](DECISIONS.md), **off until the
+   owner turns it on**: `[notifications] remember = true`). The rice's Quickshell only offers a count over IPC, so
+   sonud watches the session bus (`busctl --user monitor`, the `Notify` calls). Checked with the real busctl on a
+   private session bus (nothing popped up on the owner's screen): a WhatsApp notification kept and cleaned
+   ("Alice — see you at 6 ok?", markup and line breaks gone), KeePassXC's dropped, SONU's reminder kept. On the
+   owner's own bus it's the owner's to try. Next in M7: opening a chat; sending only ever after asking.
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
@@ -312,7 +317,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #52 | 2026-10-11 | Projects ([D65](DECISIONS.md)): "open my SONU project / planner.py at line 40" in VS Code (`dev.open_project`), "run the tests" — only the project's own commands, asked with the exact command, in a SONU window, the exit code decides (`dev.run`, `dev.run_result`) — and read-only git, private (`dev.git`); Claude Code's tools no longer pick a command's window; planner checks: "open the <name> folder" stays the file manager's, closing the focused window only when the user means it, maximize ≠ fullscreen; eval suite v26 (128) |
 | #53 | 2026-10-11 | A terminal in a folder ([D66](DECISIONS.md), `dev.terminal`): the user's terminal told the folder (kitty `--directory`, foot/alacritty/ghostty/gnome-terminal `--working-directory`, wezterm `--cwd`, konsole `--workdir`), done when its shell's working folder (`/proc`) is that folder; the folder a request makes is found by its name in a dry run too; planner checks: a terminal with no folder stays apps.launch, a terminal in a folder doesn't also open the file manager; eval suite v27 (130) |
 | #54 | 2026-10-11 | Saved layouts ([D67](DECISIONS.md)): `layouts.save` (which app is on which workspace and a terminal's folder — never titles; replacing one asks), `layouts.restore` (open windows moved, missing apps opened there, each checked; nothing closed), `layouts.list`, `layouts.forget`; "this workspace" only when the user says it; eval suite v28 (133) |
-| #55 | open | Unread messages ([D68](DECISIONS.md), M7 part 1): `messages.unread` reads the count open chat and mail apps show in their titles — "(3) WhatsApp", "Telegram (3)", "Inbox (12) …", "• Discord" — and says only the app and the number; apps not open are said, never counted as zero; "emails" means the mail apps (the user's words decide); eval suite v29 (135) |
+| #55 | 2026-10-11 | Unread messages ([D68](DECISIONS.md), M7 part 1): `messages.unread` reads the count open chat and mail apps show in their titles — "(3) WhatsApp", "Telegram (3)", "Inbox (12) …", "• Discord" — and says only the app and the number; apps not open are said, never counted as zero; "emails" means the mail apps (the user's words decide); eval suite v29 (135) |
+| #56 | open | "What was that notification?" ([D69](DECISIONS.md), opt-in): sonud watches the session bus for notifications (`busctl --user monitor`) and keeps the latest 30 in memory only (dropped after `keep_minutes`, gone when it stops); never password managers', the listed apps' or SONU's own (except reminders); `notifications.read` (latest / recent / one app) is a private result; `notifications.forget`; a `sonu doctor` line; eval suite v30 (137) |
 
 ### Found on real hardware → fixed
 
