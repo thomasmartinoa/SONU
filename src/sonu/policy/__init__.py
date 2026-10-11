@@ -1,5 +1,5 @@
 """Policy: whether a step may run, needs confirmation, or is denied."""
 
-from sonu.policy.engine import Policy, PolicyDecision
+from sonu.policy.engine import ASK_OUTSIDE, Policy, PolicyDecision, outside_caller_risk
 
-__all__ = ["Policy", "PolicyDecision"]
+__all__ = ["ASK_OUTSIDE", "Policy", "PolicyDecision", "outside_caller_risk"]

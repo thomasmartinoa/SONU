@@ -18,7 +18,19 @@ from typing import Any, TextIO
 from sonu.daemon.protocol import ENV_KEYS, decode, encode, socket_path
 
 CONNECT_TIMEOUT_S = 0.3
-_COMMANDS = {"ask", "prompt", "eval", "doctor", "config", "audit", "desktop", "daemon", "voice", "journal"}
+_COMMANDS = {
+    "ask",
+    "prompt",
+    "eval",
+    "doctor",
+    "config",
+    "audit",
+    "desktop",
+    "daemon",
+    "voice",
+    "journal",
+    "mcp",
+}
 _FLAGS = {"--dry-run", "--json", "--notify", "-v", "-vv", "-vvv", "--verbose"}
 _COLOURS = {
     "done": "32",

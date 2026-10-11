@@ -8,11 +8,12 @@ riskier than LOW (e.g. closing windows) always needs confirmation, whatever the 
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from sonu.config.settings import AutonomyMode
-from sonu.tools.base import Risk, Tool
+from sonu.tools.base import Effect, Risk, Tool
 
 Verdict = Literal["allow", "confirm", "deny"]
 
@@ -48,3 +49,27 @@ class Policy:
                 reason += " (the plan may have been influenced by window titles)"
             return PolicyDecision("confirm", reason)
         return PolicyDecision("allow", "low-risk action")
+
+
+# What another program (Claude Code over MCP) can't do without the user saying yes on screen: anything
+# that leaves the laptop, types, writes or removes — even when it's low risk by voice.
+ASK_OUTSIDE = frozenset(
+    {
+        Effect.WEB_OPEN,
+        Effect.TERMINAL_INPUT,
+        Effect.UI_INPUT,
+        Effect.GITHUB_WRITE,
+        Effect.FILE_WRITE,
+        Effect.INSTALL,
+        Effect.UNINSTALL,
+        Effect.POWER,
+        Effect.WINDOW_CLOSE,
+    }
+)
+
+
+def outside_caller_risk(tool: Tool, args: Mapping[str, Any]) -> Risk | None:
+    """The least risk of a step another program asked for (D61): there are no user's words to check
+    a search or a name against, so a step using such words — or one in ``ASK_OUTSIDE`` — is asked."""
+    words = any(isinstance(args.get(name), str) and args[name].strip() for name in tool.grounded)
+    return Risk.MEDIUM if words or tool.effects & ASK_OUTSIDE else None
