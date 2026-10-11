@@ -12,7 +12,7 @@ sonu eval --json                       # machine-readable
 sonu eval --cloud                      # also your [cloud] model (Ollama Cloud), planning as SONU will: no titles
 ```
 
-## The cases (v24, 120 cases)
+## The cases (v25, 123 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -121,6 +121,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-10-10 | `qwen3.5:4b` | v23: + `uninstall-an-app`, `get-rid-of-an-app` (packages.remove) | **116 / 116** twice | — |
 | 2026-10-11 | `qwen3.5:4b` | v24: + `what-was-i-doing-yesterday`, `the-last-hour-from-the-journal`, `when-did-i-last-use`, `pause-the-journal` (the activity journal) | **120 / 120** twice | a first run, with other requests on the GPU at the same time: 119 — `claude-code-and-a-prompt` once (passed 3/3 on its own) |
 | 2026-10-11 | `gpt-oss:120b-cloud` (Ollama Cloud, free plan, no window titles) | v24, first cloud run (~1.4 s mean) | **115 / 120** | SONU's: `folder-and-claude-code`, `claude-code-is-not-the-code-app` (the folder named by its path), `website-by-name` ("youtube.com") — fixed in #48, then passed on both models; the model's: `partly-unsupported` (connected the paired headphones, no unsupported part), `github-open-prs` (asked which repository) |
+| 2026-10-11 | `qwen3.5:4b` | v25: + `resume-song`, `night-light-off-and-dnd`, `github-user-search` (open questions from the laptop) and planner checks for resuming, "off … and do not disturb", pairing, "my pull requests" | **123 / 123** (~1.0 s mean) | — ; `two-apps-two-workspaces` (the M1 example) 10/10; `gpt-oss:120b-cloud` passes its two former misses and the three new cases, twice |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

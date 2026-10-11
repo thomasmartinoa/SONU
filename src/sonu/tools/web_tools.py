@@ -30,7 +30,7 @@ from sonu.desktop.hyprland.models import Window
 from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.desktop_tools import chosen_app, resolve_app
-from sonu.tools.grounding import ungrounded_words
+from sonu.tools.grounding import CONNECTIVES, ungrounded_words
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -349,6 +349,10 @@ class WebSearch(Tool):
         site = ENGINES[ctx.settings.web.search_engine] if site_key == "web" else SITES[site_key]
         url = site.search.format(q=quote_plus(query))
         target = Target(url, f"{site.name} search for '{query}'", compact(site.marker))
+        if site_key == "github" and (person := github_user(query, ctx.request_text)):
+            # "search for username X in github" searched repositories for "username X".
+            url = f"https://github.com/search?q={quote_plus(person)}&type=users"
+            target = Target(url, f"GitHub user search for '{person}'", compact(site.marker))
         plan = prepare_browser(target, a.browser, ctx, choice)
         if isinstance(plan, ToolOutcome):
             return plan
@@ -356,6 +360,31 @@ class WebSearch(Tool):
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
         return await open_in_browser(cast(WebPlan, prepared.payload), ctx)
+
+
+_LOGIN = r"([a-z0-9][a-z0-9-]{0,38})"  # a GitHub username: one word
+_GITHUB_USER = re.compile(
+    rf"^(?:the |a )?(?:user ?name|user|account|profile|person)s?(?: (?:named|called|of))? {_LOGIN}$"
+    rf"|^{_LOGIN}(?:'s)? (?:user ?name|user|account|profile)$",
+    re.IGNORECASE,
+)
+
+
+def github_user(query: str, request: str = "") -> str | None:
+    """The name in "username thomasmartinoa", "user named X", "X's profile" — a person, not a repo.
+    The model often leaves "username" out of the query, so the user's request is read too."""
+    query = " ".join(query.split())
+    match = _GITHUB_USER.match(query)
+    name = (match.group(1) or match.group(2)) if match else None
+    if name is None and re.fullmatch(_LOGIN, query, re.IGNORECASE):
+        said = re.search(
+            rf"(?:user ?name|user|account|profile|person)s?(?: (?:named|called|of))? {re.escape(query)}\b"
+            rf"|\b{re.escape(query)}(?:'s)? (?:user ?name|user|account|profile)\b",
+            " ".join(request.split()),
+            re.IGNORECASE,
+        )
+        name = query if said else None
+    return name if name and name.lower() not in CONNECTIVES else None
 
 
 # ---------------------------------------------------------------------------- web.open

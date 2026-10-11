@@ -164,6 +164,11 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "the-last-hour-from-the-journal": steps(("journal.read", {"when": "last_hour"})),
     "when-did-i-last-use": steps(("journal.read", {"about": "btop"})),
     "pause-the-journal": steps(("journal.recording", {"on": False})),
+    "resume-song": steps(("media.control", {"action": "play"})),
+    "night-light-off-and-dnd": steps(
+        ("desktop.shell", {"action": "night_light_off"}), ("desktop.shell", {"action": "do_not_disturb_off"})
+    ),
+    "github-user-search": steps(("web.search", {"query": "username thomasmartinoa", "site": "github"})),
     "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
     "install-already-there": steps(("packages.install", {"name": "kitty"})),
     "github-open-prs": steps(("github.prs", {})),
