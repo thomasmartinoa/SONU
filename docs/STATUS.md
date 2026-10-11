@@ -44,8 +44,8 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **120 / 120** twice on the v24 suite (2026-10-11, the laptop's GPU, ~1.3 s mean planning), including nine
-complex multi-step requests and five for Claude Code. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
+`qwen3.5:4b`: **123 / 123** on the v25 suite (2026-10-11, the laptop's GPU, ~1.0 s mean planning), including nine
+complex multi-step requests and five for Claude Code; the M1 example (VSCodium + Chromium placed) 10/10. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
@@ -201,20 +201,16 @@ Waiting on music in `~/Music`: local music with `mpv`.
 
 ## Open questions and known issues
 
-- **`gpt-oss:120b-cloud`'s own misses** (2026-10-11): "open bluetooth manager and pair my new headphones" → connected
-  the paired WH-1000XM4 instead of listing pairing as unsupported; "what are my open pull requests?" → asked which
-  repository (the local model lists them all). Worth a planner rule if they show up for real.
 - **Zen and background tabs**: once, a page SONU sent to Zen didn't show in any window title; SONU now says "didn't
   see it open (may be in a background tab)". Worth checking what Zen does with links from other apps.
 - **Planner variance**: once, "open zen on workspace 3 and …" was planned as "show workspace 3"; the same request
   worked on the next try.
-- "search for username X in github" searches repositories for those words; `open github.com/X` opens the profile.
-- Deep planner: `qwen3.5:9b` isn't pulled yet; `sonu eval --deep -m qwen3:8b` would measure the installed alternative.
+- Deep planner: `qwen3:8b` (installed, thinking on) measured 2026-10-11: **113 / 123, 10.9 s a plan** — worse and ten
+  times slower than `qwen3.5:4b` (123 / 123, 1.0 s); misses: closing, reminders, memory, the screen, the journal, a
+  prompt from an idea, an injected title. Not worth it; `qwen3.5:9b` isn't pulled. With cloud planning allowed,
+  `--deep` goes to `gpt-oss:120b-cloud` instead.
 - NitroSense key: voice part 1 is press-to-talk (one press, SONU hears until you stop), so key release isn't needed.
   Hold-to-talk would need `wev` to show *released* arriving when a 2-second hold ends.
-- M1 exit criterion not yet measured formally: the VS Code + Chromium placement example in ≥ 9/10 runs.
-- **`sonu resume song` printed nothing at all** (2026-09-25, not reproduced yet): every path prints at least a line;
-  `sonu audit tail` after running it again should show what happened.
 - **Play on YouTube doesn't work on the laptop yet** (2026-09-27). Zen: the video opens **paused** (Firefox blocks
   audible autoplay for pages opened from outside) and Firefox registers with the media controls (MPRIS) only while
   something plays, so SONU can neither press play nor confirm it. Chromium: the video **plays** (it has a live audio
@@ -222,9 +218,6 @@ Waiting on music in `~/Music`: local music with `mpv`.
   chose (a) allow autoplay for youtube.com in Zen and (b) confirm playback from the browser's new PipeWire audio
   stream — (b) is built ([D34](DECISIONS.md)), (a) is the owner's step in Zen. Still unknown: why Chromium never
   registers with MPRIS (does it show in `playerctl -l` when YouTube is played by hand?).
-- **"turn off the night light and do not disturb"** is read by `qwen3.5:4b` as "…and turn do-not-disturb **on**",
-  even with that exact sentence as a prompt example (tried and removed). The English is ambiguous; the report says
-  "Do-not-disturb is on", so it's visible. "turn off do not disturb" works (eval `dnd-off-keeps-notifications`).
 - The rice's night light: `Night.qml` polls `pgrep hyprsunset` the instant `hypr-nightlight off` returns, while
   hyprsunset takes ~0.2 s to exit, so it shows "on" until its next 10-s poll. SONU now works around it (below); the
   rice could wait for the process to exit in `off()` (for the owner's dotfiles — not edited from SONU).
@@ -281,7 +274,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #47 | 2026-10-11 | `sonu eval --help` lost a word ("[cloud]" taken as markup) — reworded, with a test |
 | #48 | 2026-10-11 | Ollama Cloud tried for real: folders named by their path, a named site by its own address, cloud vision answers read (the question names the fields; code blocks unwrapped) |
 | #49 | 2026-10-11 | M5 part 3: SONU as an MCP client ([D63](DECISIONS.md)) — `[mcp.servers.<name>]` (argv, `reaches`, `read_only`, `tools`, `env`, `env_commands`); tools as `mcp.<server>.<tool>` with the server's schema checked by SONU; high risk and asked with every argument unless read-only (web/account: only with the user's words); answers private; small environment, no desktop sockets; restarts after a timeout; `sonu mcp check`, a doctor line; rofi shows a question's details in full, other pickers refuse |
-| #50 | open | Ollama Cloud's usage limits ([D64](DECISIONS.md)): a 429 pauses the cloud (Retry-After, else 15 min; a state file, `cloud.limited`) and SONU stays local; prompts and vision fall back to the local model; `cloud.answer` counts tokens; `sonu doctor` shows the last 24 h / 7 days and a pause |
+| #50 | 2026-10-11 | Ollama Cloud's usage limits ([D64](DECISIONS.md)): a 429 pauses the cloud (Retry-After, else 15 min; a state file, `cloud.limited`) and SONU stays local; prompts and vision fall back to the local model; `cloud.answer` counts tokens; `sonu doctor` shows the last 24 h / 7 days and a pause |
+| #51 | open | Open questions: "resume song" resumes (it checked the status), "turn off the night light and do not disturb" turns both off, a GitHub username is a user search, pairing a new device is said to be impossible, "my pull requests" isn't asked back; the M1 example measured 10/10; eval suite v25 (123) |
 
 ### Found on real hardware → fixed
 
@@ -290,6 +284,10 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | 10-04 | (voice) "type hello into this window" / "write hello here in the kitty terminal" → dev.type, "Claude Code isn't open" (5 times) | code check: dev.type without Claude in the request → sent back as screen.type; "open a terminal on 3 and type hello" types into the terminal that request opened (#38) |
 | 10-04 | (voice) "open a terminal" → "Alacritty or kitty?" — the rice moved to `~/.config/orrery`, SONU read only `hypr-theme` | default apps read from `~/.config/orrery/defaults` first (#38). Theme and wallpaper fixed the same way in #39 (`orrery-theme`/`orrery-wall`, falling back to the old names) |
 | 10-04 | "next wallpaper" → "The wallpaper is still 1-mountain.png": Orrery's Eclipse theme has one picture | says "This theme has only one wallpaper — name a picture from ~/Pictures" (#39) |
+| 10-11 | "resume song" (the old "printed nothing" question, reproduced) → planned as `system.status` (media) every time: "nothing playing", done — nothing resumed | a planner check: resuming is `media.control` play; eval `resume-song` (#51) |
+| 10-11 | "turn off the night light and do not disturb" → do-not-disturb turned **on** (open since 09-28) | a planner check: the "off" goes on to do-not-disturb ("…don't disturb me" still means on); eval `night-light-off-and-dnd` (#51) |
+| 10-11 | "search for username thomasmartinoa in github" searched repositories (the model also leaves "username" out of the query) | a username, from the query or the user's words, is a GitHub user search; eval `github-user-search` (#51) |
+| 10-11 | (`gpt-oss:120b-cloud`) "pair my new headphones" connected the paired ones and said nothing about pairing; "what are my open pull requests?" → "which repository?" | planner checks for both; the cloud model passes both cases now (#51) |
 | 10-11 | (building the MCP client) a question on screen (rofi) shows 160 characters: an outside tool's arguments — and a prompt SONU wrote, cut to 400 — could be approved unseen | rofi shows the details in full in its message area; other pickers, or too much to show, mean no (#49) |
 | 10-11 | (`sonu eval --cloud`) "make a folder called shop-app in dev_works and open claude code there" → "I couldn't find a folder called 'dev_works/shop-app'": the cloud model named the new folder by its path | a folder is matched by its path too; "dev_works/SONU" is a path from home (#48) |
 | 10-11 | (`sonu eval --cloud`) "go to youtube" → `web.open` "youtube.com" → "SONU only opens links you typed yourself" | a named site's own address (nothing after it) is that site (#48) |

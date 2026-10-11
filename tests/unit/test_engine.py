@@ -783,6 +783,17 @@ async def test_site_operator_becomes_a_site_search(harness: Harness) -> None:
 
 
 @pytest.mark.anyio
+async def test_a_github_username_is_a_user_search(harness: Harness) -> None:
+    # Found on the laptop: "search for username X in github" searched repositories for "username X".
+    request = "search for username thomasmartinoa in github"
+    plans = {request: steps_plan(("web.search", {"query": "username thomasmartinoa", "site": "github"}))}
+    report = await harness.engine(plans).run(request, confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert harness.fake.launched[-1][-1] == "https://github.com/search?q=thomasmartinoa&type=users"
+    assert "GitHub user search for 'thomasmartinoa'" in report.lines()[0]
+
+
+@pytest.mark.anyio
 async def test_search_goes_to_the_site_the_user_named(harness: Harness) -> None:
     # Found in an eval: the model said "Searching YouTube" but left site out (→ the web engine).
     request = "play faded on youtube"

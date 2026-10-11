@@ -1018,3 +1018,29 @@ request = "pause the activity journal"
 expect_status = ["done"]
 require_tools = ["journal.recording"]
 forbid_tools = ["obs.record", "media.control", "journal.forget"]
+
+# ---- open questions from the laptop (v25)
+
+[[case]]
+id = "resume-song"
+request = "resume song"
+notes = "Found on the laptop: planned as system.status (media) — 'nothing playing', done; nothing resumed."
+system = { player = "Paused" }
+expect_status = ["done"]
+expect_system = { player = "Playing" }
+require_tools = ["media.control"]
+
+[[case]]
+id = "night-light-off-and-dnd"
+request = "turn off the night light and do not disturb"
+notes = "The 'off' goes on to do-not-disturb; qwen3.5:4b turned it on (an open question since 2026-09-28)."
+system = { shell = { nightlight = "on", caffeine = "off", dnd = "true", lock = "unlocked" } }
+expect_status = ["done"]
+expect_system = { night_light = "off", do_not_disturb = false }
+
+[[case]]
+id = "github-user-search"
+request = "search for username thomasmartinoa in github"
+notes = "Found on the laptop: it searched repositories for 'username thomasmartinoa'."
+expect_status = ["done"]
+expect_windows = [{ class = "zen", title_contains = "github.com/search?q=thomasmartinoa&type=users" }]

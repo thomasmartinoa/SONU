@@ -431,6 +431,16 @@ def build_system_prompt(
 _SITE_OPERATOR = re.compile(r"\bsite:\S+", re.IGNORECASE)
 _PLAY = re.compile(r"^\W*(?:play|put on)\b", re.IGNORECASE)
 _PRESS = re.compile(r"^\W*(?:press|click|tap|hit)\b", re.IGNORECASE)
+# On normalized text (lowercase words): "resume song", "unpause", "continue playing the music".
+_RESUME = re.compile(
+    r"\b(?:resume|unpause)\b|\bcontinue (?:playing|the (?:song|music|track|video|playback))\b"
+)
+_MEDIA_WORDS = re.compile(r"\b(?:song|songs|music|track|playback|video|spotify|it|media|playing)\b")
+# "turn off the night light and do not disturb": the "off" goes on to do-not-disturb ("…and don't disturb
+# me" asks for quiet).
+_OFF_AND_DND = re.compile(r"\boff\b.*\band (?:the )?(?:do not disturb|dnd)\b(?! me\b)")
+_PAIR = re.compile(r"\bpair\b")
+_PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 
 
 def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[str]:
@@ -528,6 +538,39 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 f"mention Claude — to type into their window plan exactly: {wanted} (or the app they named "
                 "as window.app instead of focused; enter: true only if they said to press enter)"
             )
+    # Found on the laptop: "resume song" was planned as system.status (media) — "nothing playing", done,
+    # every time; nothing was resumed.
+    words = said.split()
+    resumes = _RESUME.search(said) and (_MEDIA_WORDS.search(said) or len(words) <= 2)
+    if resumes and not any(step.tool in ("media.control", "media.play") for step in plan.steps):
+        wanted = json.dumps({"tool": "media.control", "args": {"action": "play"}})
+        problems.append(f"the user asked to resume playback — plan exactly this step: {wanted}")
+    # The ambiguity in the English: qwen3.5:4b read "turn off the night light and do not disturb" as
+    # "…and turn do-not-disturb on" (even with that sentence as a prompt example).
+    if _OFF_AND_DND.search(said) and "on" not in words:
+        for index, step in enumerate(plan.steps):
+            if step.tool == "desktop.shell" and step.args.get("action") == "do_not_disturb_on":
+                problems.append(
+                    f"step {index + 1} (desktop.shell): the user said to turn do not disturb off, like the "
+                    "rest — use do_not_disturb_off"
+                )
+    # Found in `sonu eval --cloud` (gpt-oss:120b-cloud): "open bluetooth manager and pair my new headphones"
+    # connected the headphones already paired and didn't say pairing can't be done.
+    pairing_unsaid = not any(_PAIR.search(normalize(part)) for part in plan.unsupported)
+    connects = any(step.tool == "settings.bluetooth_device" for step in plan.steps)
+    if _PAIR.search(said) and pairing_unsaid and connects:
+        problems.append(
+            "SONU can't pair a new Bluetooth device (settings.bluetooth_device only connects one already "
+            "paired): put the pairing, in the user's words, in unsupported"
+        )
+    # Found in `sonu eval --cloud`: "what are my open pull requests?" → "which repository?". github.prs
+    # lists the user's open pull requests in every repository.
+    if plan.kind == "ask" and _PULL_REQUESTS.search(said) and not asked_to_merge:
+        wanted = json.dumps({"tool": "github.prs", "args": {}})
+        problems.append(
+            f"no need to ask: github.prs lists the user's open pull requests in all their repositories — "
+            f"plan exactly this step: {wanted}"
+        )
     # Found on real hardware: "press the frobnicate button in thunar" was listed as unsupported; SONU
     # looks the button up itself and says what the app has.
     if not any(step.tool == "screen.press" for step in plan.steps):

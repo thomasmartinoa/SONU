@@ -8,7 +8,7 @@ from sonu.desktop.hyprland import Window
 from sonu.testing.fake_hyprland import make_window
 from sonu.tools.base import ToolOutcome
 from sonu.tools.grounding import ungrounded_words
-from sonu.tools.web_tools import site_link
+from sonu.tools.web_tools import github_user, site_link
 from sonu.world.origin import ancestor_pids, find_origin
 
 
@@ -101,3 +101,28 @@ def test_single_instance_terminal_counts_only_the_focused_window() -> None:
     windows = [_window("0xa1", 700), _window("0xb2", 700)]
     assert find_origin(windows, frozenset({700}), active_address="0xb2") == "0xb2"
     assert find_origin(windows, frozenset({700}), active_address=None) is None
+
+
+@pytest.mark.parametrize(
+    ("query", "person"),
+    [
+        ("username thomasmartinoa", "thomasmartinoa"),
+        ("user named torvalds", "torvalds"),
+        ("the profile of", None),
+        ("thomasmartinoa's profile", "thomasmartinoa"),
+        ("profile of torvalds", "torvalds"),
+        ("hypr dotfiles", None),
+        ("user interface libraries", None),
+    ],
+)
+def test_a_person_on_github(query: str, person: str | None) -> None:
+    # Found on the laptop: "search for username X in github" searched repositories for "username X".
+    assert github_user(query) == person
+
+
+def test_a_person_on_github_by_the_users_words() -> None:
+    # Found in the evals: the model searched "thomasmartinoa", leaving "username" out.
+    assert github_user("thomasmartinoa", "search for username thomasmartinoa in github") == "thomasmartinoa"
+    assert github_user("thomasmartinoa", "find the github profile of thomasmartinoa") == "thomasmartinoa"
+    assert github_user("thomasmartinoa", "search github for thomasmartinoa") is None  # a repo search
+    assert github_user("dotfiles", "search github for user thomasmartinoa dotfiles") is None

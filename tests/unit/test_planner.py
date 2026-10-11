@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
@@ -352,3 +353,61 @@ def test_typing_without_claude_code_is_screen_type() -> None:
         }
     )
     assert _problems(opened, REGISTRY, "open it in shop-app and type hello") == []
+
+
+def _plan(
+    *steps: tuple[str, Mapping[str, object]], kind: str = "steps", unsupported: tuple[str, ...] = ()
+) -> _PlanModel:
+    return _PlanModel.model_validate(
+        {
+            "unsupported": list(unsupported),
+            "kind": kind,
+            "message": "",
+            "steps": [{"tool": tool, "args": args} for tool, args in steps],
+        }
+    )
+
+
+STATUS_MEDIA = ("system.status", {"what": ["media"]})
+PLAY = ("media.control", {"action": "play"})
+
+
+@pytest.mark.parametrize(
+    ("request_text", "plan", "asked_again"),
+    [
+        # Found on the laptop: "resume song" → system.status, "nothing playing", done — every time.
+        ("resume song", _plan(STATUS_MEDIA), True),
+        ("resume", _plan(STATUS_MEDIA), True),
+        ("continue playing the music", _plan(STATUS_MEDIA), True),
+        ("resume song", _plan(PLAY), False),
+        ("resume the download in firefox", _plan(("apps.launch", {"app": "firefox"})), False),
+    ],
+)
+def test_resume_means_play(request_text: str, plan: _PlanModel, asked_again: bool) -> None:
+    found = [problem for problem in _problems(plan, REGISTRY, request_text) if "resume playback" in problem]
+    assert bool(found) is asked_again
+
+
+def test_off_carries_over_to_do_not_disturb() -> None:
+    night_off = ("desktop.shell", {"action": "night_light_off"})
+    dnd_on = ("desktop.shell", {"action": "do_not_disturb_on"})
+    plan = _plan(night_off, dnd_on)
+    # qwen3.5:4b read it as "…and turn do-not-disturb on".
+    [problem] = _problems(plan, REGISTRY, "turn off the night light and do not disturb")
+    assert "use do_not_disturb_off" in problem
+    assert _problems(plan, REGISTRY, "turn off the night light and don't disturb me") == []  # asks for quiet
+    on_plan = _plan(("desktop.shell", {"action": "night_light_on"}), dnd_on)
+    assert _problems(on_plan, REGISTRY, "turn on the night light and do not disturb") == []
+
+
+def test_pairing_and_my_pull_requests() -> None:
+    # Found in `sonu eval --cloud`: the paired headphones connected, pairing never said to be impossible.
+    request = "open bluetooth manager and pair my new headphones"
+    connect = ("settings.bluetooth_device", {"device": "headphones", "connect": True})
+    [problem] = _problems(_plan(("apps.launch", {"app": "bluetooth manager"}), connect), REGISTRY, request)
+    assert "can't pair a new Bluetooth device" in problem
+    honest = _plan(("apps.launch", {"app": "bluetooth manager"}), unsupported=("pair my new headphones",))
+    assert _problems(honest, REGISTRY, request) == []
+    # …and "what are my open pull requests?" → "which repository?".
+    [problem] = _problems(_plan(kind="ask"), REGISTRY, "what are my open pull requests?")
+    assert '{"tool": "github.prs", "args": {}}' in problem
