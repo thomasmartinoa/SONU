@@ -59,12 +59,12 @@ src/sonu/
   mcp/            server.py: SONU's tools for Claude Code over MCP (stdio, Engine.call_tool, asked on screen);
                   client.py + outside.py + schema.py: other MCP servers' tools for SONU (untrusted, D63)
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
-                  responder.py (replies), conversation.py, memory.py, prompt_writer.py, screen_reader.py
+                  responder.py (replies), conversation.py, memory.py, layouts.py, prompt_writer.py, screen_reader.py
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py, rice_tools.py, power_tools.py, obs_tools.py,
                   voice_tools.py, dev_tools.py (folders, Claude Code), project_tools.py (VS Code, a project's
-                  commands, git, a terminal in a folder), github_tools.py, package_tools.py, screen_tools.py,
-                  grounding.py, registry.py (plan schema), targets.py, context.py
+                  commands, git, a terminal in a folder), layout_tools.py, github_tools.py, package_tools.py,
+                  screen_tools.py, grounding.py, registry.py (plan schema), targets.py, context.py
   system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …),
                   github.py (gh), packages.py (pacman, yay), projects.py (a project's commands), git.py
   desktop/        hyprland/ (IPC, events, Lua/hyprlang dialects, desktop adapter), apps/ (XDG catalog, resolver)

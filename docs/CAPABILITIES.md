@@ -35,7 +35,7 @@ works:
 | Show a workspace; "what's open?" | ✅ | IPC |
 | Fullscreen, maximize, floating/tiled, pin on all workspaces (`windows.state`) | ✅ | Hyprland 0.56 Lua dispatchers (`hl.dsp.window.fullscreen/float/pin`); read back from `j/clients`; pinning floats the window first (Hyprland only pins floating windows) |
 | "Put X and Y side by side" (`windows.side_by_side`) | ✅ | both tiled on one workspace (the first window's), the tiler splits it; done only when their positions really are next to each other |
-| Save and restore a layout | 🗺 M2 | layouts need memory |
+| Save and restore a layout | 🧪 #54 | which app is on which workspace (and a terminal's folder), never titles; restoring moves what's open and opens what's missing, closes nothing ([D67](DECISIONS.md)) |
 | Screenshot of the screen, a window or an area; copy it | 🧪 this batch | `grim` (+ `slurp` for an area) into `~/Pictures/screenshot/` like the rice's keys, `wl-copy` |
 | Screen recording with **OBS** (`obs.record`): start (opens OBS if needed), stop (file verified), pause, resume (not with OBS's Hybrid MP4 format — SONU says so) | ✅ | OBS's own WebSocket server (local only; the password comes from OBS's settings) — turned on once in OBS: Tools → WebSocket Server Settings |
 | OBS scenes, streaming (always asks), virtual camera (only when `v4l2loopback` is loaded), replay buffer (when enabled in OBS), muting a source; "is OBS recording?"; names the dialog OBS is stuck on | ✅ | `obs.scene`, `obs.control`, `obs.mute`, `system.status` `obs` — every change read back from OBS |

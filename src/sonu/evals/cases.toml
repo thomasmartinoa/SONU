@@ -1106,3 +1106,31 @@ expect_status = ["done"]
 expect_windows = [{ class = "kitty", workspace = 4 }]
 require_tools = ["files.make_folder", "dev.terminal"]
 
+# ---- saved layouts (v28)
+
+[[case]]
+id = "save-a-layout"
+request = "save this layout as work"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { class = "zen", title = "Zen Browser", workspace = 2 }]
+expect_status = ["done"]
+require_tools = ["layouts.save"]
+forbid_tools = ["memory.remember"]
+
+[[case]]
+id = "restore-a-layout"
+request = "restore my work layout"
+notes = "Zen is open on 5: moved to 2; kitty and Code - OSS are opened on 1 and 3. Nothing is closed."
+layouts = { work = [["kitty.desktop", "kitty", "1"], ["zen.desktop", "Zen Browser", "2"], ["code-oss.desktop", "Code - OSS", "3"]] }
+windows = [{ class = "zen", title = "Zen Browser", workspace = 5, focused = true }]
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 1 }, { class = "zen", workspace = 2 }, { class = "code-oss", workspace = 3 }]
+require_tools = ["layouts.restore"]
+
+[[case]]
+id = "list-layouts"
+request = "what layouts do I have?"
+layouts = { work = [["kitty.desktop", "kitty", "1"]] }
+expect_status = ["done"]
+require_tools = ["layouts.list"]
+forbid_tools = ["memory.list"]
+

@@ -9,6 +9,7 @@ from typing import Protocol
 
 from sonu.config.settings import Settings
 from sonu.core.journal import Journal
+from sonu.core.layouts import Layouts
 from sonu.core.memory import Memory
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.screen_reader import ScreenReader
@@ -61,6 +62,8 @@ class ToolContext:
     recent_windows: tuple[str, ...] = ()
     # What the user asked SONU to remember (in memory only unless the runtime gives it a file).
     memory: Memory = field(default_factory=Memory)
+    # Saved window layouts ("save this layout as work"; in memory only unless the runtime gives it a file).
+    layouts: Layouts = field(default_factory=Layouts)
     # SONU's parent processes, to find the terminal it was started from (tests pass `frozenset`).
     ancestors: Callable[[], frozenset[int]] = ancestor_pids
     # The browser an earlier step of this task opened ("open chrome … and search …"): web steps

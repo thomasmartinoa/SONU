@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sonu.config.settings import AppsSettings, Settings, VerifySettings
 from sonu.core.engine import ConfirmRequest, Engine
 from sonu.core.journal import Journal
+from sonu.core.layouts import Layout, Layouts, Slot
 from sonu.core.planner import LLMPlanner
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.report import TaskReport
@@ -124,6 +125,8 @@ class EvalCase(_Model):
     expect_reply_contains: str | None = None  # text the report must contain
     # The activity journal at the start: [minutes ago, window class, title], oldest first ("" class: nothing).
     journal: list[tuple[float, str, str]] = Field(default_factory=list)
+    # Saved layouts the case starts with: name → [(desktop id, app name, workspace)].
+    layouts: dict[str, list[tuple[str, str, str]]] = Field(default_factory=dict)
     # Two window classes, tiled next to each other.
     expect_side_by_side: list[str] = Field(default_factory=list)
     obs: dict[str, Any] = Field(default_factory=dict)  # OBS's state at the start (FakeObsState fields)
@@ -379,9 +382,12 @@ async def run_case(
                 writer=PromptWriter(cast(TextModel, model)) if hasattr(model, "complete_text") else None,
                 reader=FakeScreenReader(),
                 journal=journal,
+                layouts=Layouts(workdir / "data" / "layouts.json"),
             )
             for minutes_ago, app, title in case.journal:
                 journal.record(app, title, time.time() - minutes_ago * 60)
+            for name, slots in case.layouts.items():
+                ctx.layouts.put(Layout(name, tuple(Slot(*slot) for slot in slots)))
             engine = Engine(
                 planner=LLMPlanner(model, include_titles=include_titles),
                 registry=ToolRegistry(),
