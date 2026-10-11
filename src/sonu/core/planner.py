@@ -353,6 +353,10 @@ file and line only if they said them). "Open the <name> folder" with no editor i
 <project>)? / what's not committed?" is dev.git; "my last commits" is dev.git with what "commits" — not \
 journal.read. "Open a terminal / kitty in <folder>" (or "there", after making a folder) is dev.terminal; a \
 terminal with no folder ("open a terminal on workspace 3") is apps.launch.
+- Window layouts: "save this layout / setup as <name>" (or "remember this layout as …") is layouts.save; \
+"restore / load / set up my <name> layout", "restore <name>" is \
+layouts.restore; "what layouts do I have?" is layouts.list; "forget / delete the <name> layout" is \
+layouts.forget — never memory.* for layouts.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \
 question = the user's question; window focused for "this window", the app they name, or none for \
 the whole screen.

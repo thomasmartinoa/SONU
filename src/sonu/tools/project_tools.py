@@ -658,6 +658,22 @@ _ON_WORKSPACE = re.compile(r"\b(?:on|in|to) workspace (\d{1,2})\b", re.I)
 SHELL_WAIT_S = 3.0  # the shell starts a moment after the window maps
 
 
+def terminal_argv(entry: AppEntry, folder: Path) -> tuple[str, ...] | None:
+    """The argv that starts ``entry`` (a terminal) in ``folder``; None when SONU can't tell it a folder."""
+    start_in = TERMINAL_FOLDER.get(entry.executable)
+    return (entry.argv[0], *start_in(str(folder))) if start_in and entry.argv else None
+
+
+async def shell_started_in(ctx: ToolContext, pid: int, folder: Path) -> bool:
+    """Whether a terminal's shell (a child of its process) is in ``folder`` — waiting for it to start."""
+    deadline = time.monotonic() + SHELL_WAIT_S
+    while folder not in ctx.system.child_folders(pid):
+        if time.monotonic() >= deadline:
+            return False
+        await asyncio.sleep(0.2)
+    return True
+
+
 @dataclass(frozen=True, slots=True)
 class _TerminalPlan:
     entry: AppEntry
@@ -699,17 +715,18 @@ class OpenTerminal(Tool):
         entry = resolve_app(a.app or "terminal", ctx)
         if isinstance(entry, ToolOutcome):
             return entry
-        start_in = TERMINAL_FOLDER.get(entry.executable)
-        if start_in is None:
+        if entry.executable not in TERMINAL_FOLDER:
             return ToolOutcome(StepStatus.FAILED, f"SONU can't tell {entry.name} which folder to start in")
         folder = await _project(ctx, a.folder, choice, noun="folder")
         if isinstance(folder, ToolOutcome):
             return folder
+        argv = terminal_argv(entry, folder)
+        if argv is None:
+            return ToolOutcome(StepStatus.FAILED, f"{entry.name} can't be started")
         workspace = a.workspace
         if workspace is None:  # like dev.claude_open: the one workspace the user's words name
             named = {int(n) for n in _ON_WORKSPACE.findall(ctx.request_text)}
             workspace = named.pop() if len(named) == 1 and 1 <= min(named) <= 99 else None
-        argv = (entry.argv[0], *start_in(str(folder)))
         where = f" on workspace {workspace}" if workspace else ""
         target = WorkspaceTarget.of(workspace) if workspace else None
         return Prepared(
@@ -737,12 +754,7 @@ class OpenTerminal(Tool):
         if window is None:
             return ToolOutcome(StepStatus.FAILED, f"{plan.entry.name} didn't open a window")
         # Checked on the process: its shell's working folder (/proc), not the title (a shell sets that).
-        deadline = time.monotonic() + SHELL_WAIT_S
-        while plan.folder not in (shells := ctx.system.child_folders(window.pid)):
-            if time.monotonic() >= deadline:
-                break
-            await asyncio.sleep(0.2)
-        shell = Check(f"its shell is in {where}", plan.folder in shells)
+        shell = Check(f"its shell is in {where}", await shell_started_in(ctx, window.pid, plan.folder))
         placed = [Check(f"{plan.entry.name} opened", True, {"workspace": window.workspace.name})]
         if plan.workspace is not None:
             wanted = plan.workspace.value

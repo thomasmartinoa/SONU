@@ -55,6 +55,7 @@ from sonu.policy.engine import Policy
 from sonu.runtime import (
     app_aliases,
     assistant_parts,
+    load_layouts,
     load_memory,
     model_parts,
     open_journal,
@@ -642,6 +643,7 @@ class Daemon:
             default_terminal=role_defaults.get("terminal"),
             ancestors=lambda: ancestor_pids(pid),  # the terminal the request was typed in
             memory=memory,
+            layouts=load_layouts(self.paths),
             wake=self.wake,
             journal=self.journal,
             writer=self.models.writer,

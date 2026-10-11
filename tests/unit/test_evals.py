@@ -175,6 +175,9 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "what-did-i-change": steps(("dev.git", {"folder": "SONU"})),
     "last-commits": steps(("dev.git", {"folder": "SONU", "what": "commits"})),
     "terminal-in-a-folder": steps(("dev.terminal", {"folder": "dev_works"})),
+    "save-a-layout": steps(("layouts.save", {"name": "work"})),
+    "restore-a-layout": steps(("layouts.restore", {"name": "work"})),
+    "list-layouts": steps(("layouts.list", {})),
     "folder-and-a-terminal-there": steps(
         ("files.make_folder", {"name": "demo", "inside": "dev_works"}), ("dev.terminal", {"workspace": 4})
     ),

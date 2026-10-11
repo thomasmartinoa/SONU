@@ -18,6 +18,7 @@ from sonu.tools.everyday_tools import EVERYDAY_TOOLS
 from sonu.tools.file_tools import FILE_TOOLS
 from sonu.tools.github_tools import GITHUB_TOOLS
 from sonu.tools.journal_tools import JOURNAL_TOOLS
+from sonu.tools.layout_tools import LAYOUT_TOOLS
 from sonu.tools.media_tools import MEDIA_TOOLS
 from sonu.tools.memory_tools import MEMORY_TOOLS
 from sonu.tools.obs_tools import OBS_TOOLS
@@ -69,6 +70,7 @@ class ToolRegistry:
             *OBS_TOOLS,
             *MEMORY_TOOLS,
             *JOURNAL_TOOLS,
+            *LAYOUT_TOOLS,
             *VOICE_TOOLS,
             *DEV_TOOLS,
             *PROJECT_TOOLS,

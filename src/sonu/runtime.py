@@ -16,6 +16,7 @@ from sonu.config.settings import CloudUse, ModelRole, OllamaSettings, Settings
 from sonu.core.conversation import Conversation
 from sonu.core.engine import Engine
 from sonu.core.journal import Journal
+from sonu.core.layouts import Layouts
 from sonu.core.memory import Memory
 from sonu.core.planner import LLMPlanner, RoutedPlanner
 from sonu.core.planning import Planner
@@ -51,6 +52,11 @@ logger = logging.getLogger(__name__)
 def load_memory(paths: SonuPaths) -> Memory:
     """What the user asked SONU to remember (shared by the CLI and the daemon)."""
     return Memory.load(paths.data_dir / "memory.json")
+
+
+def load_layouts(paths: SonuPaths) -> Layouts:
+    """Saved window layouts (shared by the CLI and the daemon; re-read before each use)."""
+    return Layouts.load(paths.data_dir / "layouts.json")
 
 
 def open_journal(settings: Settings, paths: SonuPaths) -> Journal | None:
@@ -214,6 +220,7 @@ async def build_runtime(
         settings,
         default_terminal=role_defaults.get("terminal"),
         memory=memory,
+        layouts=load_layouts(paths),
         journal=open_journal(settings, paths),
     )
 
