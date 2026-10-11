@@ -40,6 +40,7 @@ from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_browser import FakeBrowser, FakeControl, FakeTab
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_obs import FakeObs, FakeObsState
+from sonu.testing.fake_profiles import firefox_profile
 from sonu.testing.fake_system import FakeSystem
 from sonu.testing.fake_vision import FakePageReader, FakeScreenReader
 from sonu.testing.fake_wake import FakeWake
@@ -142,6 +143,9 @@ class EvalCase(_Model):
     # Tabs in a browser with SONU's extension (a fake one, as zen): [title, url]; the first is active, and
     # the zen window shows the active tab's title. None: no browser connected.
     tabs: list[tuple[str, str]] = Field(default_factory=list)
+    # The browser's own history and bookmarks (a Zen profile in the fake home, D73): [title, url, minutes].
+    history: list[tuple[str, str, float]] = Field(default_factory=list)
+    bookmarks: list[tuple[str, str, float]] = Field(default_factory=list)
     # Notifications SONU kept (as if turned on): [minutes ago, app, summary, body].
     notifications: list[tuple[float, str, str, str]] = Field(default_factory=list)
     # Saved layouts the case starts with: name → [(desktop id, app name, workspace)].
@@ -433,6 +437,8 @@ async def run_case(
                 journal.record(app, title, time.time() - minutes_ago * 60)
             for minutes_ago, app, summary, body in case.notifications:
                 notifications.add(app, summary, body, time.time() - minutes_ago * 60)
+            if case.history or case.bookmarks:
+                firefox_profile(workdir, list(case.history), list(case.bookmarks))
             for name, slots in case.layouts.items():
                 ctx.layouts.put(Layout(name, tuple(Slot(*slot) for slot in slots)))
             engine = Engine(

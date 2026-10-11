@@ -12,7 +12,7 @@ sonu eval --json                       # machine-readable
 sonu eval --cloud                      # also your [cloud] model (Ollama Cloud), planning as SONU will: no titles
 ```
 
-## The cases (v33, 145 cases)
+## The cases (v34, 147 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -131,6 +131,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-10-11 | `qwen3.5:4b` | v31: + `switch-to-a-tab`, `close-a-tab`, `list-tabs` (D70, a fake browser) | **140 / 140**, twice (~1.2 s mean) | — ; before two tool fixes `open-last-download` opened the folder and `read-a-window-on-another-workspace` read the whole screen (the model's plans shifted with the new rule) |
 | 2026-10-11 | `qwen3.5:4b` | v32: + `summarise-this-page`, `ask-about-a-tab` (D71, the fake browser's pages, a stand-in page reader) | **142 / 142**, twice (~1.1 s mean) | — ; before a tool fix `unread-messages` failed (the model named "whatsapp desktop", not the user's words) |
 | 2026-10-11 | `qwen3.5:4b` | v33: + `click-a-link-on-the-page`, `search-on-the-page`, `scroll-the-page` (D72, the fake page's link, button and fields) | **145 / 145**, twice (~1.1 s mean) | — ; before a tool fix `remember-a-note` failed (planned as an alias for an app) |
+| 2026-10-11 | `qwen3.5:4b` | v34: + `find-a-page-in-history`, `open-a-bookmark` (D73, a fake Zen profile in the fake home) | **147 / 147**, twice (~1.1 s mean) | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

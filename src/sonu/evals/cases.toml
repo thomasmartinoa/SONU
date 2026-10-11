@@ -1247,3 +1247,22 @@ tabs = [["Shop", "https://example.com/"]]
 expect_status = ["done"]
 require_tools = ["browser.scroll"]
 
+
+# ---- history and bookmarks from the browser's profile (v34)
+[[case]]
+id = "find-a-page-in-history"
+request = "find the page about lentil soup I saw yesterday"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+history = [["Lentil soup recipe", "https://food.example/lentil-soup", 1440], ["Inbox", "https://mail.example/", 5]]
+expect_status = ["done"]
+require_tools = ["browser.history"]
+forbid_tools = ["web.search", "web.open", "journal.read"]
+
+[[case]]
+id = "open-a-bookmark"
+request = "open my arch wiki bookmark"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }]
+bookmarks = [["ArchWiki: Hyprland", "https://wiki.archlinux.org/title/Hyprland", 4000]]
+expect_status = ["done", "unverified"]
+require_tools = ["browser.open_saved"]
+forbid_tools = ["web.open", "web.search"]

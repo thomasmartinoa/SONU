@@ -68,7 +68,7 @@ works:
 | List, switch and close tabs | 🧪 #58 | SONU's own extension (`sonu browser install`), native messaging to a local socket; titles private; closing asks ([D70](DECISIONS.md)) |
 | Read or summarise a page, ask about it or the selected text: "summarise this page", "what does the github tab say about installing?" | 🧪 #59 | the same extension (version 0.2.0, page access): the visible text to the **local** model only; the answer private ([D71](DECISIONS.md)) |
 | Click, type into a field, scroll a page: "click sign in", "type red shoes in the search box and press enter", "scroll to the bottom" | 🧪 #60 | the same extension (0.3.0): the page's own links, buttons and fields by your words; buttons ask, "delete / buy / send …" high, never a password field; checked after ([D72](DECISIONS.md)) |
-| Bookmarks and history search | 🗺 M6 | read-only from the browser profile; private, never sent anywhere |
+| Bookmarks and history: "find the page about lentil soup I saw yesterday", "what pages did I visit today?", "open my arch wiki bookmark" | 🧪 #61 | read-only copies of the browser's own files (Zen/Firefox, Chromium-family; no extension needed); private; opening a page from history asks ([D73](DECISIONS.md)) |
 | Downloads: "open my last download" | ✅ | newest file in `~/Downloads` → the app set for its type (`xdg-mime`); programs/scripts never, archives and other types ask first |
 
 ## Media
