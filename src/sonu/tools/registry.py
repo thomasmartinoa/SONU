@@ -23,6 +23,7 @@ from sonu.tools.memory_tools import MEMORY_TOOLS
 from sonu.tools.obs_tools import OBS_TOOLS
 from sonu.tools.package_tools import PACKAGE_TOOLS
 from sonu.tools.power_tools import POWER_TOOLS
+from sonu.tools.project_tools import PROJECT_TOOLS
 from sonu.tools.rice_tools import RICE_TOOLS
 from sonu.tools.screen_tools import SCREEN_TOOLS
 from sonu.tools.settings_tools import SETTINGS_TOOLS
@@ -70,6 +71,7 @@ class ToolRegistry:
             *JOURNAL_TOOLS,
             *VOICE_TOOLS,
             *DEV_TOOLS,
+            *PROJECT_TOOLS,
             *GITHUB_TOOLS,
             *PACKAGE_TOOLS,
             *SCREEN_TOOLS,

@@ -1044,3 +1044,46 @@ request = "search for username thomasmartinoa in github"
 notes = "Found on the laptop: it searched repositories for 'username thomasmartinoa'."
 expect_status = ["done"]
 expect_windows = [{ class = "zen", title_contains = "github.com/search?q=thomasmartinoa&type=users" }]
+
+# ---- working on a project: VS Code, its own commands, git (v26)
+
+[[case]]
+id = "open-project-in-editor"
+request = "open my SONU project in vscodium"
+expect_status = ["done"]
+expect_windows = [{ class = "VSCodium", title_contains = "SONU" }]
+require_tools = ["dev.open_project"]
+
+[[case]]
+id = "open-file-at-a-line"
+request = "open planner.py in SONU at line 40"
+notes = "No editor named: the VS Code-like one (VSCodium here); the file found by SONU, not given as a path."
+expect_status = ["done"]
+expect_windows = [{ class = "VSCodium", title_contains = "planner.py" }]
+require_tools = ["dev.open_project"]
+forbid_tools = ["files.open", "dev.claude_open"]
+
+[[case]]
+id = "run-project-tests"
+request = "run the tests in SONU"
+notes = "The project's own command (uv run pytest), shown and asked first (evals approve), in a SONU window."
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", title_contains = "uv run pytest" }]
+expect_system = { tasks_run = ["uv run pytest"] }
+expect_confirmed = ["dev.run"]
+forbid_tools = ["screen.type", "dev.type"]
+
+[[case]]
+id = "what-did-i-change"
+request = "what did I change in SONU?"
+notes = "Before D65 this read the activity journal."
+expect_status = ["done"]
+require_tools = ["dev.git"]
+forbid_tools = ["journal.read"]
+
+[[case]]
+id = "last-commits"
+request = "show me my last commits in SONU"
+expect_status = ["done"]
+require_tools = ["dev.git"]
+forbid_tools = ["journal.read", "github.prs"]

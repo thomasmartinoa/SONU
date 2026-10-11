@@ -94,9 +94,10 @@ works:
 
 | App | Ability | State | How |
 |---|---|---|---|
-| VS Code / Code - OSS / VSCodium | open a project folder or a file at a line; "open my SONU project" | 🗺 M4 | `code --goto`, project discovery |
-| kitty | open a terminal in a folder; run an allowlisted project command | 🗺 M4 | `kitty --directory`; commands only from an allowlist (e.g. `package.json` scripts), asks first |
-| git | "what did I change in SONU?" | 🗺 M4 | read-only `git status/log` |
+| VS Code / Code - OSS / VSCodium | open a project folder or a file at a line; "open my SONU project" | 🧪 #52 | `code <folder> --goto file:line`; SONU finds the project and the file ([D65](DECISIONS.md)) |
+| kitty | run one of a project's own commands ("run the tests"), "did it pass?" | 🧪 #52 | only commands the project lists (`package.json`, `justfile`, `Makefile`) or uv/cargo/go's own; asks with the exact command; a SONU window; the exit code decides ([D65](DECISIONS.md)) |
+| kitty | open a terminal in a folder | 🗺 | `kitty --directory` |
+| git | "what did I change in SONU?", "my last commits" | 🧪 #52 | read-only `git status/diff/log` (no repository hooks); the answer is private ([D65](DECISIONS.md)) |
 | WhatsApp, mail, chat apps | open a chat; read unread counts | 🗺 M7 | URLs / window titles; **sending messages is high risk** and always asks |
 | Any app without an interface | click, type, read the screen | 🗺 M6 | accessibility (AT-SPI) or screenshot + vision (`qwen3.5` can see images) + virtual input; high risk |
 

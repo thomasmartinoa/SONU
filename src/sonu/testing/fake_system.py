@@ -52,8 +52,16 @@ ALL_PROGRAMS = frozenset(
         "python3",
         "wlrctl",
         "wtype",
+        "git",
     }
 )
+# A repository for `git` in the fake home's projects: on a branch with one commit not pushed, two files
+# changed (one staged as new) and one untracked.
+GIT_REPO: dict[str, str] = {
+    "status": "## main...origin/main [ahead 1]\0 M src/app.py\0A  src/login.py\0?? notes.txt\0",
+    "numstat": "12\t3\tsrc/app.py\n40\t0\tsrc/login.py\n",
+    "log": "abc1234\x1f2 hours ago\x1fAdd the login page\x1e\ndef5678\x1f1 day ago\x1fFirst commit\x1e\n",
+}
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
 
@@ -177,6 +185,14 @@ class FakeSystem:
     # Removing (pacman -Rs): what each installed package alone pulled in, and what needs it.
     only_needs: dict[str, tuple[str, ...]] = field(default_factory=dict)
     required_by: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # git: folder name → its repository (GIT_REPO's keys); other folders aren't repositories.
+    git_repos: dict[str, dict[str, str]] = field(
+        default_factory=lambda: {"SONU": GIT_REPO, "shop-app": GIT_REPO}
+    )
+    # A project's command run in SONU's window (run_task.py): the command → (exit code, output);
+    # exit code None: still running. Not listed: exit 0, "3 passed".
+    task_results: dict[str, tuple[int | None, str]] = field(default_factory=dict)
+    tasks_run: list[str] = field(default_factory=list)
     polkit_answer: str = "allow"  # "dismiss": the user cancels the system's password prompt
     root_secret: str = "Hunter2!"  # noqa: S105 — the (fake) password polkit's text agent accepts
     # Accessibility (AT-SPI through SONU's helper): pid → the app's controls, as the helper reports
@@ -202,7 +218,15 @@ class FakeSystem:
         return self.run_in_terminal(argv) + "[sonu] finished (exit 0)\n"
 
     def run_in_terminal(self, argv: list[str]) -> str:
-        """A program started in a SONU terminal (an install): its output."""
+        """A program started in a SONU terminal (an install, a project's command): its output."""
+        if len(argv) > 2 and argv[1].endswith("run_task.py"):
+            status, command = Path(argv[2]), " ".join(argv[3:])
+            self.tasks_run.append(command)
+            code, output = self.task_results.get(command, (0, "===== 3 passed in 0.12s ====="))
+            if code is None:
+                return f"$ {command}\n\n{output}"
+            status.write_text(str(code))
+            return f"$ {command}\n\n{output}\n\n[sonu] finished (exit {code})\n"
         name = argv[-1]
         if argv[:3] == ["pkexec", "pacman", "-Rs"]:
             if self.polkit_answer == "dismiss":
@@ -401,6 +425,20 @@ class FakeSystem:
             ]
             return (0, "".join(lines), "") if lines else (1, "", "")
         return 1, "", f"unsupported yay call {args}"
+
+    def _git(self, args: list[str]) -> tuple[int, str, str]:
+        folder = args[args.index("-C") + 1]
+        repo = self.git_repos.get(Path(folder).name)
+        if repo is None:
+            return 128, "", "fatal: not a git repository (or any of the parent directories): .git"
+        command = next(a for a in args[args.index("-C") + 2 :] if not a.startswith("-"))
+        if command == "status":
+            return 0, repo["status"], ""
+        if command == "diff":
+            return 0, repo["numstat"], ""
+        if command == "log":
+            return 0, repo["log"], ""
+        return 1, "", f"unsupported git call {args}"
 
     def _gh(self, args: list[str]) -> tuple[int, str, str]:
         return self.github.handle(args)

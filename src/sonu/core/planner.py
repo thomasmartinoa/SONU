@@ -245,6 +245,16 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
         },
     ),
     (
+        "open planner.py in my SONU project at line 40",
+        {
+            "kind": "steps",
+            "message": "Opening planner.py at line 40 in VS Code.",
+            "steps": [
+                {"tool": "dev.open_project", "args": {"folder": "SONU", "file": "planner.py", "line": 40}}
+            ],
+        },
+    ),
+    (
         "merge the pull request in hypr-dotfiles",
         {
             "kind": "steps",
@@ -335,6 +345,13 @@ Claude doing? / is it done?" is dev.read. "Write (the best) prompt for my idea: 
 idea …, make a prompt for Claude" is dev.prompt with idea = the user's words for the idea (SONU writes \
 the prompt and shows it). files.make_folder only when the user asks to make or create a folder; for \
 a folder that exists, dev.claude_open alone.
+- A project (a code folder like SONU or shop-app): "open my <name> project", or opening it or a file \
+in it in VS Code / code / the editor, is dev.open_project (folder = the user's words for the project; \
+file and line only if they said them). "Open the <name> folder" with no editor is files.open. \
+"Run the tests / the build / lint (in <project>)" is dev.run with task = the user's word for it \
+("tests"); "did the tests pass? / how did the build go?" is dev.run_result. "What did I change (in \
+<project>)? / what's not committed?" is dev.git; "my last commits" is dev.git with what "commits" — not \
+journal.read.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \
 question = the user's question; window focused for "this window", the app they name, or none for \
 the whole screen.
@@ -441,6 +458,12 @@ _MEDIA_WORDS = re.compile(r"\b(?:song|songs|music|track|playback|video|spotify|i
 _OFF_AND_DND = re.compile(r"\boff\b.*\band (?:the )?(?:do not disturb|dnd)\b(?! me\b)")
 _PAIR = re.compile(r"\bpair\b")
 _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
+# The words that point at the focused window ("close this", "close it", "close the window").
+_THIS_WINDOW = re.compile(r"\b(?:this|that|it|here|focused|current|active|window)\b")
+# What makes "open SONU" an editor's job (dev.open_project) rather than the file manager's.
+_EDITOR_WORDS = re.compile(
+    r"\b(?:project|repo|repository|codebase|editor|vs ?code|code|codium|vscodium|cursor|windsurf|line)\b"
+)
 
 
 def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[str]:
@@ -571,6 +594,38 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
             f"no need to ask: github.prs lists the user's open pull requests in all their repositories — "
             f"plan exactly this step: {wanted}"
         )
+    # Found in the evals (v26, after two examples were added): "close kitty" was planned as closing the
+    # focused window — on a real desktop whatever window had the focus would have been closed.
+    for index, step in enumerate(plan.steps):
+        target = step.args.get("window")
+        if (
+            step.tool == "windows.close"
+            and isinstance(target, dict)
+            and target.get("focused")
+            and not _THIS_WINDOW.search(said)
+        ):
+            problems.append(
+                f"step {index + 1} (windows.close): the user didn't say 'this window' — close the app they "
+                'named: window {"app": <the user\'s word for it>} (not focused)'
+            )
+    # Found on real hardware, and again in the evals (v26): "maximize this window" was planned as fullscreen.
+    if re.search(r"\bmaximi[sz]e\b", said) and "fullscreen" not in said and "full screen" not in said:
+        for index, step in enumerate(plan.steps):
+            if step.tool == "windows.state" and step.args.get("state") == "fullscreen":
+                problems.append(
+                    f'step {index + 1} (windows.state): the user said maximize — use state "maximized" '
+                    '(not "fullscreen")'
+                )
+    # Found in the evals (v26): "open the SONU folder" opened VS Code once dev.open_project existed — a
+    # folder with no editor, project or file named is the file manager's.
+    for index, step in enumerate(plan.steps):
+        if step.tool == "dev.open_project" and not step.args.get("file") and not _EDITOR_WORDS.search(said):
+            place = str(step.args.get("folder") or "")
+            wanted = json.dumps({"tool": "files.open", "args": {"place": place}})
+            problems.append(
+                f"step {index + 1} (dev.open_project) is for opening a project in an editor, and the user "
+                f"named no editor or project — to open the folder plan exactly: {wanted}"
+            )
     # Found on real hardware: "press the frobnicate button in thunar" was listed as unsupported; SONU
     # looks the button up itself and says what the app has.
     if not any(step.tool == "screen.press" for step in plan.steps):
