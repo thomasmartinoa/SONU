@@ -205,7 +205,10 @@ Waiting on music in `~/Music`: local music with `mpv`.
   see it open (may be in a background tab)". Worth checking what Zen does with links from other apps.
 - **Planner variance**: once, "open zen on workspace 3 and …" was planned as "show workspace 3"; the same request
   worked on the next try.
-- Deep planner: `qwen3.5:9b` isn't pulled yet; `sonu eval --deep -m qwen3:8b` would measure the installed alternative.
+- Deep planner: `qwen3:8b` (installed, thinking on) measured 2026-10-11: **113 / 123, 10.9 s a plan** — worse and ten
+  times slower than `qwen3.5:4b` (123 / 123, 1.0 s); misses: closing, reminders, memory, the screen, the journal, a
+  prompt from an idea, an injected title. Not worth it; `qwen3.5:9b` isn't pulled. With cloud planning allowed,
+  `--deep` goes to `gpt-oss:120b-cloud` instead.
 - NitroSense key: voice part 1 is press-to-talk (one press, SONU hears until you stop), so key release isn't needed.
   Hold-to-talk would need `wev` to show *released* arriving when a 2-second hold ends.
 - **Play on YouTube doesn't work on the laptop yet** (2026-09-27). Zen: the video opens **paused** (Firefox blocks
