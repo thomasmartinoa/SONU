@@ -19,6 +19,7 @@ from sonu.core.engine import ConfirmRequest
 from sonu.tools.base import Risk
 from sonu.voice.audio import Endpointing, Speaker, SpeechDetector, Utterance, record
 from sonu.voice.engines import KokoroVoice, WhisperEars
+from sonu.voice.speech import for_speech
 
 _YES = re.compile(
     r"^\W*(yes|yeah|yep|yup|sure|ok(ay)?|go ahead|do it|please do|confirm(ed)?|affirmative)\b", re.I
@@ -92,6 +93,7 @@ class VoiceSession:
         ``interruptible``: stop if the user talks over it — returns True then."""
         if not text.strip():
             return False
+        text = for_speech(text)  # paths, links and times the way a person says them
         samples = self._spoken.get(text)
         if samples is None:
             samples = await asyncio.to_thread(self.voice.speak, text)

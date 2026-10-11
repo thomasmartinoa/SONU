@@ -76,7 +76,8 @@ src/sonu/
   desktop/        hyprland/ (IPC, events, Lua/hyprlang dialects, desktop adapter), apps/ (XDG catalog, resolver)
   world/          snapshot.py, origin.py (the terminal SONU runs in)
   voice/          audio.py (pw-record/pw-play, end of speech), engines.py (Whisper, Kokoro, Silero), session.py,
-                  wake.py ("Hey Sonu")
+                  wake.py ("Hey Sonu"),
+                  speech.py (text said like a person: paths, links, times, long lists)
   llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
   verify/ policy/ audit/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS,
                   kitty = SONU-owned terminals, run_task = a command's exit code, browser = the extension's sockets,

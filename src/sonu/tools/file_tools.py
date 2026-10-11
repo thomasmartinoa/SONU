@@ -289,7 +289,8 @@ def files_named(
     every song below an artist's folder: both False)."""
     if not words and not kinds:
         return []
-    keys = [compact(w) for w in words if compact(w)]
+    # "my invoices" finds "invoice march.pdf": the singular is in the plural too (found by a test, D79).
+    keys = [_singular(compact(w)) for w in words if compact(w)]
     found: list[tuple[float, Path]] = []
     stack = [folder]
     scanned = 0
@@ -331,6 +332,10 @@ def files_named(
     whole = compact(" ".join(words))
     exact = [p for p in paths if compact(p.stem) == whole]
     return (exact + [p for p in paths if p not in exact])[:limit]
+
+
+def _singular(key: str) -> str:
+    return key[:-1] if len(key) > 3 and key.endswith("s") and not key.endswith("ss") else key
 
 
 def _below(path: Path, top: Path, keys: list[str]) -> int:

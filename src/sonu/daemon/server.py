@@ -84,6 +84,7 @@ from sonu.voice.engines import (
 )
 from sonu.voice.interrupt import user_talked
 from sonu.voice.session import VoiceSession
+from sonu.voice.speech import shorten_list
 from sonu.voice.wake import WakeListener, after_wake_word, fix_name
 from sonu.world.origin import ancestor_pids
 from sonu.world.snapshot import WorldSnapshot
@@ -216,7 +217,8 @@ def spoken_reply(report: TaskReport) -> str:
         r.outcome.summary for r in report.steps if r.outcome.private and r.outcome.status is StepStatus.DONE
     ]
     if private and len(private) == len(report.steps):
-        return " ".join(private)
+        # A long list (files, tabs, history): its first few, then "and N more" (D79).
+        return " ".join(shorten_list(line) for line in private)
     return report.headline() if report.plan is not None else report.error or ""
 
 
