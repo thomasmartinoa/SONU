@@ -369,6 +369,10 @@ the <words> link / button" is browser.click (control = the user's words for it);
 <text> in the <field>" is browser.fill (text = exactly their words; field = their words for the field; \
 submit for "and press enter / and search / and send"); "scroll down / up / to the top / bottom" is \
 browser.scroll.
+- The user's browsing: "find the page about <words> (I saw yesterday)", "search my history for <words>" \
+is browser.history (words = their words; when only if they said a time); "my bookmarks (for <words>)" is \
+browser.history with kind "bookmarks"; "open my <words> bookmark" / "open that <words> page I visited" \
+is browser.open_saved — not web.open or web.search.
 - "Do I have new / unread messages?", "any WhatsApp messages?", "how many unread emails?" is \
 messages.unread (app only if they named one) — not screen.read, not system.status.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \
@@ -478,6 +482,7 @@ _OFF_AND_DND = re.compile(r"\boff\b.*\band (?:the )?(?:do not disturb|dnd)\b(?! 
 _PAIR = re.compile(r"\bpair\b")
 _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 # The words that point at the focused window ("close this", "close it", "close the window").
+_SAVED = re.compile(r"\b(?:bookmarks?|bookmarked|history|visited|i saw|i was reading)\b")
 _IN_A_FIELD = re.compile(r"\b(?:in|into)\s+(?:the|my|this)\s+(?:[\w-]+\s+){0,3}(?:field|box|bar)\b")
 _WEB_PAGE = re.compile(r"\b(?:(?:web ?)?page|webpage|article|website|tab)\b")
 _THIS_WINDOW = re.compile(r"\b(?:this|that|it|here|focused|current|active|window)\b")
@@ -676,6 +681,15 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 problems.append(
                     f"step {index + 1} (screen.read): the user asked about a web page — plan {wanted} "
                     "instead (add words only for a tab they named)"
+                )
+    # The user's bookmarks and history are on the laptop (D73): never a web search or a site by name.
+    if _SAVED.search(said):
+        for index, step in enumerate(plan.steps):
+            if step.tool in ("web.open", "web.search"):
+                problems.append(
+                    f"step {index + 1} ({step.tool}): the user means their own bookmarks or history — "
+                    "use browser.open_saved (to open one) or browser.history (to find or list) with words = "
+                    "their words for the page"
                 )
     # Found on the laptop (dry run, D72): "type red shoes in the search box and press enter" was planned as
     # keystrokes into the browser window (named by a title the model copied). A page's field is browser.fill.

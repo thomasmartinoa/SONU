@@ -18,6 +18,7 @@ from sonu.tools.dev_tools import DEV_TOOLS
 from sonu.tools.everyday_tools import EVERYDAY_TOOLS
 from sonu.tools.file_tools import FILE_TOOLS
 from sonu.tools.github_tools import GITHUB_TOOLS
+from sonu.tools.history_tools import HISTORY_TOOLS
 from sonu.tools.journal_tools import JOURNAL_TOOLS
 from sonu.tools.layout_tools import LAYOUT_TOOLS
 from sonu.tools.media_tools import MEDIA_TOOLS
@@ -64,6 +65,7 @@ class ToolRegistry:
             *WINDOW_TOOLS,
             *WEB_TOOLS,
             *BROWSER_TOOLS,
+            *HISTORY_TOOLS,
             *MEDIA_TOOLS,
             *SETTINGS_TOOLS,
             *EVERYDAY_TOOLS,

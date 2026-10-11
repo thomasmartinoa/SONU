@@ -494,3 +494,13 @@ def test_a_field_on_a_page_is_browser_fill() -> None:
     [problem] = _problems(typed, REGISTRY, "type red shoes in the search box and press enter")
     assert '"tool": "browser.fill"' in problem
     assert _problems(typed, REGISTRY, "type red shoes") == []
+
+
+def test_bookmarks_and_history_arent_the_web() -> None:
+    """D73: the user's own bookmarks and history are read on the laptop, never searched for on the web."""
+    searched = _plan(("web.search", {"site": "web", "query": "lentil soup"}))
+    [problem] = _problems(searched, REGISTRY, "find the lentil soup page I visited yesterday")
+    assert "browser.history" in problem
+    opened = _plan(("web.open", {"site": "arch wiki"}))
+    assert _problems(opened, REGISTRY, "open my arch wiki bookmark") != []
+    assert _problems(opened, REGISTRY, "open the arch wiki") == []

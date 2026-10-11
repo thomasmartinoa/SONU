@@ -19,7 +19,7 @@ _Last update: 2026-10-11_
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
 | M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)); part 4 🧪 **projects**: open one in VS Code (at a file and line), run its own tests or build (asked first), "did it pass?", what changed in git (#52, [D65](DECISIONS.md)); 🧪 **a terminal in a folder**, checked on its shell (#53, [D66](DECISIONS.md)) |
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
-| M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); part 3 🧪 **clicking by looking + typing** (#37, [D58](DECISIONS.md)); part 4 🧪 **browser tabs** through SONU's own extension: list, switch, close — set up with `sonu browser install` (#58, [D70](DECISIONS.md)); part 5 🧪 **reading a page** with the local model: summarise, ask about it, the selected text (#59, [D71](DECISIONS.md)); part 6 🧪 **clicking, typing and scrolling on a page** (#60, [D72](DECISIONS.md)) |
+| M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); part 3 🧪 **clicking by looking + typing** (#37, [D58](DECISIONS.md)); part 4 🧪 **browser tabs** through SONU's own extension: list, switch, close — set up with `sonu browser install` (#58, [D70](DECISIONS.md)); part 5 🧪 **reading a page** with the local model: summarise, ask about it, the selected text (#59, [D71](DECISIONS.md)); part 6 🧪 **clicking, typing and scrolling on a page** (#60, [D72](DECISIONS.md)); part 7 🧪 **history and bookmarks** from the browsers' own files (#61, [D73](DECISIONS.md)) |
 | M5 Connect | 🚧 part 1 🧪 **Claude Code uses SONU's tools (MCP)**: `sonu mcp serve`, SONU's policy, asked on screen, personal content kept back (#45, [D61](DECISIONS.md)); part 2 🧪 **Ollama Cloud, opt-in**: prompts, harder requests (no window titles), vision; every send audited (#46, [D62](DECISIONS.md)); part 3 🧪 **other MCP servers' tools**: local, web and account servers, high risk unless listed read-only, answers shown only to you (#49, [D63](DECISIONS.md)); 🧪 **cloud usage limits**: a 429 pauses the cloud and SONU stays local, use counted in `sonu doctor` (#50, [D64](DECISIONS.md)) — **M5 is complete** |
 | M7 Beyond the desktop | 🚧 part 1 🧪 **unread messages**: "do I have new messages?" — the counts open chat and mail apps show, nothing else of their titles (#55, [D68](DECISIONS.md)); part 2 🧪 **"what was that notification?"**, opt-in: the latest kept in memory only, shown and said only to you (#56, [D69](DECISIONS.md)) |
 
@@ -45,9 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **145 / 145** on the v33 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **147 / 147** on the v34 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
-for messages and notifications, three for browser tabs, two for reading a page and three for acting on one; the M1 example (VSCodium + Chromium
+for messages and notifications, three for browser tabs, two for reading a page, three for acting on one and two for
+history and bookmarks; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -258,7 +259,16 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    "type blue boots in the search box and press enter" → the page's results; "click send" (asked, **high**) → the form
    sent; "click delete account" → asked high; "type hunter2 in the password field" → refused; "scroll to the bottom" /
    "scroll up" / "scroll down" at the end → done / "already at the bottom"; "click the about us link" on a page without
-   one → "it has: none SONU can use". Next: the owner's own browsers once the extension is added.
+   one → "it has: none SONU can use". ~~History and bookmarks~~ (#61, [D73](DECISIONS.md)) — on the laptop, the owner's
+   profiles were looked at for their layout only (Zen 1.23 `places.sqlite` in WAL mode with a 2 MB `-wal`, 5,365 places;
+   Chromium 153 `History`, no `Bookmarks` yet), never their pages. Then throwaway headless Chromium and Zen visited a
+   local test site: SONU read Chromium's two pages and Zen's page **while Zen ran** (its newest visit only in the
+   `-wal`); the copies were gone after. With the real planner (a scratch home with those profiles): "find the page about
+   lentil soup I visited today" → "1 page in your history … Lentil soup recipe (today 19:37)"; "search my history for
+   kestrel" → found; "what pages did I visit today?" → all three (it had reused "lentil soup" from the turn before:
+   fixed); "what bookmarks do I have?" → Zen's four default ones; "open the kestrel lake page from my history" (dry
+   run: it would open the owner's real browser) → "Open your history matching “kestrel lake” in Chromium". Next: the
+   owner's own browsers once the extension is added.
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
@@ -348,12 +358,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #57 | 2026-10-11 | A dry run names the window an earlier step would open: "open a terminal on 3 and type hello" → "Type “hello” … into the window from “Open kitty on workspace 3”" (it said "into zen", the window focused now) |
 | #58 | 2026-10-11 | Browser tabs ([D70](DECISIONS.md)): SONU's extension (one manifest for Chromium and Zen/Firefox; `tabs` + `nativeMessaging` only), its native messaging host (a 0600 socket in SONU's runtime folder), `sonu browser install / status / uninstall`, `browser.tabs` (private), `browser.tab` (SONU focuses the window: Wayland won't let the browser), `browser.close_tabs` (asks, titles shown, never logged); a `sonu doctor` line; tests and evals never reach the real browser; "open my last download" and "what is open in zen?" decided from the user's words (two eval slips); eval suite v31 (140) |
 | #59 | 2026-10-11 | Reading a page ([D71](DECISIONS.md)): `browser.read` answers a question about a page, a tab the user names or the selected text, from its visible text — through the extension (0.2.0: `scripting` + `<all_urls>`, one tab only when SONU asks) to the local model only (`core/page_reader.py`), a private answer; browsers' own pages refused; an older extension told to update (`sonu browser status` shows each browser's extension version); answers up to 4 MiB (the 64 KiB default cut long tab lists and pages); a planner check: a page question isn't `screen.read`; the tab the user's words name decides; `messages.unread` leaves out an app the user didn't name; eval suite v32 (142) |
-| #60 | open | Clicking, typing and scrolling on a page ([D72](DECISIONS.md)): `browser.click` (a link low, a button or checkbox medium, "delete / buy / send …" high), `browser.fill` (the user's exact words, never a password or card field, Enter optional), `browser.scroll`; the extension 0.3.0 lists a page's controls by name and number; the control is checked again before acting; done only when the page changed / the field shows the words / the page moved; `screen.type` into a page's named field goes through the extension; name matching shared with `screen.press` (`tools/naming.py`); the user's words decide where to scroll; an "alias" without "mean" is a note; planner rule and a check (a page's field isn't keystrokes); page input asks over MCP; eval suite v33 (145) |
+| #60 | 2026-10-11 | Clicking, typing and scrolling on a page ([D72](DECISIONS.md)): `browser.click` (a link low, a button or checkbox medium, "delete / buy / send …" high), `browser.fill` (the user's exact words, never a password or card field, Enter optional), `browser.scroll`; the extension 0.3.0 lists a page's controls by name and number; the control is checked again before acting; done only when the page changed / the field shows the words / the page moved; `screen.type` into a page's named field goes through the extension; name matching shared with `screen.press` (`tools/naming.py`); the user's words decide where to scroll; an "alias" without "mean" is a note; planner rule and a check (a page's field isn't keystrokes); page input asks over MCP; eval suite v33 (145) |
+| #61 | open | History and bookmarks ([D73](DECISIONS.md)): `browser.history` (by the user's words and/or a time; private) and `browser.open_saved` (a bookmark low, a page from history shown and asked) — read from read-only copies of Zen/Firefox `places.sqlite` (with its `-wal`) and Chromium `History` / `Bookmarks` in SONU's 0700 runtime folder, deleted after; no extension needed; a search uses this request's words only; planner rule and a check (bookmarks and history aren't `web.*`); fake profiles for tests and evals; eval suite v34 (147) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-11 | (D73, throwaway profiles) "what pages did I visit today?" right after a lentil soup search was planned with words "lentil soup" | a history search uses this request's words only (#61) |
 | 10-11 | (D72, a unit test while building) a test of `screen.type` ran with the real `wtype` — "martin" was typed once into the focused window (the owner's Zen); no Enter, nothing sent | the browser tests' context has no real programs (`which` finds nothing, a fake system) (#60) |
 | 10-11 | (D72, throwaway Zen/Chromium) "type hello there in the message box" stayed `screen.type` after the planner asked again; "scroll to the bottom of the page" was planned as "top"; "type red shoes in the search box" went to keystrokes into the owner's Zen window (dry run, nothing typed) | a page's named field is filled through the extension, also from `screen.type`; the user's words decide where to scroll; a planner check sends a page's field to `browser.fill` (#60) |
 | 10-11 | (eval v33, after the page rules) "remember that the shop project is in dev_works/shop-app" was planned as an alias for an app | an alias needs "mean"; otherwise it's a note in the user's words (#60) |
