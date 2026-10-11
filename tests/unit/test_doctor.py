@@ -433,6 +433,35 @@ async def test_the_browser_extension_line(xdg_env: dict[str, str], short_tmp: Pa
         by_id(await check_integrations(context))["integration.browser"].summary
         == "set up; no browser connected"
     )
-    async with FakeBrowser(short_tmp / "sonu" / "browsers"):
+    from sonu.browser.install import extension_version
+
+    current = extension_version()
+    async with FakeBrowser(short_tmp / "sonu" / "browsers", version=current):
         result = by_id(await check_integrations(context))["integration.browser"]
-    assert (result.status, result.summary) == ("ok", "connected: zen")
+    assert (result.status, result.summary) == ("ok", f"connected: zen ({current})")
+    # An older extension can't read pages or click (D71, D72): the doctor says to update it.
+    async with FakeBrowser(short_tmp / "sonu" / "browsers", version="0.1.0"):
+        result = by_id(await check_integrations(context))["integration.browser"]
+    assert result.status == "warn"
+    assert result.summary == f"connected: zen (0.1.0) — zen has an older extension than {current}"
+
+
+@pytest.mark.anyio
+async def test_the_local_music_line(xdg_env: dict[str, str], tmp_path: Path) -> None:
+    import dataclasses
+
+    from sonu.doctor.checks import check_integrations
+
+    context = dataclasses.replace(
+        make_context(xdg_env, hypr=None, ollama=None), which=lambda name: f"/usr/bin/{name}"
+    )
+    result = by_id(await check_integrations(context))["integration.music"]
+    assert (result.status, result.summary) == ("info", "no songs in ~/Music yet · media keys: off")
+    assert result.hint is not None and "mpv-mpris" in result.hint
+    for name in ("a/1.ogg", "a/2.mp3", "cover.jpg"):
+        (context.home / "Music" / name).parent.mkdir(parents=True, exist_ok=True)
+        (context.home / "Music" / name).write_bytes(b"x")
+    (context.home / ".config" / "mpv" / "scripts").mkdir(parents=True, exist_ok=True)
+    (context.home / ".config" / "mpv" / "scripts" / "mpris.so").write_bytes(b"")
+    result = by_id(await check_integrations(context))["integration.music"]
+    assert (result.status, result.summary) == ("ok", "2 songs in ~/Music · media keys: on (mpv-mpris)")

@@ -1,0 +1,69 @@
+# Things to try on the laptop
+
+Everything below was built and tested while the owner was away (PRs #52–#65). Each feature passed its unit tests and
+the eval suite, and was tried on the laptop with throwaway browsers, scratch folders or silent test songs. **None of it
+has been tried by the owner yet.** Tick a line once it worked; anything that doesn't becomes a "found on real
+hardware" fix (see [`STATUS.md`](STATUS.md)).
+
+Start with `sonu doctor`: the **Integrations** lines show what's set up (browser extension, local music) and what's
+missing.
+
+## Set up first (one time)
+
+- [ ] **Browser extension** (tabs, pages, clicking, typing): `sonu browser install`, then
+  - Chromium: `chrome://extensions` → Developer mode → Load unpacked → the folder it printed;
+  - Zen: `about:config` → `xpinstall.signatures.required` = false; `about:addons` → ⚙ → Install Add-on From File →
+    the `.xpi` it printed; allow "Access your data for all websites";
+  - then `sonu browser status` → each browser "connected · N tabs · extension 0.3.0".
+- [ ] **Notifications** ("what was that notification?"): add to `~/.config/sonu/config.toml`, then
+  `systemctl --user restart sonud`:
+
+  ```toml
+  [notifications]
+  remember = true
+  ```
+
+- [ ] **Local music**: put some songs in `~/Music`. Optional: `sudo pacman -S mpv-mpris` so the rice's media keys
+  control SONU's music too.
+
+## Try by voice (or typed)
+
+### Projects and terminals (#52, #53)
+- [ ] "open my SONU project" · "open planner.py in SONU at line 40"
+- [ ] "run the tests in SONU" · "did the tests pass?"
+- [ ] "what did I change in SONU?" · "my last commits"
+- [ ] "open a terminal in dev_works"
+
+### Layouts (#54)
+- [ ] "save this layout as work" · "what layouts do I have?" · "restore work" · "forget the work layout"
+
+### Messages and notifications (#55, #56)
+- [ ] with WhatsApp or Telegram open: "do I have new messages?" · "any telegram messages?" · "how many unread emails?"
+- [ ] (notifications on) "what was that notification?" · "read my notifications" · "forget my notifications"
+
+### Browser — needs the extension (#58–#60)
+- [ ] "what tabs do I have open?" · "switch to the YouTube tab" · "close the YouTube tabs" (asks first)
+- [ ] "summarise this page" · "what does the github tab say about installing?" · select text, then "explain the
+  selected text"
+- [ ] "scroll down" · "scroll to the top" · "click <a link on the page>" · "type red shoes in the search box and press
+  enter"
+
+### History and bookmarks — no extension needed (#61)
+- [ ] "what pages did I visit today?" · "find the page about <something> I saw yesterday"
+- [ ] "what bookmarks do I have?" · "open my <name> bookmark" · "open that <something> page from my history" (asks)
+
+### Files (#62–#64)
+- [ ] "open my <file name>" · "where is my <file> pdf?" · "what files did I open yesterday?"
+- [ ] on a file you don't need: "move <it> to documents" · "rename <it> to <new name>" · "delete <it>" (it goes to
+  the trash) · "restore <it>"
+- [ ] "copy the path of <a file>" · "copy my last screenshot" · "copy hello from sonu", then paste somewhere
+
+### Music (#65)
+- [ ] "play my music" · "shuffle my music" · "play <artist> from my music" · "pause" · "next song" · "what's
+  playing?" · "stop the music"
+
+## Before #52 and still 🧪
+
+[`CAPABILITIES.md`](CAPABILITIES.md) marks everything built but not yet confirmed on the laptop with 🧪 — among them
+reminders, screenshots, laptop health, Claude Code by voice, GitHub merges, pressing buttons through accessibility
+and the cloud models. When one is confirmed, change its 🧪 to ✅ there.
