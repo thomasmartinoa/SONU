@@ -31,6 +31,9 @@ def test_query_words_must_come_from_the_request(query: str, request_text: str, m
     ("site", "request_text", "url", "marker"),
     [
         ("youtube", "go to youtube", "https://www.youtube.com/", "youtube"),
+        # Found in `sonu eval --cloud`: a named site by its own address.
+        ("youtube.com", "go to youtube", "https://www.youtube.com/", "youtube"),
+        ("https://www.youtube.com/", "go to youtube", "https://www.youtube.com/", "youtube"),
         ("arch wiki", "open the arch wiki", "https://wiki.archlinux.org/", "archwiki"),
         ("github.com", "open github.com", "https://github.com", "github"),
         (
@@ -56,6 +59,8 @@ def test_sites_the_user_named(site: str, request_text: str, url: str, marker: st
         ("youtube", "move the browser to 3", "only opens sites you named"),
         ("evil.example/steal?d=secret", "move the browser to 3", "links you typed yourself"),
         ("github.com.evil.example", "open github.com", "links you typed yourself"),
+        ("youtube.com/watch?v=x", "go to youtube", "links you typed yourself"),  # more than the site
+        ("youtube.com", "move the browser to 3", "links you typed yourself"),  # a site not named
         ("javascript:alert(1)", "open javascript:alert(1)", "not a web address"),
         ("file:///etc/passwd", "open file:///etc/passwd", "only opens web links"),
         ("https://user:pw@github.com", "open https://user:pw@github.com", "not a web address"),

@@ -93,7 +93,10 @@ class ScreenReader:
             raise ScreenReaderError("the vision model can't point at things")
         question = (
             f"Point at {target}. Give its center as x and y on a 0 to 1000 scale of the image width "
-            "and height. If it isn't visible, set found to false."
+            "and height. If it isn't visible, set found to false. "
+            # Found on the laptop: gemma4:31b-cloud ignores the schema and points its own way
+            # ([{"point": [y, x]}]) unless the question names the fields.
+            'Answer with JSON only: {"found": true or false, "x": 0-1000, "y": 0-1000}.'
         )
         message = ChatMessage("user", question, images=(base64.b64encode(png).decode(),))
         try:

@@ -45,7 +45,9 @@ _Last update: 2026-10-11_
 ### Eval suite
 
 `qwen3.5:4b`: **120 / 120** twice on the v24 suite (2026-10-11, the laptop's GPU, ~1.3 s mean planning), including nine
-complex multi-step requests and five for Claude Code. Pass/fail only. History, including the runs that failed while the prompt wording
+complex multi-step requests and five for Claude Code. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
+**115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
+questions). Pass/fail only. History, including the runs that failed while the prompt wording
 settled, in [`evals.md`](evals.md).
 
 ## M1.5 — system settings (done)
@@ -173,12 +175,20 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    prompts, planning (no window titles), vision — but Ollama isn't signed in"; a three-part request with planning
    allowed was offered to `gpt-oss:120b-cloud` (`cloud.send` audited, 19,958 characters, no titles), refused
    ("run `ollama signin`") and planned locally — 2.9 s in all; `[models.planner] = gpt-oss:120b-cloud` → sonud, `sonu
-   --deep` and `sonu ask` refuse to start. Waiting on the owner's `ollama signin` for the real cloud answers.
+   --deep` and `sonu ask` refuse to start. **Signed in** (the owner, 2026-10-11, free plan; tried with a copy of the
+   owner's config allowing all three uses): `sonu doctor` → "signed in as thomasmartinoa"; `sonu eval -m
+   gpt-oss:120b-cloud` → 115/120, ~1.4 s a plan; "open kitty on workspace 9, set the volume to 30 percent and then
+   tell me my battery" (dry run) → three steps by the cloud in 1.7 s, `cloud.send` in the audit log; vision on a
+   made-up picture (a red square, a blue circle — not the screen): described right in 0.7 s, the circle pointed at
+   within 1 % (the local model: ~10 % off) once #48 named the answer's fields.
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
 ## Open questions and known issues
 
+- **`gpt-oss:120b-cloud`'s own misses** (2026-10-11): "open bluetooth manager and pair my new headphones" → connected
+  the paired WH-1000XM4 instead of listing pairing as unsupported; "what are my open pull requests?" → asked which
+  repository (the local model lists them all). Worth a planner rule if they show up for real.
 - **Zen and background tabs**: once, a page SONU sent to Zen didn't show in any window title; SONU now says "didn't
   see it open (may be in a background tab)". Worth checking what Zen does with links from other apps.
 - **Planner variance**: once, "open zen on workspace 3 and …" was planned as "show workspace 3"; the same request
@@ -253,7 +263,8 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #44 | 2026-10-11 | The activity journal (M2 part 4, [D60](DECISIONS.md)): sonud records which window has the focus (local SQLite, 30 days, password managers and private windows never); "what was I doing yesterday / this morning?", "when did I last use …?", pause/resume, delete (asks); `sonu journal`; eval suite v24 (120) |
 | #45 | 2026-10-11 | M5 part 1: SONU as an MCP server ([D61](DECISIONS.md)) — `sonu mcp serve` / `tools` / `setup`; every tool but `voice.wake` and `dev.prompt`; `Engine.call_tool` (policy, checks, audit); asked on screen for words, links, typing, writing; private results shown to the user, never sent to the client |
 | #46 | 2026-10-11 | M5 part 2: Ollama Cloud, opt-in ([D62](DECISIONS.md)) — `[cloud]` (model, vision_model, use_for, plan); prompts, harder requests without window titles (falls back to local), vision; `[models]` refuses cloud models; every send audited first (`cloud.send`); `sonu doctor` checks sign-in and retired models; `sonu eval --cloud` |
-| #47 | open | `sonu eval --help` lost a word ("[cloud]" taken as markup) — reworded, with a test |
+| #47 | 2026-10-11 | `sonu eval --help` lost a word ("[cloud]" taken as markup) — reworded, with a test |
+| #48 | open | Ollama Cloud tried for real: folders named by their path, a named site by its own address, cloud vision answers read (the question names the fields; code blocks unwrapped) |
 
 ### Found on real hardware → fixed
 
@@ -262,6 +273,9 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | 10-04 | (voice) "type hello into this window" / "write hello here in the kitty terminal" → dev.type, "Claude Code isn't open" (5 times) | code check: dev.type without Claude in the request → sent back as screen.type; "open a terminal on 3 and type hello" types into the terminal that request opened (#38) |
 | 10-04 | (voice) "open a terminal" → "Alacritty or kitty?" — the rice moved to `~/.config/orrery`, SONU read only `hypr-theme` | default apps read from `~/.config/orrery/defaults` first (#38). Theme and wallpaper fixed the same way in #39 (`orrery-theme`/`orrery-wall`, falling back to the old names) |
 | 10-04 | "next wallpaper" → "The wallpaper is still 1-mountain.png": Orrery's Eclipse theme has one picture | says "This theme has only one wallpaper — name a picture from ~/Pictures" (#39) |
+| 10-11 | (`sonu eval --cloud`) "make a folder called shop-app in dev_works and open claude code there" → "I couldn't find a folder called 'dev_works/shop-app'": the cloud model named the new folder by its path | a folder is matched by its path too; "dev_works/SONU" is a path from home (#48) |
+| 10-11 | (`sonu eval --cloud`) "go to youtube" → `web.open` "youtube.com" → "SONU only opens links you typed yourself" | a named site's own address (nothing after it) is that site (#48) |
+| 10-11 | (Ollama Cloud vision) "point at the blue circle" → "the model couldn't point at it": `gemma4:31b-cloud` isn't held to the JSON schema — it answered `[{"point": [y, x]}]` or in a ```json block | the question names the fields; cloud answers are unwrapped from a code block (#48) |
 | 10-11 | `sonu eval --help`: "Also score your  model" — rich took "[cloud]" as markup | reworded; a test checks the help keeps its words (#47) |
 | 10-11 | (journal, recording the real desktop) Claude Code's spinner (◑ ◐ …) changed its terminal's title every second: a new row every ~2 s | a spinner or an unread count ("(3) Inbox") in front of a title is the same title (#44) |
 | 10-11 | `sonu journal show today` went to the planner as a request | `journal` routed as a command; a test checks every subcommand is (#44) |

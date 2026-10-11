@@ -98,6 +98,9 @@ def test_find_folders(tmp_path: Path) -> None:
     assert find_folders("the SONU folder", home) == [home / "dev_works" / "SONU"]
     assert find_folders("home", home) == [home]
     assert find_folders("~/dev_works/SONU", home) == [home / "dev_works" / "SONU"]
+    assert find_folders("dev_works/SONU", home) == [home / "dev_works" / "SONU"]  # a path from home
+    assert find_folders("dev_works/nothing", home) == []
+    assert find_folders("dev_works/../../..", home) == []  # still only inside the home folder
     assert find_folders("/etc", home) == []  # only folders in the user's home
     # "screenshots" is where SONU and the rice's keys save them; other matches only without it.
     assert find_folders("screenshots", home, home / "Pictures" / "screenshot") == [

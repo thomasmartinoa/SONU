@@ -249,3 +249,18 @@ async def test_screenshots_go_to_the_cloud_only_when_vision_is_allowed(tmp_path:
     )
     with pytest.raises(ScreenReaderError, match="is a cloud model"):
         await sneaky.read(b"png", "what's this?", "the screen")
+
+
+async def test_a_cloud_answer_in_a_code_block_is_still_read(tmp_path: Path) -> None:
+    # Found on the laptop (gemma4:31b-cloud, 2026-10-11): Ollama Cloud doesn't hold it to the JSON
+    # schema — it pointed its own way ([{"point": [y, x]}]) or answered in a ```json block, and SONU
+    # said "the model couldn't point at it".
+    fake = fake_ollama()
+    fake.chat_responder = lambda body: (
+        '```json\n{"found": true, "x": 711, "y": 492}\n```'
+        if '"found"' in body["messages"][-1]["content"]
+        else '[{"point": [492, 711], "label": "blue circle"}]'  # its own way, unless the fields are named
+    )
+    client = OllamaClient(transport=fake.transport)
+    parts = model_parts(allowed("vision"), client, OllamaSettings(), AuditLog(tmp_path / "audit.jsonl"))
+    assert await parts.reader.locate(b"png", "the blue circle") == (0.711, 0.492)

@@ -163,6 +163,9 @@ def find_folders(place: str, home: Path, screenshots: Path | None = None) -> lis
     if text.startswith(("~/", "/")) or text == "~":
         path = Path(text.replace("~", str(home), 1)).expanduser()
         return [path] if path.is_dir() and _inside(path, home) else []
+    if "/" in text.strip("/"):  # "dev_works/SONU": a path from the home folder
+        path = home / text
+        return [path] if path.is_dir() and _inside(path, home) else []
     words = [word for word in normalize(_NEWEST.sub(" ", text)).split() if word not in _FILLERS]
     if not words or words == ["home"]:
         return [home]

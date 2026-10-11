@@ -61,6 +61,14 @@ def _where(ctx: ToolContext, path: Path) -> str:
     return _home_relative(path, ctx.system.home)
 
 
+def _names(folder: Path, place: str) -> bool:
+    """Whether ``place`` names ``folder``: "shop-app", or its path ("dev_works/shop-app", "~/…", "/home/…").
+    Found in `sonu eval --cloud`: the model named the folder this request made by its path."""
+    wanted = [compact(part) for part in Path(place.strip().removeprefix("~")).parts if compact(part)]
+    have = [compact(part) for part in folder.parts]
+    return bool(wanted) and have[-len(wanted) :] == wanted
+
+
 def _pick_folder(ctx: ToolContext, place: str | None, choice: str | None) -> Path | ToolOutcome:
     """The folder the user means: their words, the folder this task made, or the one they picked."""
     home = ctx.system.home
@@ -72,7 +80,7 @@ def _pick_folder(ctx: ToolContext, place: str | None, choice: str | None) -> Pat
             else ToolOutcome(StepStatus.FAILED, "That folder is gone")
         )
     task = ctx.task_folder  # made by an earlier step of this request (in a dry run: would be)
-    if task is not None and (not place or compact(place) in (compact(task.name), compact(str(task)))):
+    if task is not None and (not place or _names(task, place)):
         return task
     if not place:
         return ToolOutcome(StepStatus.FAILED, "Which folder? Say its name (“open Claude Code in shop-app”)")

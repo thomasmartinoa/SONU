@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
+from dataclasses import replace
 from typing import Any
 
 from sonu.audit.log import AuditError, AuditLog
@@ -21,6 +23,16 @@ from sonu.config.settings import CloudUse, Settings
 from sonu.llm.chat import ChatMessage, ChatModelError, ChatResult, OllamaChatModel
 
 logger = logging.getLogger(__name__)
+
+
+# Found on the laptop: gemma4:31b-cloud, asked for JSON, answers in a ```json block — Ollama Cloud
+# doesn't hold every model to the format.
+_FENCED = re.compile(r"\A\s*```[a-z]*\s*\n(.*?)\n?\s*```\s*\Z", re.DOTALL)
+
+
+def unfenced(text: str) -> str:
+    match = _FENCED.match(text)
+    return match.group(1) if match else text
 
 
 class CloudRefused(Exception):
@@ -96,9 +108,10 @@ class CloudModel:
     async def complete_json(self, messages: list[ChatMessage], schema: dict[str, Any]) -> ChatResult:
         self._record(messages)
         try:
-            return await self.inner.complete_json(messages, schema)
+            result = await self.inner.complete_json(messages, schema)
         except ChatModelError as exc:
             raise self._explain(exc) from exc
+        return replace(result, content=unfenced(result.content))
 
     async def complete_text(
         self, messages: list[ChatMessage], *, temperature: float, max_tokens: int
