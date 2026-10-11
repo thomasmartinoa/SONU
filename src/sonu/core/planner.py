@@ -357,6 +357,8 @@ terminal with no folder ("open a terminal on workspace 3") is apps.launch.
 "restore / load / set up my <name> layout", "restore <name>" is \
 layouts.restore; "what layouts do I have?" is layouts.list; "forget / delete the <name> layout" is \
 layouts.forget — never memory.* for layouts.
+- "Do I have new / unread messages?", "any WhatsApp messages?", "how many unread emails?" is \
+messages.unread (app only if they named one) — not screen.read, not system.status.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \
 question = the user's question; window focused for "this window", the app they name, or none for \
 the whole screen.

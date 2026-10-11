@@ -1134,3 +1134,22 @@ expect_status = ["done"]
 require_tools = ["layouts.list"]
 forbid_tools = ["memory.list"]
 
+# ---- unread messages (v29)
+
+[[case]]
+id = "unread-messages"
+request = "do I have any new messages?"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { class = "WhatsApp Desktop", title = "(3) WhatsApp", workspace = 6 }]
+expect_status = ["done"]
+expect_reply_contains = "3"
+require_tools = ["messages.unread"]
+forbid_tools = ["screen.read", "windows.focus"]
+
+[[case]]
+id = "unread-in-one-app"
+request = "any unread telegram messages?"
+windows = [{ class = "TelegramDesktop", title = "Telegram (5)", workspace = 4 }]
+expect_status = ["done"]
+require_tools = ["messages.unread"]
+forbid_tools = ["screen.read", "apps.launch"]
+
