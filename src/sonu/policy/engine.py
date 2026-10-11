@@ -57,6 +57,7 @@ ASK_OUTSIDE = frozenset(
     {
         Effect.WEB_OPEN,
         Effect.TERMINAL_INPUT,
+        Effect.RUN_COMMAND,
         Effect.UI_INPUT,
         Effect.GITHUB_WRITE,
         Effect.FILE_WRITE,

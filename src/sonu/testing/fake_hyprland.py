@@ -421,6 +421,9 @@ class FakeHyprland:
                 title = argv[argv.index("--title") + 1]
             if title is None and path and app.shows_pages:
                 title = f"{Path(path).name} - {app.title}"
+            if path and "--goto" in argv[:-1]:  # VS Code: "planner.py - SONU - Visual Studio Code"
+                file = argv[argv.index("--goto") + 1].rsplit(":", 1)[0]
+                title = f"{Path(file).name} - {Path(path).name} - {app.title}"
             self._background(self._open(app, rule_workspace, title))
         return "ok"
 

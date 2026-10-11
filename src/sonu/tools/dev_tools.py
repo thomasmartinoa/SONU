@@ -101,8 +101,9 @@ def _pick_folder(ctx: ToolContext, place: str | None, choice: str | None) -> Pat
 
 
 async def _terminal(ctx: ToolContext, which: str | None) -> Terminal | ToolOutcome:
-    """The SONU terminal meant: one whose folder the user's words name, else the one used last."""
-    open_ones = await ctx.sonu_terminals().open_ones()
+    """The Claude Code SONU opened that is meant: one whose folder the user's words name, else the one
+    used last. Only Claude Code: a command's window (dev.run) or an install's stays open afterwards."""
+    open_ones = [t for t in await ctx.sonu_terminals().open_ones() if t.program == "claude"]
     if not open_ones:
         return ToolOutcome(
             StepStatus.FAILED,

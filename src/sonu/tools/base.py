@@ -64,6 +64,7 @@ class Effect(StrEnum):
     UNINSTALL = "uninstall"  # removes software (root, through the system's own password prompt)
     UI_INPUT = "ui.input"  # presses a control in an app (accessibility; no mouse)
     OUTSIDE = "outside.tool"  # a tool of another program (an MCP server the user added, D63)
+    RUN_COMMAND = "run.command"  # runs one of a project's own commands (its tests, build) in a SONU window
 
 
 class StepStatus(StrEnum):

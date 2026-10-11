@@ -169,6 +169,11 @@ GOLDEN: dict[str, dict[str, Any]] = {
         ("desktop.shell", {"action": "night_light_off"}), ("desktop.shell", {"action": "do_not_disturb_off"})
     ),
     "github-user-search": steps(("web.search", {"query": "username thomasmartinoa", "site": "github"})),
+    "open-project-in-editor": steps(("dev.open_project", {"folder": "SONU", "editor": "vscodium"})),
+    "open-file-at-a-line": steps(("dev.open_project", {"folder": "SONU", "file": "planner.py", "line": 40})),
+    "run-project-tests": steps(("dev.run", {"task": "tests", "folder": "SONU"})),
+    "what-did-i-change": steps(("dev.git", {"folder": "SONU"})),
+    "last-commits": steps(("dev.git", {"folder": "SONU", "what": "commits"})),
     "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
     "install-already-there": steps(("packages.install", {"name": "kitty"})),
     "github-open-prs": steps(("github.prs", {})),

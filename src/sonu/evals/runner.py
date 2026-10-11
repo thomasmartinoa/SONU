@@ -59,6 +59,12 @@ ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty", "files": "thunar
 # The home folders every case starts with (like the owner's), and the newest download.
 HOME_FOLDERS = ("Downloads", "Documents", "Pictures/screenshot", "dev_works/SONU", "hypr-dotfiles")
 NEWEST_DOWNLOAD = "Downloads/cat.png"
+# The SONU project's files (D65): what "run the tests" and "open planner.py" find.
+PROJECT_FILES = {
+    "dev_works/SONU/pyproject.toml": "[project]\nname = 'sonu'\n[tool.ruff]\n[tool.pytest.ini_options]\n",
+    "dev_works/SONU/uv.lock": "",
+    "dev_works/SONU/src/sonu/core/planner.py": "",
+}
 
 
 # FakeSystem properties an eval may check besides its fields.
@@ -329,6 +335,9 @@ async def run_case(
             for folder in HOME_FOLDERS:
                 (workdir / folder).mkdir(parents=True, exist_ok=True)
             (workdir / NEWEST_DOWNLOAD).write_bytes(b"png")
+            for name, text in PROJECT_FILES.items():
+                (workdir / name).parent.mkdir(parents=True, exist_ok=True)
+                (workdir / name).write_text(text)
             desktop = await HyprlandDesktop.connect(fake.instance)
             system = FakeSystem(**case.system)
             fake.on_url = system.page_opened

@@ -411,3 +411,50 @@ def test_pairing_and_my_pull_requests() -> None:
     # …and "what are my open pull requests?" → "which repository?".
     [problem] = _problems(_plan(kind="ask"), REGISTRY, "what are my open pull requests?")
     assert '{"tool": "github.prs", "args": {}}' in problem
+
+
+@pytest.mark.parametrize(
+    ("request_text", "args", "asked_again"),
+    [
+        # Found in the evals (v26): "open the SONU folder" opened VS Code once dev.open_project existed.
+        ("open the SONU folder", {"folder": "SONU"}, True),
+        ("open my SONU project", {"folder": "SONU"}, False),
+        ("open SONU in vs code", {"folder": "SONU"}, False),
+        ("open SONU in my editor", {"folder": "SONU"}, False),
+        ("open planner.py in SONU", {"folder": "SONU", "file": "planner.py"}, False),
+    ],
+)
+def test_a_folder_with_no_editor_is_the_file_managers(
+    request_text: str, args: dict[str, object], asked_again: bool
+) -> None:
+    found = _problems(_plan(("dev.open_project", args)), REGISTRY, request_text)
+    assert bool(found) is asked_again
+    if asked_again:
+        assert '{"tool": "files.open", "args": {"place": "SONU"}}' in found[0]
+
+
+@pytest.mark.parametrize(
+    ("request_text", "asked_again"),
+    [
+        # Found in the evals (v26): "close kitty" → close the focused window, whatever it was.
+        ("close kitty", True),
+        ("close spotify please", True),
+        ("close this", False),
+        ("close it", False),
+        ("close the window", False),
+        ("close the focused window", False),
+    ],
+)
+def test_closing_the_focused_window_needs_the_user_to_mean_it(request_text: str, asked_again: bool) -> None:
+    found = _problems(_plan(("windows.close", {"window": {"focused": True}})), REGISTRY, request_text)
+    assert bool(found) is asked_again
+
+
+def test_maximize_isnt_fullscreen() -> None:
+    """Found on real hardware, and again in the evals (v26)."""
+    full = _plan(("windows.state", {"window": {"focused": True}, "state": "fullscreen"}))
+    [problem] = _problems(full, REGISTRY, "maximize this window")
+    assert 'use state "maximized"' in problem
+    assert _problems(full, REGISTRY, "make this window fullscreen") == []
+    maximized = _plan(("windows.state", {"window": {"focused": True}, "state": "maximized"}))
+    assert _problems(maximized, REGISTRY, "maximize this window") == []
