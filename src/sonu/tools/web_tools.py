@@ -170,6 +170,12 @@ def site_link(text: str, request: str) -> Target | ToolOutcome:
         return ToolOutcome(StepStatus.FAILED, f"'{raw}' is not a web address SONU will open")
     typed = raw.removeprefix("https://").removeprefix("http://").rstrip("/")
     if typed.casefold() not in request.casefold():
+        # Found in `sonu eval --cloud`: "go to youtube" was planned as "youtube.com". A known site's own
+        # address, nothing after it, is the site the user named; anything more must be typed.
+        bare = typed.casefold().removeprefix("www.")
+        for site in (*SITES.values(), *ENGINES.values()):
+            if bare == (urlsplit(site.home).hostname or "").removeprefix("www.") and _named_in(site, request):
+                return Target(site.home, site.name, compact(site.marker))
         return ToolOutcome(StepStatus.FAILED, "SONU only opens links you typed yourself")
     label = typed if len(typed) <= 60 else typed[:59] + "…"
     return Target(url, label, compact(_brand(host) if port is None else ""))

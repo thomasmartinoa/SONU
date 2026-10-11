@@ -110,6 +110,22 @@ async def test_make_a_folder_and_open_claude_code_there(rig: Rig) -> None:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("folder", ["dev_works/shop-app", "~/dev_works/shop-app", "shop-app"])
+async def test_the_folder_this_request_made_by_its_path(rig: Rig, folder: str) -> None:
+    # Found in `sonu eval --cloud` (gpt-oss:120b-cloud): the model named the new folder by its path,
+    # "dev_works/shop-app", and SONU looked for a folder called that.
+    request = "make a folder called shop-app in dev_works and open claude code there"
+    report = await rig.run(
+        request,
+        ("files.make_folder", {"name": "shop-app", "inside": "dev_works"}),
+        ("dev.claude_open", {"folder": folder}),
+    )
+    assert report.status == "done", lines(report)
+    assert rig.confirmations == []  # the folder this request made: trusted without asking
+    assert rig.claude("shop-app").state == "ready"
+
+
+@pytest.mark.anyio
 async def test_an_untrusted_folder_is_trusted_only_after_asking(rig: Rig) -> None:
     report = await rig.run("open claude code in blog", ("dev.claude_open", {"folder": "blog"}), approve=False)
     assert report.status == "declined"
