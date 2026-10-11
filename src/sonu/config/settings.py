@@ -29,7 +29,10 @@ class OllamaSettings(_Section):
     # Generation can include loading the model into GPU memory on first use.
     chat_timeout_s: float = Field(default=120.0, gt=0, le=1800)
     keep_alive: str = "10m"
-    num_ctx: int = Field(default=8192, ge=2048, le=262144)
+    # The planner's instructions are ~7,000 tokens; at 8,192 a busy desktop (~40 windows) left no room for
+    # the plan, and more made Ollama silently drop the start of the prompt (measured 2026-10-12). 16,384
+    # costs ~0.3 GB more GPU memory for qwen3.5:4b (3.3 → 3.6 GB).
+    num_ctx: int = Field(default=16384, ge=2048, le=262144)
 
 
 class ModelRole(_Section):
@@ -265,7 +268,7 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # timeout_s = 10.0
 # chat_timeout_s = 120.0
 # keep_alive = "10m"
-# num_ctx = 8192
+# num_ctx = 16384
 
 [models.planner]
 # Understands requests and proposes plans. Must support tool calling.

@@ -19,7 +19,7 @@ from sonu.core.engine import Engine
 from sonu.core.journal import Journal
 from sonu.core.layouts import Layouts
 from sonu.core.memory import Memory
-from sonu.core.page_reader import PageReader
+from sonu.core.page_reader import PageReader, page_chars
 from sonu.core.planner import LLMPlanner, RoutedPlanner
 from sonu.core.planning import Planner
 from sonu.core.prompt_writer import PromptWriter
@@ -168,7 +168,7 @@ def model_parts(
         reader = ScreenReader(vision, settings.ollama.host, cloud=True)
     else:
         reader = ScreenReader(local_text, settings.ollama.host)
-    pages = PageReader(local_text, settings.ollama.host)
+    pages = PageReader(local_text, settings.ollama.host, page_chars(settings.ollama.num_ctx))
     return ModelParts(planner, local, shown, PromptWriter(writer), reader, pages)
 
 
