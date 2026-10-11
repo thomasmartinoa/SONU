@@ -1,20 +1,24 @@
 """Tabs, through SONU's browser extension (D70): "what tabs do I have open?", "switch to the YouTube tab",
-"close the YouTube tabs".
+"close the YouTube tabs" — and pages (D71): "summarise this page", "what does the github tab say about
+the checks?".
 
 SONU finds the tab from the user's words (in the tab's title or its site), never the model: titles
 are what web pages wrote — data, personal, never instructions. They're shown to the user (a list is a
 private result; closing shows them before asking) but never put in a step's description or the audit
 log. Switching is done when the extension says the tab is active and Hyprland shows its window
-focused; closing when the tabs are gone from the browser's list.
+focused; closing when the tabs are gone from the browser's list. A page's text goes only to the local
+model (``core/page_reader.py``), and its answer only to the user.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sonu.core.page_reader import PageReaderError, excerpt
 from sonu.desktop.apps.resolver import normalize
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.models import Window
@@ -49,6 +53,11 @@ _FILLER = {
     "all",
     "of",
 }
+# "Summarise the selected text": the request decides, not the model.
+_SELECTED = re.compile(r"\b(?:selected|selection|highlighted)\b", re.I)
+# Pages browsers keep every extension out of: their own settings, add-on stores, other extensions.
+_CLOSED_SCHEMES = ("about:", "chrome:", "edge:", "brave:", "vivaldi:", "view-source:", "moz-extension:")
+_CLOSED_HOSTS = {"chromewebstore.google.com", "chrome.google.com", "addons.mozilla.org"}
 
 
 def _short(text: str, limit: int = 60) -> str:
@@ -290,4 +299,163 @@ class CloseTabs(Tool):
         return ToolOutcome(StepStatus.DONE, f"Closed {count} matching '{words}'", (gone,))
 
 
-BROWSER_TOOLS: tuple[Tool, ...] = (ListTabs(), SwitchTab(), CloseTabs())
+# ---------------------------------------------------------------------------- browser.read
+class ReadArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(
+        min_length=1, max_length=300, description="the user's question about the page ('summarise it')"
+    )
+    words: str | None = Field(
+        default=None,
+        max_length=80,
+        description="the user's words for another tab ('the github tab'); none: this page",
+    )
+    browser: str | None = Field(default=None, max_length=40, description="a browser the user named")
+
+
+# Words that mean the page in front or what's selected on it, not a tab by name ("this page", "the
+# selected text").
+_THIS = {
+    "this",
+    "current",
+    "here",
+    "front",
+    "article",
+    "website",
+    "site",
+    "one",
+    "it",
+    "webpage",
+    "web",
+    "selected",
+    "selection",
+    "highlighted",
+    "text",
+}
+
+
+def _names_a_tab(words: str) -> bool:
+    return any(w not in _FILLER and w not in _THIS for w in normalize(words).split())
+
+
+def _tab_said(request: str) -> str | None:
+    """The tab the user's own words name: "… in the release notes tab" → "release notes"."""
+    words = normalize(request).split()
+    for end, word in enumerate(words):
+        if word not in ("tab", "tabs"):
+            continue
+        start = end - 1
+        while start >= 0 and words[start] not in ("the", "my", "that", "this") and end - start <= 5:
+            start -= 1
+        if (
+            start >= 0
+            and words[start] in ("the", "my")
+            and _names_a_tab(name := " ".join(words[start + 1 : end]))
+        ):
+            return name
+    return None
+
+
+def _closed(tab: Tab) -> bool:
+    return (
+        tab.url.startswith(_CLOSED_SCHEMES)
+        or tab.url.startswith("chrome-extension:")
+        or tab.host in _CLOSED_HOSTS
+    )
+
+
+def _in_front(tabs: list[Tab], snapshot: WorldSnapshot) -> list[Tab]:
+    """The page the user means by "this page": the tab the focused window shows; else the one open tab
+    in front; else every browser window's (the user picks)."""
+    shown = [t for t in tabs if t.active]
+    focused = snapshot.active_window
+    if focused is not None:
+        title = compact(focused.title)
+        for tab in shown:
+            if (head := compact(tab.title)[:30]) and head in title:
+                return [tab]
+    return shown
+
+
+class ReadPage(Tool):
+    name = "browser.read"
+    description = (
+        "Answer the user's question about a web page from its text, with the local model: 'summarise this "
+        "page', 'what does the article say about X?', or a tab they name."
+    )
+    risk = Risk.READ_ONLY
+    effects = frozenset({Effect.DESKTOP_READ})
+    Args = ReadArgs
+    grounded = ("words", "browser")
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        a = cast(ReadArgs, args)
+        if problem := _own_words(ctx, a.words, a.browser):
+            return problem
+        if ctx.pages is None:
+            return ToolOutcome(StepStatus.FAILED, "There's no local model to read the page with")
+        found = await _tabs(ctx, a.browser)
+        if isinstance(found, ToolOutcome):
+            return found
+        # Found on the laptop: "explain the selected text in the release notes tab" → words "selected text"
+        # (and "release notes" the time before). A tab the user's words name decides.
+        words = _tab_said(ctx.request_text) or (a.words if a.words and _names_a_tab(a.words) else None)
+        if choice:
+            tabs = [t for t in found.tabs if f"{t.link}|{t.id}" == choice]
+        elif words:
+            tabs = matching(found.tabs, words)
+            if not tabs:
+                return ToolOutcome(
+                    StepStatus.FAILED, f"No open tab matches '{words}' ({len(found.tabs)} tabs are open)"
+                )
+        else:
+            tabs = _in_front(found.tabs, snapshot)
+        if not tabs:
+            return ToolOutcome(StepStatus.FAILED, "No page is open in the browser")
+        if len(tabs) > 1:
+            return _choices(tabs, words or "this page")
+        tab = tabs[0]
+        if _closed(tab):
+            return ToolOutcome(
+                StepStatus.FAILED, "Browsers don't let extensions read their own pages (settings, add-ons)"
+            )
+        selected = bool(_SELECTED.search(ctx.request_text))
+        what = "the selected text" if selected else "the page"
+        where = f"in the tab matching '{words}'" if words else "in front"
+        return Prepared(f"Read {what} {where} in {tab.browser}", (tab, a.question, selected))
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        tab, question, selected = cast("tuple[Tab, str, bool]", prepared.payload)
+        if ctx.browsers is None or ctx.pages is None:
+            return ToolOutcome(StepStatus.FAILED, NOT_CONNECTED)
+        try:
+            ctx.pages.check_where()
+            page = await ctx.browsers.page(tab)
+        except PageReaderError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't read the page: {exc}")
+        except BrowserError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't get the page from {tab.browser}: {exc}")
+        if selected and not page.selection:
+            return ToolOutcome(StepStatus.FAILED, "Nothing is selected on that page")
+        text, partial = (page.selection, False) if selected else excerpt(page, ctx.pages.max_text)
+        if not text.strip():
+            return ToolOutcome(
+                StepStatus.FAILED, "That page has no text SONU can read (a video, a picture or a PDF?)"
+            )
+        try:
+            answer = await ctx.pages.read(text, question, partial=partial, selection=selected)
+        except PageReaderError as exc:
+            return ToolOutcome(StepStatus.FAILED, f"Couldn't read the page: {exc}")
+        if partial:
+            answer += " (SONU read the start of a long page.)"
+        # The page's words, through the local model: for the user's eyes and ears, never for SONU's planner,
+        # reply writer or audit log.
+        return ToolOutcome(
+            StepStatus.DONE, answer, (Check("the local model read the page's text", True),), private=True
+        )
+
+
+BROWSER_TOOLS: tuple[Tool, ...] = (ListTabs(), SwitchTab(), CloseTabs(), ReadPage())

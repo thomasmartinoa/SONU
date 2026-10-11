@@ -114,10 +114,10 @@ class UnreadMessages(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         named = cast(UnreadArgs, args).app
+        # Found in the evals (v32): "do I have any new messages?" was planned with app "whatsapp desktop",
+        # from the window list. Only the user's own words name an app; with none, every chat app is read.
         if named and (missing := ungrounded_words(named, ctx.user_words or ctx.request_text)):
-            return ToolOutcome(
-                StepStatus.FAILED, f"The app must be your own word ({', '.join(missing)} isn't)"
-            )
+            named = " ".join(w for w in normalize(named).split() if w not in missing) or None
         apps = [e for e in ctx.resolver.catalog.entries if not e.no_display and is_chat_app(e)]
         # Found on the laptop (dry run): "how many unread emails do I have?" was planned with no app — the
         # user's words decide that it's mail.

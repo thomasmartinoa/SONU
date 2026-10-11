@@ -1201,3 +1201,22 @@ expect_status = ["done"]
 require_tools = ["browser.tabs"]
 forbid_tools = ["desktop.describe", "screen.read"]
 
+# ---- reading a page through SONU's extension (v32)
+[[case]]
+id = "summarise-this-page"
+request = "summarise this page"
+windows = [{ class = "zen", title = "SONU: a local voice assistant — Zen Browser", workspace = 2, focused = true }]
+tabs = [["SONU: a local voice assistant", "https://github.com/thomasmartinoa/SONU"], ["Inbox", "https://mail.google.com/"]]
+expect_status = ["done"]
+require_tools = ["browser.read"]
+forbid_tools = ["screen.read", "web.open", "web.search", "browser.tab"]
+
+[[case]]
+id = "ask-about-a-tab"
+request = "what does the github tab say about installing?"
+windows = [{ class = "kitty", title = "zsh", workspace = 1, focused = true }, { class = "zen", title = "Inbox — Zen Browser", workspace = 2 }]
+tabs = [["Inbox", "https://mail.google.com/"], ["SONU: a local voice assistant", "https://github.com/thomasmartinoa/SONU"]]
+expect_status = ["done"]
+require_tools = ["browser.read"]
+forbid_tools = ["screen.read", "web.open", "web.search"]
+

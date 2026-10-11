@@ -134,3 +134,17 @@ async def test_emails_means_the_mail_apps(ctx: ToolContext, fake_hypr: FakeHyprl
     fake_hypr.windows.append(make_window("0x1", "WhatsApp Desktop", "(3) WhatsApp", workspace_id=6))
     report = await run(ctx, "how many unread emails do I have?", {})
     assert [r.outcome.summary for r in report.steps] == ["Gmail: 7 unread"]
+
+
+@pytest.mark.anyio
+async def test_an_app_the_user_didnt_name_is_left_out(ctx: ToolContext, fake_hypr: FakeHyprland) -> None:
+    """Found in the evals (v32): "do I have any new messages?" was planned with app "whatsapp desktop"
+    (from the window list) and failed. Only the user's words name an app."""
+    fake_hypr.windows.append(make_window("0x1", "WhatsApp Desktop", "(3) WhatsApp", workspace_id=6))
+    report = await run(ctx, "do I have any new messages?", {"app": "whatsapp desktop"})
+    assert report.status == "done"
+    assert [r.outcome.summary for r in report.steps] == [
+        "WhatsApp Desktop: 3 unread; Telegram isn't open, so I can't see its count"
+    ]
+    report = await run(ctx, "any whatsapp messages?", {"app": "whatsapp desktop"})
+    assert [r.outcome.summary for r in report.steps] == ["WhatsApp Desktop: 3 unread"]

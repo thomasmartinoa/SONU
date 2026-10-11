@@ -662,6 +662,7 @@ class Daemon:
             notifications=self.notifications,
             writer=self.models.writer,
             reader=self.models.reader,
+            pages=self.models.pages,
         )
         conversation, responder = assistant_parts(
             self.settings, self.paths, self.ollama, self.ollama_settings, memory
