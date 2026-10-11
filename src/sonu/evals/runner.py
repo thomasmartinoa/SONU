@@ -342,6 +342,7 @@ async def run_case(
             system = FakeSystem(**case.system)
             fake.on_url = system.page_opened
             fake.on_exec = system.kitty.launched
+            fake.proc = workdir / "proc"
             sys_dir = workdir / "sys" / "class" / "thermal" / "thermal_zone0"
             sys_dir.mkdir(parents=True, exist_ok=True)
             (sys_dir / "type").write_text("x86_pkg_temp\n")
@@ -365,7 +366,13 @@ async def run_case(
                 default_terminal="kitty",
                 which=lambda name: f"/usr/bin/{name}",
                 ancestors=frozenset,
-                system=SystemControl(system, power_supply=power_supply, sys=workdir / "sys", home=workdir),
+                system=SystemControl(
+                    system,
+                    power_supply=power_supply,
+                    sys=workdir / "sys",
+                    home=workdir,
+                    proc=workdir / "proc",
+                ),
                 obs=ObsLink(settings=ObsSettings(enabled=True, port=obs.port, password=obs.password)),
                 wake=FakeWake(),
                 terminals=SonuTerminals(workdir / "run" / "terminals", system),

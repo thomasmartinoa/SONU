@@ -458,3 +458,21 @@ def test_maximize_isnt_fullscreen() -> None:
     assert _problems(full, REGISTRY, "make this window fullscreen") == []
     maximized = _plan(("windows.state", {"window": {"focused": True}, "state": "maximized"}))
     assert _problems(maximized, REGISTRY, "maximize this window") == []
+
+
+def test_a_terminal_with_no_folder_is_apps_launch() -> None:
+    no_folder = _plan(("dev.terminal", {}))
+    [problem] = _problems(no_folder, REGISTRY, "open a terminal on workspace 3")
+    assert '{"tool": "apps.launch", "args": {"app": "terminal"}}' in problem
+    made = _plan(("files.make_folder", {"name": "demo"}), ("dev.terminal", {}))
+    assert _problems(made, REGISTRY, "make a folder called demo and open a terminal there") == []
+    named = _plan(("dev.terminal", {"folder": "dev_works"}))
+    assert _problems(named, REGISTRY, "open a terminal in dev_works") == []
+
+
+def test_a_terminal_in_a_folder_doesnt_open_the_file_manager_too() -> None:
+    """Found on the laptop (dry run): "open a terminal in downloads" opened Downloads in Thunar as well."""
+    both = _plan(("files.open", {"place": "downloads"}), ("dev.terminal", {"folder": "downloads"}))
+    [problem] = _problems(both, REGISTRY, "open a terminal in downloads")
+    assert "remove this step" in problem
+    assert _problems(both, REGISTRY, "open downloads in the file manager and a terminal in downloads") == []

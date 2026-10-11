@@ -17,7 +17,7 @@ _Last update: 2026-10-11_
 | Capability batch 2 | ✅ done and **verified on the laptop** — windows (#12), folders/files, media, reminders (#13), theme/wallpaper/clipboard (#14), power and OBS (#15), OBS fixes and Spotify by name (#16). Apple Music by name isn't possible with the owner's app |
 | M2 Daemon, conversation, memory | 🚧 part 1 ✅ **`sonud`**: requests in ~0.8 s (#18); part 2 ✅ **natural replies + one conversation** ("move it to 4", "play it again"), ~1.2–1.6 s with the reply (#19); part 3 ✅ **"remember …"** (#20); part 4 🧪 **the activity journal** ("what was I doing yesterday?", #44, [D60](DECISIONS.md)) |
 | M3 Voice | 🚧 part 1 ✅ **push-to-talk** on the SONU key, verified by the owner: greeting → hears (Whisper on the GPU) → acts → **says the reply** (Kokoro); medium risk by a spoken yes (#21, #22, [D46](DECISIONS.md)); part 2 🧪 **"Hey Sonu"**, opt-in (#23, [D47](DECISIONS.md)) — the owner: "working perfectly" (#24); a conversation after each reply (#25, [D48](DECISIONS.md)); talk over SONU to stop it (#27, [D50](DECISIONS.md)) |
-| M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)); part 4 🧪 **projects**: open one in VS Code (at a file and line), run its own tests or build (asked first), "did it pass?", what changed in git (#52, [D65](DECISIONS.md)) |
+| M4 Developer operator | 🚧 part 1 🧪 **Claude Code by voice**: make a folder, open Claude Code there, type your words into it, `/model sonnet`, "is it done?" (#28, [D51](DECISIONS.md)); part 2 🧪 **the prompt writer** (#29, [D52](DECISIONS.md)); part 3 🧪 **GitHub** (#31, [D53](DECISIONS.md)); part 4 🧪 **projects**: open one in VS Code (at a file and line), run its own tests or build (asked first), "did it pass?", what changed in git (#52, [D65](DECISIONS.md)); 🧪 **a terminal in a folder**, checked on its shell (#53, [D66](DECISIONS.md)) |
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
 | M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); part 3 🧪 **clicking by looking + typing** (#37, [D58](DECISIONS.md)) |
 | M5 Connect | 🚧 part 1 🧪 **Claude Code uses SONU's tools (MCP)**: `sonu mcp serve`, SONU's policy, asked on screen, personal content kept back (#45, [D61](DECISIONS.md)); part 2 🧪 **Ollama Cloud, opt-in**: prompts, harder requests (no window titles), vision; every send audited (#46, [D62](DECISIONS.md)); part 3 🧪 **other MCP servers' tools**: local, web and account servers, high risk unless listed read-only, answers shown only to you (#49, [D63](DECISIONS.md)); 🧪 **cloud usage limits**: a 429 pauses the cloud and SONU stays local, use counted in `sonu doctor` (#50, [D64](DECISIONS.md)) — **M5 is complete** |
@@ -44,8 +44,8 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **128 / 128** on the v26 suite, twice (2026-10-11, the laptop's GPU, ~1.2 s mean planning), including
-nine complex multi-step requests, five for Claude Code and five for projects; the M1 example (VSCodium + Chromium
+`qwen3.5:4b`: **130 / 130** on the v27 suite, twice (2026-10-11, the laptop's GPU, ~1.2 s mean planning), including
+nine complex multi-step requests, five for Claude Code and seven for projects and terminals; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -206,7 +206,12 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    (closed after); "run the lint in SONU" → asked "Run uv run ruff check in ~/dev_works/SONU (from pyproject.toml) …
    It runs the project's own code", yes → a SONU window, "passed" from the exit code; "did the lint pass?" →
    "passed"; "what is claude doing?" afterwards → no Claude Code open (it had read the command's window: fixed, see
-   the findings). Window closed after. Not done: "open a terminal in a folder".
+   the findings). Window closed after. ~~A terminal in a folder~~ (#53, [D66](DECISIONS.md)): before it, "open a
+   terminal in dev_works" opened Thunar and a terminal in the home folder. On the laptop (the owner away, so one
+   window opened and closed at once): "open a terminal in dev_works" → "Opened kitty in ~/dev_works on workspace 2",
+   its zsh's working folder `/home/martin/dev_works` (what SONU checks, in `/proc`). Dry runs: "open kitty in my
+   SONU project", "make a folder called demo in dev_works and open a terminal there", "open a terminal in downloads"
+   (kitty only), "open a terminal on workspace 3" (still apps.launch). **M4 is complete.**
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
@@ -214,6 +219,9 @@ Waiting on music in `~/Music`: local music with `mpv`.
 
 - **Zen and background tabs**: once, a page SONU sent to Zen didn't show in any window title; SONU now says "didn't
   see it open (may be in a background tab)". Worth checking what Zen does with links from other apps.
+- **A dry run's typing target**: "open a terminal on workspace 3 and type hello" dry-runs as "Type “hello” into zen"
+  (the window focused now — the terminal doesn't exist in a dry run); a real run types into the new terminal (eval
+  `open-terminal-and-type`). The dry run's wording could say "into the new terminal".
 - **Planner variance**: once, "open zen on workspace 3 and …" was planned as "show workspace 3"; the same request
   worked on the next try.
 - Deep planner: `qwen3:8b` (installed, thinking on) measured 2026-10-11: **113 / 123, 10.9 s a plan** — worse and ten
@@ -287,12 +295,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #49 | 2026-10-11 | M5 part 3: SONU as an MCP client ([D63](DECISIONS.md)) — `[mcp.servers.<name>]` (argv, `reaches`, `read_only`, `tools`, `env`, `env_commands`); tools as `mcp.<server>.<tool>` with the server's schema checked by SONU; high risk and asked with every argument unless read-only (web/account: only with the user's words); answers private; small environment, no desktop sockets; restarts after a timeout; `sonu mcp check`, a doctor line; rofi shows a question's details in full, other pickers refuse |
 | #50 | 2026-10-11 | Ollama Cloud's usage limits ([D64](DECISIONS.md)): a 429 pauses the cloud (Retry-After, else 15 min; a state file, `cloud.limited`) and SONU stays local; prompts and vision fall back to the local model; `cloud.answer` counts tokens; `sonu doctor` shows the last 24 h / 7 days and a pause |
 | #51 | 2026-10-11 | Open questions: "resume song" resumes (it checked the status), "turn off the night light and do not disturb" turns both off, a GitHub username is a user search, pairing a new device is said to be impossible, "my pull requests" isn't asked back; the M1 example measured 10/10; eval suite v25 (123) |
-| #52 | open | Projects ([D65](DECISIONS.md)): "open my SONU project / planner.py at line 40" in VS Code (`dev.open_project`), "run the tests" — only the project's own commands, asked with the exact command, in a SONU window, the exit code decides (`dev.run`, `dev.run_result`) — and read-only git, private (`dev.git`); Claude Code's tools no longer pick a command's window; planner checks: "open the <name> folder" stays the file manager's, closing the focused window only when the user means it, maximize ≠ fullscreen; eval suite v26 (128) |
+| #52 | 2026-10-11 | Projects ([D65](DECISIONS.md)): "open my SONU project / planner.py at line 40" in VS Code (`dev.open_project`), "run the tests" — only the project's own commands, asked with the exact command, in a SONU window, the exit code decides (`dev.run`, `dev.run_result`) — and read-only git, private (`dev.git`); Claude Code's tools no longer pick a command's window; planner checks: "open the <name> folder" stays the file manager's, closing the focused window only when the user means it, maximize ≠ fullscreen; eval suite v26 (128) |
+| #53 | open | A terminal in a folder ([D66](DECISIONS.md), `dev.terminal`): the user's terminal told the folder (kitty `--directory`, foot/alacritty/ghostty/gnome-terminal `--working-directory`, wezterm `--cwd`, konsole `--workdir`), done when its shell's working folder (`/proc`) is that folder; the folder a request makes is found by its name in a dry run too; planner checks: a terminal with no folder stays apps.launch, a terminal in a folder doesn't also open the file manager; eval suite v27 (130) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-11 | (dry run, D66) "make a folder called demo … and open a terminal there" → "no folder called demo" (a dry run doesn't make it); "open a terminal in downloads" → Thunar too | the folder this request makes is found by its name; plan check: no file manager for a terminal's folder (#53) |
 | 10-11 | (D65, the laptop) after "run the lint in SONU", a command's window stays open — the most recently used SONU window, so "what is Claude doing?" would read it as Claude Code | Claude Code's tools only pick Claude Code windows (#52) |
 | 10-11 | (eval v26, after the new prompt rule) "close kitty" → close the focused window (on a real desktop: whatever had the focus); "maximize this window" → fullscreen again; "open the SONU folder" → VSCodium | plan checks: closing the focused window needs "this / it / the window…"; maximize isn't fullscreen; a folder with no editor, project or file named is files.open (#52) |
 | 10-04 | (voice) "type hello into this window" / "write hello here in the kitty terminal" → dev.type, "Claude Code isn't open" (5 times) | code check: dev.type without Claude in the request → sent back as screen.type; "open a terminal on 3 and type hello" types into the terminal that request opened (#38) |

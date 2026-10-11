@@ -1087,3 +1087,22 @@ request = "show me my last commits in SONU"
 expect_status = ["done"]
 require_tools = ["dev.git"]
 forbid_tools = ["journal.read", "github.prs"]
+
+# ---- a terminal in a folder (v27)
+
+[[case]]
+id = "terminal-in-a-folder"
+request = "open a terminal in dev_works"
+notes = "Before this, a file manager and a terminal opened (the terminal in the home folder)."
+expect_status = ["done"]
+expect_windows = [{ class = "kitty" }]
+expect_absent = ["Thunar"]
+require_tools = ["dev.terminal"]
+
+[[case]]
+id = "folder-and-a-terminal-there"
+request = "make a folder called demo in dev_works and open a terminal there on workspace 4"
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 4 }]
+require_tools = ["files.make_folder", "dev.terminal"]
+

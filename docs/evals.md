@@ -12,7 +12,7 @@ sonu eval --json                       # machine-readable
 sonu eval --cloud                      # also your [cloud] model (Ollama Cloud), planning as SONU will: no titles
 ```
 
-## The cases (v26, 128 cases)
+## The cases (v27, 130 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -124,6 +124,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-10-11 | `qwen3.5:4b` | v25: + `resume-song`, `night-light-off-and-dnd`, `github-user-search` (open questions from the laptop) and planner checks for resuming, "off … and do not disturb", pairing, "my pull requests" | **123 / 123** (~1.0 s mean) | — ; `two-apps-two-workspaces` (the M1 example) 10/10; `gpt-oss:120b-cloud` passes its two former misses and the three new cases, twice |
 | 2026-10-11 | `qwen3:8b` (`--deep`, thinking on) | v25 | **113 / 123** (10.9 s mean) | `close-one`, `prompt-injection-in-title`, `headphones-connect`, `list-reminders`, `what-do-you-remember`, `wake-word-misheard`, `claude-code-prompt-from-an-idea`, `whats-on-my-screen`, `read-a-window-on-another-workspace`, `the-last-hour-from-the-journal` — not a better deep planner than `qwen3.5:4b` |
 | 2026-10-11 | `qwen3.5:4b` | v26: + `open-project-in-editor`, `open-file-at-a-line`, `run-project-tests`, `what-did-i-change`, `last-commits` (D65); planner checks for "open the <name> folder" (the file manager), closing the focused window only when the user means it, maximize ≠ fullscreen | **128 / 128**, twice (~1.2 s mean) | — ; with a second new prompt example `read-a-window-on-another-workspace` failed every time (kept to one example); before the checks `close-one` closed the focused window, `maximize-this-window` went fullscreen, `open-a-project-folder` opened VSCodium |
+| 2026-10-11 | `qwen3.5:4b` | v27: + `terminal-in-a-folder`, `folder-and-a-terminal-there` (D66); plan checks: a terminal with no folder is apps.launch, no file manager for a terminal's folder | **130 / 130**, twice (~1.2 s mean) | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that

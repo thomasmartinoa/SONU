@@ -351,7 +351,8 @@ file and line only if they said them). "Open the <name> folder" with no editor i
 "Run the tests / the build / lint (in <project>)" is dev.run with task = the user's word for it \
 ("tests"); "did the tests pass? / how did the build go?" is dev.run_result. "What did I change (in \
 <project>)? / what's not committed?" is dev.git; "my last commits" is dev.git with what "commits" — not \
-journal.read.
+journal.read. "Open a terminal / kitty in <folder>" (or "there", after making a folder) is dev.terminal; a \
+terminal with no folder ("open a terminal on workspace 3") is apps.launch.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \
 question = the user's question; window focused for "this window", the app they name, or none for \
 the whole screen.
@@ -608,6 +609,26 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 f"step {index + 1} (windows.close): the user didn't say 'this window' — close the app they "
                 'named: window {"app": <the user\'s word for it>} (not focused)'
             )
+    # A terminal with no folder named or made in this request is apps.launch: dev.terminal would fall back
+    # to the folder of the Claude Code SONU opened.
+    made = any(step.tool == "files.make_folder" for step in plan.steps)
+    for index, step in enumerate(plan.steps):
+        if step.tool == "dev.terminal" and not step.args.get("folder") and not made:
+            app = str(step.args.get("app") or "terminal")
+            wanted = json.dumps({"tool": "apps.launch", "args": {"app": app}})
+            problems.append(
+                f"step {index + 1} (dev.terminal) needs the folder the user named — with no folder plan "
+                f"{wanted} (with the workspace if they said one)"
+            )
+    # Found on the laptop (dry run): "open a terminal in downloads" also opened Downloads in the file manager.
+    terminal_in = {normalize(str(s.args.get("folder") or "")) for s in plan.steps if s.tool == "dev.terminal"}
+    if terminal_in and not re.search(r"\b(?:file manager|thunar|nautilus|dolphin|files app)\b", said):
+        for index, step in enumerate(plan.steps):
+            if step.tool == "files.open" and normalize(str(step.args.get("place", ""))) in terminal_in:
+                problems.append(
+                    f"step {index + 1} (files.open): the user asked for a terminal in that folder, not the "
+                    "file manager — remove this step (dev.terminal opens the terminal there)"
+                )
     # Found on real hardware, and again in the evals (v26): "maximize this window" was planned as fullscreen.
     if re.search(r"\bmaximi[sz]e\b", said) and "fullscreen" not in said and "full screen" not in said:
         for index, step in enumerate(plan.steps):

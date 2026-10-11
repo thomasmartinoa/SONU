@@ -175,7 +175,9 @@ class Rig:
     home: Path
     confirmations: list[ConfirmRequest]
 
-    async def run(self, request: str, *steps: tuple[str, dict[str, Any]], approve: bool = True) -> TaskReport:
+    async def run(
+        self, request: str, *steps: tuple[str, dict[str, Any]], approve: bool = True, dry_run: bool = False
+    ) -> TaskReport:
         async def confirm(confirm_request: ConfirmRequest) -> bool:
             self.confirmations.append(confirm_request)
             return approve
@@ -186,7 +188,7 @@ class Rig:
             ctx=self.ctx,
             policy=Policy("confirm-risky"),
         )
-        return await engine.run(request, confirm=confirm)
+        return await engine.run(request, confirm=confirm, dry_run=dry_run)
 
 
 @pytest.fixture
@@ -209,13 +211,14 @@ async def rig(fake_hypr: FakeHyprland, tmp_path: Path) -> AsyncIterator[Rig]:
     fake_hypr.apps["code-oss"] = FakeApp("code-oss", "Code - OSS", single_instance=True)
     system = FakeSystem()
     fake_hypr.on_exec = system.kitty.launched
+    fake_hypr.proc = tmp_path / "proc"
     desktop = await HyprlandDesktop.connect(fake_hypr.instance)
     ctx = ToolContext(
         desktop,
         AppResolver(catalog),
         Settings(apps=AppsSettings(launch_timeout_s=1.5), verify=VerifySettings(timeout_s=0.5)),
         which=installed,
-        system=SystemControl(system, home=home),
+        system=SystemControl(system, home=home, proc=tmp_path / "proc"),
         terminals=SonuTerminals(tmp_path / "run" / "terminals", system),
     )
     yield Rig(fake_hypr, system, ctx, home, [])
@@ -380,3 +383,63 @@ async def test_only_the_last_runs_are_kept(rig: Rig, monkeypatch: pytest.MonkeyP
     folder = rig.ctx.sonu_terminals().folder
     assert len(list(folder.glob("*.run"))) == 2
     assert len(list(folder.glob("*.exit"))) == 2
+
+
+# ---------------------------------------------------------------------------- dev.terminal
+@pytest.mark.anyio
+async def test_a_terminal_opens_in_the_folder_and_its_shell_is_checked(rig: Rig) -> None:
+    report = await rig.run("open a terminal in dev_works", ("dev.terminal", {"folder": "dev_works"}))
+    assert report.status == "done", summaries(report)
+    assert rig.fake.launched[-1] == ["kitty", "--directory", str(rig.home / "dev_works")]
+    assert summaries(report) == ["Opened kitty in ~/dev_works on workspace 1"]
+    assert [c.description for c in report.steps[0].outcome.checks] == [
+        "kitty opened",
+        "its shell is in ~/dev_works",
+    ]
+
+
+@pytest.mark.anyio
+async def test_the_workspace_the_user_named(rig: Rig) -> None:
+    report = await rig.run("open a terminal in SONU on workspace 3", ("dev.terminal", {"folder": "SONU"}))
+    assert report.status == "done", summaries(report)
+    assert summaries(report) == ["Opened kitty in ~/dev_works/SONU on workspace 3"]
+
+
+@pytest.mark.anyio
+async def test_a_terminal_in_the_folder_this_request_made(rig: Rig) -> None:
+    report = await rig.run(
+        "make a folder called demo in dev_works and open a terminal there",
+        ("files.make_folder", {"name": "demo", "inside": "dev_works"}),
+        ("dev.terminal", {}),
+    )
+    assert report.status == "done", summaries(report)
+    assert rig.fake.launched[-1] == ["kitty", "--directory", str(rig.home / "dev_works/demo")]
+
+
+@pytest.mark.anyio
+async def test_a_shell_not_seen_in_the_folder_is_unverified(rig: Rig) -> None:
+    rig.fake.proc = None  # the shell's folder can't be seen
+    report = await rig.run("open a terminal in dev_works", ("dev.terminal", {"folder": "dev_works"}))
+    assert report.status == "unverified"
+    assert summaries(report) == ["Opened kitty, but I couldn't see its shell start in ~/dev_works"]
+
+
+@pytest.mark.anyio
+async def test_no_folder_no_terminal(rig: Rig) -> None:
+    report = await rig.run("open a terminal", ("dev.terminal", {}))
+    assert report.status == "failed"
+    assert summaries(report) == ["Which folder? Say its name (“… in SONU”)"]
+    assert not rig.fake.launched
+
+
+@pytest.mark.anyio
+async def test_the_folder_this_request_made_by_its_name(rig: Rig) -> None:
+    """Found on the laptop (dry run): "…and open a terminal there" named the new folder, which a dry run
+    doesn't make — the folder this request makes is used when the words name it."""
+    report = await rig.run(
+        "make a folder called demo in dev_works and open a terminal there",
+        ("files.make_folder", {"name": "demo", "inside": "dev_works"}),
+        ("dev.terminal", {"folder": "demo"}),
+        dry_run=True,
+    )
+    assert summaries(report) == ["Make the folder ~/dev_works/demo", "Open kitty in ~/dev_works/demo"]
