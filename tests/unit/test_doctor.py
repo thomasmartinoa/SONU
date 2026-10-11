@@ -393,3 +393,24 @@ async def test_the_cloud_line_counts_use_and_says_when_a_limit_was_reached(xdg_e
     CloudPause(ctx.paths.state_dir / PAUSE_FILE).start(600, "hourly usage limit")
     paused = by_id(await check_ollama(ctx))["ollama.cloud"]
     assert paused.status == "warn" and "usage limit reached — SONU stays local until" in paused.summary
+
+
+@pytest.mark.anyio
+async def test_the_notifications_line(xdg_env: dict[str, str]) -> None:
+    from sonu.config.settings import NotificationsSettings
+    from sonu.doctor.checks import check_sonu
+
+    off = by_id(await check_sonu(make_context(xdg_env, hypr=None, ollama=None)))["sonu.notifications"]
+    assert (off.status, off.summary) == (
+        "info",
+        "off — “what was that notification?” needs [notifications] remember = true",
+    )
+    on = Settings(notifications=NotificationsSettings(remember=True, keep_minutes=30))
+    kept = by_id(await check_sonu(make_context(xdg_env, hypr=None, ollama=None, settings=on)))
+    assert kept["sonu.notifications"].status == "warn"  # no busctl in this context's tools
+    with_busctl = make_context(xdg_env, hypr=None, ollama=None, settings=on, tools=("busctl",))
+    result = by_id(await check_sonu(with_busctl))["sonu.notifications"]
+    assert (result.status, result.summary) == (
+        "ok",
+        "the latest, in memory only for 30 min, while sonud runs",
+    )

@@ -11,6 +11,7 @@ from sonu.config.settings import Settings
 from sonu.core.journal import Journal
 from sonu.core.layouts import Layouts
 from sonu.core.memory import Memory
+from sonu.core.notifications import NotificationLog
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.screen_reader import ScreenReader
 from sonu.desktop.apps.entry import AppEntry
@@ -93,6 +94,8 @@ class ToolContext:
     ask_secret: Callable[[str], Awaitable[str | None]] | None = None
     # The activity journal (which window had the focus, when); sonud records it. None: not available.
     journal: Journal | None = None
+    # The latest notifications (D69), kept by sonud when the user turned it on. None: not kept.
+    notifications: NotificationLog | None = None
 
     def sonu_terminals(self) -> SonuTerminals:
         if self.terminals is None:

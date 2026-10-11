@@ -587,3 +587,16 @@ async def test_the_mcp_servers_the_user_added_start_with_sonud(
     connection = daemon.outside.servers[0].connection
     await daemon.stop()
     assert connection is not None and not connection.alive
+
+
+@pytest.mark.anyio
+async def test_notifications_are_kept_only_when_turned_on(short_tmp: Path, xdg_env: dict[str, str]) -> None:
+    from sonu.config.settings import NotificationsSettings
+
+    ollama = FakeOllama()
+    off = Daemon(Settings(), SonuPaths.from_env(xdg_env), xdg_env, ollama_transport=ollama.transport)
+    assert off.notifications is None
+    on = Settings(notifications=NotificationsSettings(remember=True, exclude_apps=["signal"]))
+    daemon = Daemon(on, SonuPaths.from_env(xdg_env), xdg_env, ollama_transport=ollama.transport)
+    assert daemon.notifications is not None
+    assert not daemon.notifications.add("Signal", "Carol", "hi")

@@ -357,6 +357,9 @@ terminal with no folder ("open a terminal on workspace 3") is apps.launch.
 "restore / load / set up my <name> layout", "restore <name>" is \
 layouts.restore; "what layouts do I have?" is layouts.list; "forget / delete the <name> layout" is \
 layouts.forget — never memory.* for layouts.
+- "What was that notification? / read my notifications / any notifications from <app>?" is \
+notifications.read (which "recent" for more than one); "forget my notifications" is notifications.forget; \
+clearing the notifications on screen stays desktop.shell clear_notifications.
 - "Do I have new / unread messages?", "any WhatsApp messages?", "how many unread emails?" is \
 messages.unread (app only if they named one) — not screen.read, not system.status.
 - "What's on my screen? / what does this window say? / read the error in <app>" is screen.read with \

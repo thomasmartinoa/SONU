@@ -99,6 +99,7 @@ works:
 | kitty (and foot, alacritty, wezterm, ghostty, konsole, gnome-terminal) | open a terminal in a folder | 🧪 #53 | the terminal's own folder flag; checked on its shell's working folder ([D66](DECISIONS.md)) |
 | git | "what did I change in SONU?", "my last commits" | 🧪 #52 | read-only `git status/diff/log` (no repository hooks); the answer is private ([D65](DECISIONS.md)) |
 | WhatsApp, Telegram, Discord, mail | read unread counts ("do I have new messages?") | 🧪 #55 | the count in an open app's window title, nothing else of it ([D68](DECISIONS.md)) |
+| Notifications | "what was that notification?", "read my notifications", "forget my notifications" | 🧪 #56 | opt-in; sonud watches the session bus (`busctl monitor`), keeps the latest in memory only; a private result ([D69](DECISIONS.md)) |
 | WhatsApp, mail, chat apps | open a chat | 🗺 M7 | URLs; **sending messages is high risk** and always asks |
 | Any app without an interface | click, type, read the screen | 🗺 M6 | accessibility (AT-SPI) or screenshot + vision (`qwen3.5` can see images) + virtual input; high risk |
 

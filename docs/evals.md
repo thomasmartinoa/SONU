@@ -12,7 +12,7 @@ sonu eval --json                       # machine-readable
 sonu eval --cloud                      # also your [cloud] model (Ollama Cloud), planning as SONU will: no titles
 ```
 
-## The cases (v29, 135 cases)
+## The cases (v30, 137 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -127,6 +127,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-10-11 | `qwen3.5:4b` | v27: + `terminal-in-a-folder`, `folder-and-a-terminal-there` (D66); plan checks: a terminal with no folder is apps.launch, no file manager for a terminal's folder | **130 / 130**, twice (~1.2 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v28: + `save-a-layout`, `restore-a-layout`, `list-layouts` (D67) | **133 / 133**, twice (~1.2 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v29: + `unread-messages`, `unread-in-one-app` (D68) | **135 / 135**, twice (~1.2 s mean) | — |
+| 2026-10-11 | `qwen3.5:4b` | v30: + `what-was-that-notification`, `read-my-notifications` (D69) | **137 / 137**, twice (~1.2 s mean) | — |
 
 Every failure in these runs was SONU **asking or stopping**, except the last one, which is why it was fixed with a
 deterministic guard rather than more prompting: an assistant that guesses between two apps is worse than one that
