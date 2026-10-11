@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **149 / 149** on the v35 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **152 / 152** on the v36 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks and two for files by name; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name and three for moving, renaming and the trash; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -274,8 +274,13 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
     (#62). On the laptop, counts and timings only (never names): 9,422 files in 1,125 folders walked in 0.03 s; "pdf" 40
     files in 0.13 s; 17 recent files in 0.01 s. Dry runs with the branch's code: "open dev_works/SONU/README.md" →
     "Open 'README.md' with LibreOffice Writer" (the desktop's app for Markdown); "where is my pyproject.toml file?" →
-    "Look for files matching …"; "what files did I open yesterday?" → the recent list. Next: move, rename, and delete to
-    the trash only (`gio trash`), each asked first.
+    "Look for files matching …"; "what files did I open yesterday?" → the recent list. ~~Move, rename, delete to the
+    trash, restore~~ (#63, [D75](DECISIONS.md)) — `gio` 2.90 measured on a scratch file (trashed, listed as
+    `trash:///name` + its path, restored); then the real planner and tools on a scratch folder in the home: "move
+    kestrel-invoice.pdf to sonu-scratch-d75/archive" (asked) → moved; "rename kestrel-invoice.pdf to march kestrel
+    invoice" → "march kestrel invoice.pdf"; "delete march kestrel invoice" → in the trash; "restore march kestrel
+    invoice" → back; "delete my sonu-scratch-d75 folder" → asked **high**, in the trash (then taken back out and removed).
+    The move was also listed as "can't do" — a planner example still said renaming files wasn't possible (fixed).
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
@@ -367,12 +372,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #59 | 2026-10-11 | Reading a page ([D71](DECISIONS.md)): `browser.read` answers a question about a page, a tab the user names or the selected text, from its visible text — through the extension (0.2.0: `scripting` + `<all_urls>`, one tab only when SONU asks) to the local model only (`core/page_reader.py`), a private answer; browsers' own pages refused; an older extension told to update (`sonu browser status` shows each browser's extension version); answers up to 4 MiB (the 64 KiB default cut long tab lists and pages); a planner check: a page question isn't `screen.read`; the tab the user's words name decides; `messages.unread` leaves out an app the user didn't name; eval suite v32 (142) |
 | #60 | 2026-10-11 | Clicking, typing and scrolling on a page ([D72](DECISIONS.md)): `browser.click` (a link low, a button or checkbox medium, "delete / buy / send …" high), `browser.fill` (the user's exact words, never a password or card field, Enter optional), `browser.scroll`; the extension 0.3.0 lists a page's controls by name and number; the control is checked again before acting; done only when the page changed / the field shows the words / the page moved; `screen.type` into a page's named field goes through the extension; name matching shared with `screen.press` (`tools/naming.py`); the user's words decide where to scroll; an "alias" without "mean" is a note; planner rule and a check (a page's field isn't keystrokes); page input asks over MCP; eval suite v33 (145) |
 | #61 | 2026-10-11 | History and bookmarks ([D73](DECISIONS.md)): `browser.history` (by the user's words and/or a time; private) and `browser.open_saved` (a bookmark low, a page from history shown and asked) — read from read-only copies of Zen/Firefox `places.sqlite` (with its `-wal`) and Chromium `History` / `Bookmarks` in SONU's 0700 runtime folder, deleted after; no extension needed; a search uses this request's words only; planner rule and a check (bookmarks and history aren't `web.*`); fake profiles for tests and evals; eval suite v34 (147) |
-| #62 | open | Files by name ([D74](DECISIONS.md)): `files.open` opens a file by its name when no folder has it (several → the user picks; programs never; unusual types ask), `files.find` (where files are, private), `files.recent` (from `recently-used.xbel`, private); kind words ("pdf", "photo") as extensions; planner rule; eval suite v35 (149) |
+| #62 | 2026-10-11 | Files by name ([D74](DECISIONS.md)): `files.open` opens a file by its name when no folder has it (several → the user picks; programs never; unusual types ask), `files.find` (where files are, private), `files.recent` (from `recently-used.xbel`, private); kind words ("pdf", "photo") as extensions; planner rule; eval suite v35 (149) |
+| #63 | open | Move, rename, delete to the trash, restore ([D75](DECISIONS.md)): `files.move`, `files.rename` (the user's exact words, the extension kept), `files.trash` (`gio trash` only; a folder high), `files.restore`; never outside the home, its main folders or anything hidden; never overwrites; each asked and checked on disk; the planner example that said renaming wasn't possible replaced, and a check for a step's own part listed as unsupported; eval suite v36 (152) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-11 | (D75, a scratch folder) "move kestrel-invoice.pdf to …" was planned with files.move **and** listed as "can't do" — a planner example said renaming files wasn't possible | the example now uses printing; a plan that lists what its own step does as unsupported is sent back (#63) |
 | 10-11 | (D73, throwaway profiles) "what pages did I visit today?" right after a lentil soup search was planned with words "lentil soup" | a history search uses this request's words only (#61) |
 | 10-11 | (D72, a unit test while building) a test of `screen.type` ran with the real `wtype` — "martin" was typed once into the focused window (the owner's Zen); no Enter, nothing sent | the browser tests' context has no real programs (`which` finds nothing, a fake system) (#60) |
 | 10-11 | (D72, throwaway Zen/Chromium) "type hello there in the message box" stayed `screen.type` after the planner asked again; "scroll to the bottom of the page" was planned as "top"; "type red shoes in the search box" went to keystrokes into the owner's Zen window (dry run, nothing typed) | a page's named field is filled through the extension, also from `screen.type`; the user's words decide where to scroll; a planner check sends a page's field to `browser.fill` (#60) |

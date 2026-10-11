@@ -64,8 +64,9 @@ src/sonu/
                   prompt_writer.py, screen_reader.py, page_reader.py (a page's text → the local model)
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py (folders, files by name, recent),
-                  rice_tools.py, power_tools.py, obs_tools.py, voice_tools.py, dev_tools.py (folders, Claude Code), project_tools.py (VS Code, a project's
-                  commands, git, a terminal in a folder), layout_tools.py, message_tools.py, browser_tools.py,
+                  file_change_tools.py (move, rename, the trash, restore), rice_tools.py, power_tools.py,
+                  obs_tools.py, voice_tools.py, dev_tools.py (folders, Claude Code), project_tools.py (VS Code, a
+                  project's commands, git, a terminal in a folder), layout_tools.py, message_tools.py, browser_tools.py,
                   history_tools.py (bookmarks, history), github_tools.py, package_tools.py, screen_tools.py,
                   naming.py (a control by its name), grounding.py, registry.py (plan schema), targets.py, context.py
   system/         commands.py (argv runner), control.py (wpctl, nmcli, playerctl, yt-dlp, qs ipc, /proc, …),

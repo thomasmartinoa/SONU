@@ -50,7 +50,7 @@ from sonu.tools.base import (
 from sonu.tools.context import ToolContext
 from sonu.tools.desktop_tools import failed_dispatch, resolve_app
 from sonu.tools.dev_tools import _names
-from sonu.tools.file_tools import _home_relative, _inside, find_folders
+from sonu.tools.file_tools import find_folders, home_relative, inside_home
 from sonu.tools.grounding import ungrounded_words
 from sonu.tools.web_tools import compact
 from sonu.verify.checks import Check
@@ -87,7 +87,7 @@ _COUNTS = re.compile(r"\b(\d+) (passed|failed|errors?|skipped|warnings?|tests?)\
 
 
 def _where(ctx: ToolContext, path: Path) -> str:
-    return _home_relative(path, ctx.system.home)
+    return home_relative(path, ctx.system.home)
 
 
 def _own_words(ctx: ToolContext, name: str, value: str | None) -> ToolOutcome | None:
@@ -103,7 +103,7 @@ def _chosen(choice: str, inside: Path, *, file: bool = False) -> Path | ToolOutc
     path = Path(choice)
     there = path.is_file() if file else path.is_dir()
     gone = "That file is gone" if file else "That folder is gone"
-    return path if there and _inside(path, inside) else ToolOutcome(StepStatus.FAILED, gone)
+    return path if there and inside_home(path, inside) else ToolOutcome(StepStatus.FAILED, gone)
 
 
 def _is_file(text: str | None) -> bool:

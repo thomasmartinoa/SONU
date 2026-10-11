@@ -27,7 +27,7 @@ from sonu.integrations.kitty import TITLE_PREFIX
 from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.desktop_tools import _move_and_verify
-from sonu.tools.file_tools import _home_relative, _inside
+from sonu.tools.file_tools import home_relative, inside_home
 from sonu.tools.grounding import ungrounded_words
 from sonu.tools.project_tools import TERMINAL_FOLDER, shell_started_in, terminal_argv
 from sonu.verify.checks import Check
@@ -71,7 +71,7 @@ def _terminal_folder(window: Window, entry: AppEntry, ctx: ToolContext) -> str:
     if entry.executable not in TERMINAL_FOLDER:
         return ""
     home = ctx.system.home
-    folders = {f for f in ctx.system.child_folders(window.pid) if f != home and _inside(f, home)}
+    folders = {f for f in ctx.system.child_folders(window.pid) if f != home and inside_home(f, home)}
     return str(folders.pop()) if len(folders) == 1 else ""
 
 
@@ -200,7 +200,7 @@ def _plan_restore(layout: Layout, ctx: ToolContext, snapshot: WorldSnapshot) -> 
     steps = []
     for index, slot in enumerate(layout.slots):
         folder = Path(slot.folder) if slot.folder else None
-        if folder is not None and not (folder.is_dir() and _inside(folder, ctx.system.home)):
+        if folder is not None and not (folder.is_dir() and inside_home(folder, ctx.system.home)):
             folder = None  # the folder is gone: the terminal opens in its usual place
         steps.append(_Step(slot, entries[slot.app], chosen.get(index), folder))
     return steps
@@ -213,7 +213,7 @@ def _describe_steps(steps: list[_Step], ctx: ToolContext) -> str:
         if step.entry is None:
             parts.append(f"{name} isn't installed anymore")
         elif step.window is None:
-            folder = f" in {_home_relative(step.folder, ctx.system.home)}" if step.folder else ""
+            folder = f" in {home_relative(step.folder, ctx.system.home)}" if step.folder else ""
             parts.append(f"open {name}{folder} on {where}")
         elif step.window.workspace.name != where:
             parts.append(f"move {name} to {where}")
@@ -340,7 +340,7 @@ class RestoreLayout(Tool):
         else:
             checks.append(Check(f"{name} opened on {workspace}", True))
         if step.folder is not None:
-            where = _home_relative(step.folder, ctx.system.home)
+            where = home_relative(step.folder, ctx.system.home)
             in_folder = await shell_started_in(ctx, window.pid, step.folder)
             checks.append(Check(f"{name}'s shell is in {where}", in_folder))
             if not in_folder:

@@ -16,6 +16,7 @@ from sonu.tools.browser_tools import BROWSER_TOOLS
 from sonu.tools.desktop_tools import DEFAULT_TOOLS
 from sonu.tools.dev_tools import DEV_TOOLS
 from sonu.tools.everyday_tools import EVERYDAY_TOOLS
+from sonu.tools.file_change_tools import FILE_CHANGE_TOOLS
 from sonu.tools.file_tools import FILE_TOOLS
 from sonu.tools.github_tools import GITHUB_TOOLS
 from sonu.tools.history_tools import HISTORY_TOOLS
@@ -66,6 +67,7 @@ class ToolRegistry:
             *WEB_TOOLS,
             *BROWSER_TOOLS,
             *HISTORY_TOOLS,
+            *FILE_CHANGE_TOOLS,
             *MEDIA_TOOLS,
             *SETTINGS_TOOLS,
             *EVERYDAY_TOOLS,

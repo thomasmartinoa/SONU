@@ -482,6 +482,27 @@ class SystemControl:
         return result.ok and result.stdout.strip() == "active"
 
     # ------------------------------------------------------------------ files (xdg-mime, read-only)
+    # ------------------------------------------------------------------ the trash (gio, D75)
+    async def trash(self, path: Path) -> None:
+        """Into the desktop's trash (``gio trash``): it can be restored; nothing is deleted."""
+        await self._run("gio", "trash", "--", str(path), timeout_s=30.0)
+
+    async def trashed(self) -> list[tuple[str, Path]]:
+        """What's in the trash: (its trash:// address, where it was)."""
+        result = await self._run("gio", "trash", "--list")
+        items = []
+        for line in result.stdout.splitlines():
+            uri, _, original = line.partition("\t")
+            if uri.startswith("trash:///") and original.startswith("/"):
+                items.append((uri, Path(original)))
+        return items
+
+    async def restore(self, uri: str) -> None:
+        """Back to where it was (``gio trash --restore``; never over a file that's there now)."""
+        if not uri.startswith("trash:///"):
+            raise CommandError(f"not something in the trash: {uri}")
+        await self._run("gio", "trash", "--restore", uri)
+
     async def mime_type(self, path: Path) -> str | None:
         """The file's type as the desktop sees it, e.g. "application/pdf"."""
         result = await self._run("xdg-mime", "query", "filetype", str(path))

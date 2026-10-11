@@ -195,6 +195,9 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "open-a-bookmark": steps(("browser.open_saved", {"words": "arch wiki"})),
     "open-a-file-by-name": steps(("files.open", {"place": "kestrel lake photo"})),
     "find-a-file": steps(("files.find", {"name": "invoice"})),
+    "move-a-file": steps(("files.move", {"name": "invoice", "to": "downloads"})),
+    "rename-a-file": steps(("files.rename", {"name": "kestrel lake photo", "new_name": "lake view"})),
+    "delete-the-last-download": steps(("files.trash", {"name": "my last download"})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),

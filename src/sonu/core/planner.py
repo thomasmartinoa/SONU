@@ -128,12 +128,12 @@ EXAMPLES: tuple[tuple[str, dict[str, Any]], ...] = (
         },
     ),
     (
-        "open thunar and rename my holiday photos",
+        "open thunar and print my holiday photos",
         {
             "kind": "steps",
-            "message": "Opening Thunar. I can't rename files yet.",
+            "message": "Opening Thunar. I can't print yet.",
             "steps": [{"tool": "apps.launch", "args": {"app": "thunar"}}],
-            "unsupported": ["rename my holiday photos"],
+            "unsupported": ["print my holiday photos"],
         },
     ),
     (
@@ -323,8 +323,10 @@ media.control only plays, pauses or skips what is already playing.
 - Opening a folder ("open my downloads", "open dev_works"), the newest file in one ("open my \
 last download") or a file by its name ("open my resume", "open notes.txt") is files.open with the user's \
 words as place (SONU finds the folder or file). "Where is / find my <file>" is files.find (name = their \
-words for it); "what files did I open recently / yesterday?" is files.recent. "What's playing?" is \
-system.status with what ["media"].
+words for it); "what files did I open recently / yesterday?" is files.recent. "Move <file> to <folder>" is \
+files.move, "rename <file> to <name>" files.rename (new_name = their exact words), "delete / trash / get rid \
+of <file>" files.trash (it goes to the trash), "restore / undelete <file>" files.restore — name = their \
+words ("my last download"). "What's playing?" is system.status with what ["media"].
 - The colour theme is desktop.theme ("light mode" / "dark mode" is action light / dark); the \
 wallpaper is desktop.wallpaper ("change my wallpaper" is next); "which theme / wallpaper?" is \
 system.status with what ["theme"] or ["wallpaper"]. "What's on my clipboard?" is clipboard.read.
@@ -484,6 +486,15 @@ _OFF_AND_DND = re.compile(r"\boff\b.*\band (?:the )?(?:do not disturb|dnd)\b(?! 
 _PAIR = re.compile(r"\bpair\b")
 _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 # The words that point at the focused window ("close this", "close it", "close the window").
+_FILE_VERBS = {
+    "move": "files.move",
+    "rename": "files.rename",
+    "delete": "files.trash",
+    "trash": "files.trash",
+    "remove": "files.trash",
+    "restore": "files.restore",
+    "undelete": "files.restore",
+}
 _SAVED = re.compile(r"\b(?:bookmarks?|bookmarked|history|visited|i saw|i was reading)\b")
 _IN_A_FIELD = re.compile(r"\b(?:in|into)\s+(?:the|my|this)\s+(?:[\w-]+\s+){0,3}(?:field|box|bar)\b")
 _WEB_PAGE = re.compile(r"\b(?:(?:web ?)?page|webpage|article|website|tab)\b")
@@ -706,6 +717,14 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                     f"step {index + 1} (screen.type): the user named a field on the page — plan {wanted} "
                     "(submit true if they said press enter / search / send)"
                 )
+    # Found on the laptop (D75): "move kestrel-invoice.pdf to …" was planned with files.move and also listed
+    # as unsupported (an example said renaming files wasn't possible). What a step does isn't unsupported.
+    planned = {step.tool for step in plan.steps}
+    for part in plan.unsupported:
+        verb = normalize(part).split()[:1]
+        doer = _FILE_VERBS.get(verb[0]) if verb else None
+        if doer in planned:
+            problems.append(f"'{part}' is done by the {doer} step — remove it from unsupported")
     # Found on real hardware: "press the frobnicate button in thunar" was listed as unsupported; SONU
     # looks the button up itself and says what the app has.
     if not any(step.tool == "screen.press" for step in plan.steps):
