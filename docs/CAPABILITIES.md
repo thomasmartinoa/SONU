@@ -98,7 +98,8 @@ works:
 | kitty | run one of a project's own commands ("run the tests"), "did it pass?" | 🧪 #52 | only commands the project lists (`package.json`, `justfile`, `Makefile`) or uv/cargo/go's own; asks with the exact command; a SONU window; the exit code decides ([D65](DECISIONS.md)) |
 | kitty (and foot, alacritty, wezterm, ghostty, konsole, gnome-terminal) | open a terminal in a folder | 🧪 #53 | the terminal's own folder flag; checked on its shell's working folder ([D66](DECISIONS.md)) |
 | git | "what did I change in SONU?", "my last commits" | 🧪 #52 | read-only `git status/diff/log` (no repository hooks); the answer is private ([D65](DECISIONS.md)) |
-| WhatsApp, mail, chat apps | open a chat; read unread counts | 🗺 M7 | URLs / window titles; **sending messages is high risk** and always asks |
+| WhatsApp, Telegram, Discord, mail | read unread counts ("do I have new messages?") | 🧪 #55 | the count in an open app's window title, nothing else of it ([D68](DECISIONS.md)) |
+| WhatsApp, mail, chat apps | open a chat | 🗺 M7 | URLs; **sending messages is high risk** and always asks |
 | Any app without an interface | click, type, read the screen | 🗺 M6 | accessibility (AT-SPI) or screenshot + vision (`qwen3.5` can see images) + virtual input; high risk |
 
 ## Talking and remembering

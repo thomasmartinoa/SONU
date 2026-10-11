@@ -30,6 +30,10 @@ SAMPLE_APPS: dict[str, str] = {
         "Categories=System;FileManager;\nStartupWMClass=Thunar\n"
     ),
     "whatsapp.desktop": "[Desktop Entry]\nName=WhatsApp Desktop\nExec=whatsapp-desktop\nType=Application\n",
+    "org.telegram.desktop.desktop": (
+        "[Desktop Entry]\nName=Telegram\nExec=Telegram -- %U\nType=Application\n"
+        "Categories=Chat;Network;InstantMessaging;Qt;\nStartupWMClass=TelegramDesktop\n"
+    ),
     "btop.desktop": "[Desktop Entry]\nName=btop++\nExec=btop\nType=Application\nTerminal=true\n",
     "blueman-manager.desktop": (
         "[Desktop Entry]\nName=Bluetooth Manager\nExec=blueman-manager\nType=Application\n"

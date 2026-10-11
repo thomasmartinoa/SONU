@@ -54,6 +54,7 @@ EVAL_APPS: dict[str, FakeApp] = {
     "imv": FakeApp("imv", "imv"),
     "obs": FakeApp("com.obsproject.Studio", "OBS 32.2.2 - Profile: Untitled"),
     "whatsapp-desktop": FakeApp("WhatsApp Desktop", "WhatsApp"),
+    "Telegram": FakeApp("TelegramDesktop", "Telegram"),
     "blueman-manager": FakeApp("blueman-manager", "Bluetooth Devices"),
 }
 ROLE_DEFAULTS = {"browser": "zen-browser", "terminal": "kitty", "files": "thunar"}

@@ -21,6 +21,7 @@ _Last update: 2026-10-11_
 | M4.5 Installs | 🧪 **"install <app>"**: official repos then the AUR, the system's own password prompt, verified with pacman (#32, [D54](DECISIONS.md)) |
 | M6 Screen control | 🚧 part 1 ✅ **reading the screen** (#33, [D55](DECISIONS.md)); part 2 🧪 **pressing buttons by name** through accessibility (#34, [D56](DECISIONS.md)); part 3 🧪 **clicking by looking + typing** (#37, [D58](DECISIONS.md)) |
 | M5 Connect | 🚧 part 1 🧪 **Claude Code uses SONU's tools (MCP)**: `sonu mcp serve`, SONU's policy, asked on screen, personal content kept back (#45, [D61](DECISIONS.md)); part 2 🧪 **Ollama Cloud, opt-in**: prompts, harder requests (no window titles), vision; every send audited (#46, [D62](DECISIONS.md)); part 3 🧪 **other MCP servers' tools**: local, web and account servers, high risk unless listed read-only, answers shown only to you (#49, [D63](DECISIONS.md)); 🧪 **cloud usage limits**: a 429 pauses the cloud and SONU stays local, use counted in `sonu doctor` (#50, [D64](DECISIONS.md)) — **M5 is complete** |
+| M7 Beyond the desktop | 🚧 part 1 🧪 **unread messages**: "do I have new messages?" — the counts open chat and mail apps show, nothing else of their titles (#55, [D68](DECISIONS.md)) |
 
 ### Verified on the owner's laptop (Arch · Hyprland 0.56.2 · RTX 3070 Ti · `qwen3.5:4b`)
 
@@ -44,8 +45,9 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **133 / 133** on the v28 suite, twice (2026-10-11, the laptop's GPU, ~1.2 s mean planning), including
-nine complex multi-step requests, five for Claude Code, seven for projects and terminals and three for layouts; the M1 example (VSCodium + Chromium
+`qwen3.5:4b`: **135 / 135** on the v29 suite, twice (2026-10-11, the laptop's GPU, ~1.2 s mean planning), including
+nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts and two
+for unread messages; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -219,6 +221,11 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
    0600); "restore the sonu test layout" → "4 already in place", nothing moved; a layout with kitty in ~/dev_works
    on 9 → kitty opened there (its zsh in ~/dev_works, the view stayed on 2), Zen left on 2; both forgotten, the
    window closed.
+8. **M7 — beyond the desktop**, part 1 ([D68](DECISIONS.md)): ~~"do I have new messages?"~~ (#55). On the laptop (no
+   chat app open; the owner away, so none was opened — WhatsApp, Telegram, Discord and a Gmail web app are installed):
+   "do I have any new messages?" → "Gmail, Discord, Telegram and WhatsApp Desktop aren't open, so I can't see their
+   count"; "how many unread emails do I have?" → only Gmail (it read every app before: fixed, see the findings). With
+   an app open it's the owner's to try. Next in M7: opening a chat; sending only ever after asking.
 
 Waiting on music in `~/Music`: local music with `mpv`.
 
@@ -304,12 +311,14 @@ Waiting on music in `~/Music`: local music with `mpv`.
 | #51 | 2026-10-11 | Open questions: "resume song" resumes (it checked the status), "turn off the night light and do not disturb" turns both off, a GitHub username is a user search, pairing a new device is said to be impossible, "my pull requests" isn't asked back; the M1 example measured 10/10; eval suite v25 (123) |
 | #52 | 2026-10-11 | Projects ([D65](DECISIONS.md)): "open my SONU project / planner.py at line 40" in VS Code (`dev.open_project`), "run the tests" — only the project's own commands, asked with the exact command, in a SONU window, the exit code decides (`dev.run`, `dev.run_result`) — and read-only git, private (`dev.git`); Claude Code's tools no longer pick a command's window; planner checks: "open the <name> folder" stays the file manager's, closing the focused window only when the user means it, maximize ≠ fullscreen; eval suite v26 (128) |
 | #53 | 2026-10-11 | A terminal in a folder ([D66](DECISIONS.md), `dev.terminal`): the user's terminal told the folder (kitty `--directory`, foot/alacritty/ghostty/gnome-terminal `--working-directory`, wezterm `--cwd`, konsole `--workdir`), done when its shell's working folder (`/proc`) is that folder; the folder a request makes is found by its name in a dry run too; planner checks: a terminal with no folder stays apps.launch, a terminal in a folder doesn't also open the file manager; eval suite v27 (130) |
-| #54 | open | Saved layouts ([D67](DECISIONS.md)): `layouts.save` (which app is on which workspace and a terminal's folder — never titles; replacing one asks), `layouts.restore` (open windows moved, missing apps opened there, each checked; nothing closed), `layouts.list`, `layouts.forget`; "this workspace" only when the user says it; eval suite v28 (133) |
+| #54 | 2026-10-11 | Saved layouts ([D67](DECISIONS.md)): `layouts.save` (which app is on which workspace and a terminal's folder — never titles; replacing one asks), `layouts.restore` (open windows moved, missing apps opened there, each checked; nothing closed), `layouts.list`, `layouts.forget`; "this workspace" only when the user says it; eval suite v28 (133) |
+| #55 | open | Unread messages ([D68](DECISIONS.md), M7 part 1): `messages.unread` reads the count open chat and mail apps show in their titles — "(3) WhatsApp", "Telegram (3)", "Inbox (12) …", "• Discord" — and says only the app and the number; apps not open are said, never counted as zero; "emails" means the mail apps (the user's words decide); eval suite v29 (135) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-11 | (dry run, D68) "how many unread emails do I have?" was planned with no app — every chat app was read | "emails / mail / inbox" in the user's words means the mail apps (#55) |
 | 10-11 | (dry run, D67) "remember this setup as coding" / "save this layout as work" were planned as this workspace only | the user's words decide ("this workspace"); the argument is gone (#54) |
 | 10-11 | (dry run, D66) "make a folder called demo … and open a terminal there" → "no folder called demo" (a dry run doesn't make it); "open a terminal in downloads" → Thunar too | the folder this request makes is found by its name; plan check: no file manager for a terminal's folder (#53) |
 | 10-11 | (D65, the laptop) after "run the lint in SONU", a command's window stays open — the most recently used SONU window, so "what is Claude doing?" would read it as Claude Code | Claude Code's tools only pick Claude Code windows (#52) |

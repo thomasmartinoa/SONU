@@ -21,6 +21,7 @@ from sonu.tools.journal_tools import JOURNAL_TOOLS
 from sonu.tools.layout_tools import LAYOUT_TOOLS
 from sonu.tools.media_tools import MEDIA_TOOLS
 from sonu.tools.memory_tools import MEMORY_TOOLS
+from sonu.tools.message_tools import MESSAGE_TOOLS
 from sonu.tools.obs_tools import OBS_TOOLS
 from sonu.tools.package_tools import PACKAGE_TOOLS
 from sonu.tools.power_tools import POWER_TOOLS
@@ -71,6 +72,7 @@ class ToolRegistry:
             *MEMORY_TOOLS,
             *JOURNAL_TOOLS,
             *LAYOUT_TOOLS,
+            *MESSAGE_TOOLS,
             *VOICE_TOOLS,
             *DEV_TOOLS,
             *PROJECT_TOOLS,

@@ -178,6 +178,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "save-a-layout": steps(("layouts.save", {"name": "work"})),
     "restore-a-layout": steps(("layouts.restore", {"name": "work"})),
     "list-layouts": steps(("layouts.list", {})),
+    "unread-messages": steps(("messages.unread", {})),
+    "unread-in-one-app": steps(("messages.unread", {"app": "telegram"})),
     "folder-and-a-terminal-there": steps(
         ("files.make_folder", {"name": "demo", "inside": "dev_works"}), ("dev.terminal", {"workspace": 4})
     ),
