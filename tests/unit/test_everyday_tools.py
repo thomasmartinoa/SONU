@@ -385,7 +385,7 @@ async def test_screenshot_without_wl_copy_still_saves(rig: Rig) -> None:
 @pytest.mark.anyio
 async def test_rice_switches(rig: Rig) -> None:
     report = await rig.run(
-        "r",
+        "night light on, keep awake, clear my notifications and lock",
         ("desktop.shell", {"action": "night_light_on"}),
         ("desktop.shell", {"action": "keep_awake_on"}),
         ("desktop.shell", {"action": "clear_notifications"}),
@@ -450,3 +450,19 @@ async def test_runner_passes_input_and_can_skip_capturing() -> None:
     assert result.stdout == "hello"
     result = await runner.run(["sh", "-c", "echo hidden; exit 0"], capture=False)
     assert result.ok and result.stdout == ""
+
+
+@pytest.mark.anyio
+async def test_notifications_are_cleared_only_when_the_user_says_so(rig: Rig) -> None:
+    """Found in the evals (v37): "turn off night light and turn off do not disturb" was planned with
+    clear_notifications — the notifications were cleared."""
+    rig.system.shell["dnd"], rig.system.notifications = "true", 3
+    report = await rig.run(
+        "turn off night light and turn off do not disturb",
+        ("desktop.shell", {"action": "clear_notifications"}),
+    )
+    assert report.lines() == ["✔ Do-not-disturb is off"]
+    assert rig.system.notifications == 3 and not rig.system.do_not_disturb
+    report = await rig.run("turn the night light off", ("desktop.shell", {"action": "clear_notifications"}))
+    assert report.lines() == ["✖ You didn't ask to clear your notifications — none cleared"]
+    assert rig.system.notifications == 3

@@ -329,7 +329,9 @@ of <file>" files.trash (it goes to the trash), "restore / undelete <file>" files
 words ("my last download"). "What's playing?" is system.status with what ["media"].
 - The colour theme is desktop.theme ("light mode" / "dark mode" is action light / dark); the \
 wallpaper is desktop.wallpaper ("change my wallpaper" is next); "which theme / wallpaper?" is \
-system.status with what ["theme"] or ["wallpaper"]. "What's on my clipboard?" is clipboard.read.
+system.status with what ["theme"] or ["wallpaper"]. "What's on my clipboard?" is clipboard.read. "Copy …" \
+is clipboard.copy: what "path" for the path of a file (name = their words), "file" for a picture or text \
+file, "screenshot" for the last screenshot, "link" for this page's link, "text" for their own words.
 - Suspend (sleep), restart, shut down and log out are system.power, always the last step.
 - Recording the screen is obs.record (OBS Studio); OBS scenes are obs.scene; streaming, the \
 virtual camera and the replay buffer are obs.control; muting a source in OBS is obs.mute; "is OBS \

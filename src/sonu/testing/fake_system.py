@@ -745,8 +745,11 @@ class FakeSystem:
         if args == ["--clear"]:
             self.clipboard_type, self.clipboard_text = None, None
             return 0, "", ""
-        if self.last_input and self.last_input.startswith(PNG[:8]):
-            self.clipboard_type = "image/png"
+        kind = args[args.index("--type") + 1] if "--type" in args else "text/plain"
+        if kind.startswith("text/"):
+            self.clipboard_type, self.clipboard_text = None, (self.last_input or b"").decode()
+        else:
+            self.clipboard_type, self.clipboard_text = kind.split(";")[0], None
         return 0, "", ""
 
     def _wl_paste(self, args: list[str]) -> tuple[int, str, str]:

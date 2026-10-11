@@ -300,7 +300,10 @@ def files_named(folder: Path, words: list[str], kinds: frozenset[str] | None) ->
                 if not entry.is_file(follow_symlinks=False) or entry.name.endswith(_PARTIAL):
                     continue
                 name = compact(entry.name)
-                if not all(key in name for key in keys):
+                # Every word in the file's name or its folders' ("the SONU readme": README.md in SONU), at
+                # least one in its own name.
+                where = compact(os.path.relpath(entry.path, folder))
+                if not all(key in where for key in keys) or (keys and not any(key in name for key in keys)):
                     continue
                 if kinds and Path(entry.name).suffix.lower() not in kinds:
                     continue
@@ -308,10 +311,27 @@ def files_named(folder: Path, words: list[str], kinds: frozenset[str] | None) ->
             except OSError:
                 continue
     found.sort(key=lambda item: -item[0])
+    # Words that name a folder ("the SONU readme"): the files right in that folder, not deeper ones
+    # (SONU/README.md, not SONU/docs/adr/README.md).
+    nearest = min((_below(p, folder, keys) for _, p in found), default=0)
+    paths = [p for _, p in found if _below(p, folder, keys) == nearest]
     # The file the words name exactly ("notes" → notes.txt) before the ones that only contain them.
     whole = compact(" ".join(words))
-    exact = [p for _, p in found if compact(p.stem) == whole]
-    return (exact + [p for _, p in found if p not in exact])[:MAX_FOUND]
+    exact = [p for p in paths if compact(p.stem) == whole]
+    return (exact + [p for p in paths if p not in exact])[:MAX_FOUND]
+
+
+def _below(path: Path, top: Path, keys: list[str]) -> int:
+    """How far below the folder the user's words name ``path`` is (0: right in it, or no folder named)."""
+    name = compact(path.name)
+    folder_keys = [k for k in keys if k not in name]
+    if not folder_keys:
+        return 0
+    parts = Path(os.path.relpath(path, top)).parts[:-1]
+    for index in range(len(parts) - 1, -1, -1):
+        if any(k in compact(parts[index]) for k in folder_keys):
+            return len(parts) - 1 - index
+    return len(parts)
 
 
 def home_relative(path: Path, home: Path) -> str:

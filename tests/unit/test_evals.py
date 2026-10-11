@@ -198,6 +198,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "move-a-file": steps(("files.move", {"name": "invoice", "to": "downloads"})),
     "rename-a-file": steps(("files.rename", {"name": "kestrel lake photo", "new_name": "lake view"})),
     "delete-the-last-download": steps(("files.trash", {"name": "my last download"})),
+    "copy-a-files-path": steps(("clipboard.copy", {"what": "path", "name": "invoice"})),
+    "copy-the-last-screenshot": steps(("clipboard.copy", {"what": "screenshot"})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),
