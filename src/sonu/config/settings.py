@@ -132,6 +132,13 @@ class JournalSettings(_Section):
     exclude_apps: list[str] = Field(default_factory=list, max_length=50)
 
 
+class BriefingSettings(_Section):
+    # A briefing once a day, by itself (D83): sonud shows it on the HUD (or as a notification) the first time
+    # it's running after `at` each day. Off unless turned on; "good morning" / "brief me" work either way.
+    daily: bool = False
+    at: str = Field(default="08:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
 class HudSettings(_Section):
     # SONU's HUD (D80): its own Quickshell window at the top centre — listening, thinking, the steps as they
     # happen, the result, and questions with buttons. sonud starts it when Quickshell (`qs`) is installed.
@@ -227,6 +234,7 @@ class Settings(_Section):
     journal: JournalSettings = JournalSettings()
     notifications: NotificationsSettings = NotificationsSettings()
     hud: HudSettings = HudSettings()
+    briefing: BriefingSettings = BriefingSettings()
     cloud: CloudSettings = CloudSettings()
     mcp: McpSettings = McpSettings()
 
@@ -362,6 +370,12 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # Its own Quickshell window (your shell is untouched); sonud starts it when `qs` is installed.
 # enabled = true
 # hide_after_s = 6               # after a result
+
+[briefing]
+# A briefing once a day by itself (battery, reminders, messages, yesterday's work, problems), shown on the HUD
+# the first time sonud runs after `at`. "good morning" / "brief me" work either way.
+# daily = false
+# at = "08:00"
 
 [cloud]
 # Ollama Cloud models, reached through your local Ollama after `ollama signin`. Nothing is sent unless

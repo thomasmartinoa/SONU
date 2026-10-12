@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **161 / 161** on the v40 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **162 / 162** on the v41 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop and two for reading documents; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents and one for a briefing; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -394,11 +394,13 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 | #71 | 2026-10-12 | **SONU's HUD** ([D80](DECISIONS.md), the owner chose the full HUD at the top centre): its own Quickshell window sonud starts — listening / thinking / working, the steps as they happen, the result and reply, questions with buttons instead of the picker; the rice's colours; hides after 6 s; a `sonu doctor` line; checked on the laptop with a real request asked on it and answered by a real click |
 | #72 | open | Inside the laptop ([D81](DECISIONS.md)): `system.processes` (the busiest programs, memory, GPU, fans, temperature), `system.problems` (failed services, crashes, errors), `system.stop_program` (your own programs only, never the desktop's core, high risk, SIGTERM only); signalling injected so fakes never signal; planner checks (a loud fan, stop words, removing isn't stopping, music isn't a program); "resume" means play; eval suite v39 (159) |
 | #73 | open | Reading your documents ([D82](DECISIONS.md)): `files.read` — a text file, a PDF (`pdftotext`) or a Word / OpenDocument file (LibreOffice under SONU's own profile) to the local model only, a private answer; hidden files refused; the page reader reads documents too; planner rule and checks (a document isn't a page, a screen look or opening it); a browser name the user didn't say is dropped, not refused; eval suite v40 (161) |
+| #74 | open | Proactive, opt-in ([D83](DECISIONS.md)): a long project command ends with a desktop notification (passed / failed, how long) — only when it outlived SONU's own wait; `system.briefing` ("brief me", "catch me up") from SONU's read-only tools; `[briefing] daily` shows it once a day on the HUD (off by default); daemon tests never post a real notification; eval suite v41 (162) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-12 | (D83) "brief me" said "Yesterday: Yesterday (10 hours …)"; while building, a new daemon test showed a real "SONU — your briefing" notification on the owner's screen (the daemon tests' notifier was the real one) | the journal's own wording kept; every daemon test records notifications instead (#74) |
 | 10-12 | (eval v40, after the documents rule) "summarise this page" was planned with browser "Zen Browser" (the window list's name) and refused | a browser filter the user didn't name is dropped, not refused (#73) |
 | 10-12 | (D81, dry runs and evals) "why is my fan so loud?" planned as a temperature reading; "kill sonu-nonexistent-program" matched SONU's own process (refused); "get rid of obs studio" became stopping it; "resume song" planned as pause; Claude Code's processes named "2.1.295" | a loud fan is the busy programs; a program must contain the user's words; stopping needs kill / quit / stop / end, removing is packages.remove; the user's word decides play or pause; versioned and interpreter programs named by their process (#72) |
 | 10-12 | "what can you do?" — the list behind it said SONU couldn't see the screen or type into apps (it can since M6) and named none of the newer abilities; "can you play my own music?" → "No songs matching “my own music”" | the list rewritten, a test ties every tool to it; "own" isn't a song's name (#69) |

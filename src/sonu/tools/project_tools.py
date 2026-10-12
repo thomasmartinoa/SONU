@@ -391,7 +391,7 @@ def _result(run: _Run, code: int | None, open_now: bool, counts: str) -> ToolOut
     if open_now:
         return ToolOutcome(
             StepStatus.UNVERIFIED,
-            f"{run.name} is still running in its window{shown} — ask “did it pass?” later",
+            f"{run.name} is still running in its window{shown} — you'll get a notification when it ends",
         )
     return ToolOutcome(StepStatus.FAILED, f"{run.name}: its window was closed before it finished")
 
@@ -477,7 +477,7 @@ class RunTask(Tool):
         terminal, launch = terminals.new(
             folder,
             SYSTEM_PYTHON,
-            (str(RUN_TASK), str(status), *task.argv),
+            (str(RUN_TASK), str(status), f"--notify={task.command} in {folder.name}", *task.argv),
             label=f"{task.command} · {folder.name}",
             hold=True,  # the output stays to read
         )

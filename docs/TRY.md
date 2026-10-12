@@ -74,6 +74,10 @@ missing.
 ### Your documents (#73)
 - [ ] "summarise my <file> pdf" · "what does <notes file> say about <something>?" · a Word document too
 
+### Proactive (#74)
+- [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
+- [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
+
 ### Music (#65)
 - [ ] "play my music" · "shuffle my music" · "play <artist> from my music" · "pause" · "next song" · "what's
   playing?" · "stop the music"

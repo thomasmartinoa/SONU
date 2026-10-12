@@ -12,6 +12,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from sonu.tools.base import Tool
+from sonu.tools.briefing_tools import BRIEFING_TOOLS
 from sonu.tools.browser_tools import BROWSER_TOOLS
 from sonu.tools.clipboard_tools import CLIPBOARD_TOOLS
 from sonu.tools.desktop_tools import DEFAULT_TOOLS
@@ -76,6 +77,7 @@ class ToolRegistry:
             *MUSIC_TOOLS,
             *HEALTH_TOOLS,
             *DOCUMENT_TOOLS,
+            *BRIEFING_TOOLS,
             *MEDIA_TOOLS,
             *SETTINGS_TOOLS,
             *EVERYDAY_TOOLS,

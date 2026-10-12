@@ -341,6 +341,7 @@ _SAID = {
     "system.processes": "which programs use the CPU",
     "system.problems": "whether anything crashed",
     "system.stop_program": "stopping a program",
+    "system.briefing": "A briefing of the day",
     "voice.wake": "Hey Sonu",
     "web.open": "open sites",
     "web.search": "search",

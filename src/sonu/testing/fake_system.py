@@ -211,6 +211,7 @@ class FakeSystem:
     # A project's command run in SONU's window (run_task.py): the command → (exit code, output);
     # exit code None: still running. Not listed: exit 0, "3 passed".
     task_results: dict[str, tuple[int | None, str]] = field(default_factory=dict)
+    task_notices: list[str] = field(default_factory=list)  # --notify labels of the runs started
     tasks_run: list[str] = field(default_factory=list)
     polkit_answer: str = "allow"  # "dismiss": the user cancels the system's password prompt
     root_secret: str = "Hunter2!"  # noqa: S105 — the (fake) password polkit's text agent accepts
@@ -239,7 +240,11 @@ class FakeSystem:
     def run_in_terminal(self, argv: list[str]) -> str:
         """A program started in a SONU terminal (an install, a project's command): its output."""
         if len(argv) > 2 and argv[1].endswith("run_task.py"):
-            status, command = Path(argv[2]), " ".join(argv[3:])
+            rest = argv[3:]
+            if rest and rest[0].startswith("--notify="):  # D83: who to tell when a long run ends
+                self.task_notices.append(rest[0].removeprefix("--notify="))
+                rest = rest[1:]
+            status, command = Path(argv[2]), " ".join(rest)
             self.tasks_run.append(command)
             code, output = self.task_results.get(command, (0, "===== 3 passed in 0.12s ====="))
             if code is None:

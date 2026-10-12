@@ -1368,3 +1368,11 @@ request = "what do my trip notes say about parking?"
 expect_status = ["done"]
 require_tools = ["files.read"]
 forbid_tools = ["files.open", "browser.read", "memory.list", "journal.read"]
+
+# ---- a briefing (v41)
+[[case]]
+id = "brief-me"
+request = "catch me up"
+expect_status = ["done"]
+require_tools = ["system.briefing"]
+forbid_tools = ["journal.read", "web.search"]

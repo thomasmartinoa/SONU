@@ -27,6 +27,8 @@ import struct
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
+from datetime import time as dt_time
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +69,7 @@ from sonu.runtime import (
     outside_tools,
 )
 from sonu.tools.base import Choices, Risk, StepStatus
+from sonu.tools.briefing_tools import brief
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 from sonu.ui.desktop_ui import Picker
@@ -212,6 +215,12 @@ _ENDS = re.compile(
 )
 
 
+def briefing_due(now: datetime, at: str, last: str | None) -> bool:
+    """Past today's time, and not shown yet today (D83)."""
+    hour, minute = (int(part) for part in at.split(":"))
+    return now.time() >= dt_time(hour, minute) and last != now.date().isoformat()
+
+
 def ends_conversation(text: str) -> bool:
     return bool(_ENDS.match(text))
 
@@ -283,6 +292,7 @@ class Daemon:
         self._watching: asyncio.Task[None] | None = None
         # SONU's HUD (D80), started in start(); None: turned off or no Quickshell
         self.hud: Hud | None = None
+        self._briefing: asyncio.Task[None] | None = None  # the daily briefing (D83), when it's on
 
     # -------------------------------------------------------------- lifetime
     async def start(self, path: Path | None = None) -> Path:
@@ -299,6 +309,8 @@ class Daemon:
             self._journaling = asyncio.create_task(self.keep_journal())
         if self.notifications is not None:
             self._watching = asyncio.create_task(watch_notifications(self.notifications, self.env))
+        if self.settings.briefing.daily:
+            self._briefing = asyncio.create_task(self._brief_every_day())
         if self.settings.hud.enabled and self.env.get("WAYLAND_DISPLAY"):  # a desktop to show it on
             hud = Hud(hud_folder(self.env), self.settings.hud.hide_after_s)
             try:
@@ -308,6 +320,37 @@ class Daemon:
                 started = False
             self.hud = hud if started else None
         return path
+
+    # -------------------------------------------------------------- the daily briefing (D83)
+    async def _brief_every_day(self) -> None:
+        while True:
+            with contextlib.suppress(Exception):  # a failed briefing never stops the daemon
+                await self.brief_if_due(datetime.now())
+            await asyncio.sleep(60)
+
+    async def brief_if_due(self, now: datetime) -> bool:
+        """Show today's briefing if it's past ``[briefing] at`` and it wasn't shown today. True: shown."""
+        record = self.paths.data_dir / "briefing.json"
+        try:
+            last = json.loads(record.read_text()).get("last")
+        except (OSError, ValueError, AttributeError):
+            last = None
+        if not briefing_due(now, self.settings.briefing.at, last):
+            return False
+        async with self.lock:  # never in the middle of a request
+            engine = await self._engine({**self.env, **self._client_env}, os.getpid())
+            outcome = await brief(engine.ctx)
+        if outcome.status is not StepStatus.DONE:
+            return False
+        if self.hud is not None:
+            self.hud.begin("your briefing", "done")
+            self.hud.show(result=outcome.summary)
+        else:
+            with contextlib.suppress(Exception):
+                self.notice().show("SONU — your briefing", outcome.summary, seconds=30, limit=1000)
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(json.dumps({"last": now.date().isoformat()}) + "\n")
+        return True
 
     def _journal_instance(self) -> HyprlandInstance:
         env = {**self.env, **self._client_env}
@@ -379,7 +422,7 @@ class Daemon:
             self._warming.cancel()
         if self.hud is not None:
             await self.hud.stop()
-        for task in (self._journaling, self._watching):
+        for task in (self._journaling, self._watching, self._briefing):
             if task is not None:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
