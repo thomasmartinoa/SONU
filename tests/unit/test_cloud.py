@@ -15,6 +15,7 @@ from sonu.config.settings import (
     OllamaSettings,
     PlannerRole,
     PrivacySettings,
+    ProviderSettings,
     Settings,
 )
 from sonu.core.planner import LLMPlanner, RoutedPlanner, is_hard
@@ -366,3 +367,60 @@ async def test_the_cloud_comes_first_when_it_is_allowed() -> None:
     settings = allowed("planning").model_copy(update={"models": ModelsSettings(harder="deep")})
     parts = model_parts(settings, OllamaClient(transport=fake.transport), OllamaSettings(), None)
     assert (await parts.planner.plan(HARD, SNAPSHOT, REGISTRY)).model == CLOUD
+
+
+# ---------------------------------------------------------------- any provider (D94)
+async def test_a_hard_request_goes_to_the_chosen_provider_audited_first(tmp_path: Path) -> None:
+    import httpx
+
+    fake = fake_ollama()
+    sent: list[dict[str, Any]] = []
+
+    def anthropic(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"content": [{"type": "tool_use", "name": "answer", "input": PLAN}]})
+
+    audit = AuditLog(tmp_path / "audit.jsonl")
+    settings = allowed("planning", "replies").model_copy(
+        update={
+            "cloud": CloudSettings(
+                provider="anthropic", model="claude-haiku-5-5", use_for=["planning", "replies"]
+            )
+        }
+    )
+    parts = model_parts(
+        settings,
+        OllamaClient(transport=fake.transport),
+        OllamaSettings(),
+        audit,
+        env={"PATH": ""},  # no secret-tool: the key comes from nowhere…
+        http=httpx.MockTransport(anthropic),
+    )
+    plan = await parts.planner.plan(HARD, SNAPSHOT, REGISTRY)
+    assert plan.model == LOCAL  # …so with no key the local planner planned, and nothing was sent
+    assert sent == []
+
+    named = settings.model_copy(
+        update={
+            "providers": {
+                "anthropic": ProviderSettings(
+                    kind="anthropic", base_url="https://api.anthropic.com", key="env:ANTHROPIC_KEY"
+                )
+            }
+        }
+    )
+    parts = model_parts(
+        named,
+        OllamaClient(transport=fake.transport),
+        OllamaSettings(),
+        audit,
+        env={"ANTHROPIC_KEY": "sk-test"},
+        http=httpx.MockTransport(anthropic),
+    )
+    plan = await parts.planner.plan(HARD, SNAPSHOT, REGISTRY)
+    assert plan.model == "claude-haiku-5-5" and sent  # (and a repair round, the fake plan being off-topic)
+    assert "bank-server" not in json.dumps(sent)  # no window titles go to the cloud
+    sends = [r.data for r in audit.records() if r.kind == "cloud.send"]
+    assert len(sends) == len(sent)  # every send audited first
+    assert all(d["provider"] == "Anthropic" and d["use"] == "planning" for d in sends)
+    assert isinstance(parts.replies, LocalFallback)  # "replies" allowed: the cloud writes them

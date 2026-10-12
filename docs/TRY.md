@@ -78,6 +78,11 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Cloud brains (#87)
+- [ ] `sonu settings providers` — which have a key; `sonu settings key openrouter` (a free OpenRouter account works)
+- [ ] Control Center → Brain: Cloud provider = openrouter, Cloud model = a `:free` model, Cloud models = allow (asks), Use the cloud for = planning — then a long request plans in the cloud (`sonu audit tail` shows cloud.send)
+- [ ] read [MODELS.md](MODELS.md) for which model fits which job
+
 ### The new HUD (#86)
 - [ ] press the SONU key: the rings breathe while it listens, spin while it thinks, the arc fills with the steps
 - [ ] a long answer: the HUD stays until SONU stops talking, then hides a few seconds later

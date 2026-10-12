@@ -1,16 +1,15 @@
-"""Answering the user's question about a web page from its text (D71): "summarise this page", "what does
-this article say about pricing?".
+"""Answering the user's question about a web page from its text (D71): "summarise this page", "what does this
+article say about pricing?".
 
 The text comes from SONU's browser extension. It's what the page wrote — other people's words, often
-personal (mail, a bank) — so it goes only to the planner model **on this laptop**, never to a cloud
-model (pages aren't one of the uses ``[cloud] use_for`` can allow), and the answer is shown to the user
-only, never fed into SONU's planning. The model is told the text is content, never instructions; it
-also answers nothing but the question, so a page that says "ignore your instructions" can at worst
-make the answer wrong — nothing acts on it.
+personal (mail, a bank) — so it goes only to the planner model **on this laptop**, unless the user allowed
+"reading" in ``[cloud] use_for`` (D94: then their cloud model reads it, audited first), and the answer is
+shown to the user only, never fed into SONU's planning. The model is told the text is content, never
+instructions; it also answers nothing but the question, so a page that says "ignore your instructions" can
+at worst make the answer wrong — nothing acts on it.
 
 The planner's context (``[ollama] num_ctx``, 16,384 tokens by default) is shared with this call; a
-different size would make Ollama load the model again, so the page is cut to fit instead
-(``page_chars``).
+different size would make Ollama load the model again, so the page is cut to fit instead (``page_chars``).
 """
 
 from __future__ import annotations
@@ -48,10 +47,15 @@ def excerpt(page: Page, max_text: int = MAX_TEXT) -> tuple[str, bool]:
 
 
 class PageReader:
-    def __init__(self, model: TextModel, host: str, max_text: int = MAX_TEXT) -> None:
-        self.model, self.host, self.max_text = model, host, max_text
+    def __init__(
+        self, model: TextModel, host: str, max_text: int = MAX_TEXT, *, remote: bool = False
+    ) -> None:
+        # remote (D94): the user allowed "reading" in [cloud] use_for — page text goes to their cloud model
+        self.model, self.host, self.max_text, self.remote = model, host, max_text, remote
 
     def check_where(self) -> None:
+        if self.remote:
+            return
         if not is_local(self.host):
             raise PageReaderError(
                 f"pages are only read by a model on this laptop, and Ollama is set to {self.host}"

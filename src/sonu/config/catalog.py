@@ -72,17 +72,44 @@ CATALOG: tuple[Entry, ...] = (
         choices=("never", "ask", "allow"),
         loosens=("ask", "allow"),
     ),
-    Entry("cloud.model", "Brain", "Cloud model", "The Ollama Cloud model for planning and prompts.", "text"),
+    Entry(
+        "cloud.provider",
+        "Brain",
+        "Cloud provider",
+        "Who runs the cloud model: Ollama Cloud, Anthropic, Google Gemini, Groq, OpenRouter (free models "
+        "too) or OmniRoute on this laptop. Its key: `sonu settings key <provider>`.",
+        "choice",
+        choices=("ollama", "anthropic", "gemini", "groq", "openrouter", "omniroute"),
+    ),
+    Entry(
+        "cloud.model",
+        "Brain",
+        "Cloud model",
+        "The provider's model name, e.g. gpt-oss:120b-cloud (Ollama), claude-haiku-5-5, gemini-2.5-flash, "
+        "openai/gpt-oss-120b (Groq), meta-llama/llama-3.3-70b-instruct:free (OpenRouter).",
+        "text",
+    ),
+    Entry(
+        "cloud.vision_provider",
+        "Brain",
+        "Cloud provider for the screen",
+        "Who looks at screenshots when “vision” is on.",
+        "choice",
+        choices=("ollama", "anthropic", "gemini", "groq", "openrouter", "omniroute"),
+    ),
+    Entry(
+        "cloud.vision_model", "Brain", "Cloud model for the screen", "A model that can see images.", "text"
+    ),
     Entry(
         "cloud.use_for",
         "Brain",
         "Use the cloud for",
-        "prompts: your idea for Claude Code → a better prompt. planning: harder requests. vision: "
-        "screenshots "
-        "(anything visible on screen goes).",
+        "prompts: your idea for Claude Code → a better prompt. planning: harder requests (your words, no "
+        "window titles). vision: screenshots (anything visible goes). reading: pages, documents and research "
+        "(their text goes). replies: what SONU says back (your words and the results go).",
         "list",
-        choices=("prompts", "planning", "vision"),
-        loosens=("vision",),
+        choices=("prompts", "planning", "vision", "reading", "replies"),
+        loosens=("vision", "reading", "replies"),
     ),
     Entry(
         "cloud.plan",

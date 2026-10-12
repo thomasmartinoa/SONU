@@ -891,7 +891,7 @@ class Daemon:
             pages=self.models.pages,
         )
         conversation, responder = assistant_parts(
-            self.settings, self.paths, self.ollama, self.ollama_settings, memory
+            self.settings, self.paths, self.ollama, self.ollama_settings, memory, model=self.models.replies
         )
         return Engine(
             planner=self.planner,
