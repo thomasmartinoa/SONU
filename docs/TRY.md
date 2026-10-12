@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Hearing in the cloud (#90)
+- [ ] a Sarvam key: `sonu settings key sarvam`; then `sonu voice check -m large-v3-turbo -m sarvam` — read ten lines, see which hears you better
+- [ ] if Sarvam wins: Control Center → Voice → Who hears you = sarvam, and Brain → Use the cloud for → hearing (asks)
+
 ### Cloud brains (#87)
 - [ ] `sonu settings providers` — which have a key; `sonu settings key openrouter` (a free OpenRouter account works)
 - [ ] Control Center → Brain: Cloud provider = openrouter, Cloud model = a `:free` model, Cloud models = allow (asks), Use the cloud for = planning — then a long request plans in the cloud (`sonu audit tail` shows cloud.send)

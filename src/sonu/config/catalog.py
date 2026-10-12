@@ -105,11 +105,12 @@ CATALOG: tuple[Entry, ...] = (
         "Brain",
         "Use the cloud for",
         "prompts: your idea for Claude Code → a better prompt. planning: harder requests (your words, no "
-        "window titles). vision: screenshots (anything visible goes). reading: pages, documents and research "
-        "(their text goes). replies: what SONU says back (your words and the results go).",
+        "window titles). vision: screenshots (anything visible goes). reading: pages, documents and "
+        "research (their text goes). replies: what SONU says back (your words and the results go). hearing: "
+        "what you say after the SONU key or “Hey Sonu” (the audio goes; see Voice → Who hears you).",
         "list",
-        choices=("prompts", "planning", "vision", "reading", "replies"),
-        loosens=("vision", "reading", "replies"),
+        choices=("prompts", "planning", "vision", "reading", "replies", "hearing"),
+        loosens=("vision", "reading", "replies", "hearing"),
     ),
     Entry(
         "cloud.plan",
@@ -191,6 +192,25 @@ CATALOG: tuple[Entry, ...] = (
         "large-v3-turbo: best with accents and noise. small.en: lighter.",
         "choice",
         choices=("large-v3-turbo", "large-v3", "small.en"),
+    ),
+    Entry(
+        "voice.hearing",
+        "Voice",
+        "Who hears you",
+        "local: Whisper on this laptop. sarvam: built for Indian English and Hinglish. groq: Whisper "
+        "large-v3, hosted. gemini: Google. Only your request goes (never “Hey Sonu” listening or a "
+        "password), and only with “hearing” on under Brain → Use the cloud for. Its key: "
+        "`sonu settings key <provider>`.",
+        "choice",
+        choices=("local", "sarvam", "groq", "gemini"),
+        loosens=("sarvam", "groq", "gemini"),
+    ),
+    Entry(
+        "voice.hearing_model",
+        "Voice",
+        "Cloud hearing model",
+        "Empty: the provider's best (saaras:v4, whisper-large-v3-turbo, gemini-2.5-flash).",
+        "text",
     ),
     Entry(
         "voice.password_by_voice",
