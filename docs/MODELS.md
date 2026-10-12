@@ -26,7 +26,7 @@ Laptop, 8 GB); everything else is cited and marked when it comes from a vendor. 
 | Prompts for Claude Code | **A lot** | `[cloud] use_for` "prompts" |
 | Seeing the screen | **A lot** — small local vision models misread screens | `[cloud] use_for` "vision", `vision_provider` |
 | Hearing | Depends on your accent | `[voice] stt_model` (local), `[voice] hearing` (sarvam, groq, gemini) |
-| Speaking | Style only (Indian English voices) | `[voice] voice` (cloud: next PR) |
+| Speaking | Style only (Indian English voices) | `[voice] voice` (Kokoro), `[voice] speaking` (sarvam, gemini) |
 
 ## Measured on the laptop (planning, SONU's eval suite)
 

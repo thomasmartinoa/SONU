@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 AutonomyMode = Literal["suggest", "confirm-each", "confirm-risky", "trusted"]
 CloudPolicy = Literal["never", "ask", "allow"]
-CloudUse = Literal["prompts", "planning", "vision", "reading", "replies", "hearing"]
+CloudUse = Literal["prompts", "planning", "vision", "reading", "replies", "hearing", "speaking"]
 
 
 class _Section(BaseModel):
@@ -114,6 +114,11 @@ class VoiceSettings(_Section):
     # [cloud] use_for. "Hey Sonu", talking over SONU and a spoken password always stay local.
     hearing: Literal["local", "sarvam", "groq", "gemini"] = "local"
     hearing_model: str = Field(default="", max_length=80)  # "": the provider's best (saaras:v4, …)
+    # Who speaks (D98): "local" (Kokoro, the voice above), "sarvam" (Bulbul: Indian English voices) or
+    # "gemini" — only with "speaking" in [cloud] use_for; a reply holding something private is always Kokoro.
+    speaking: Literal["local", "sarvam", "gemini"] = "local"
+    speaking_voice: str = Field(default="", max_length=40)  # "": shubh (Sarvam), Kore (Gemini)
+    speaking_model: str = Field(default="", max_length=80)  # "": bulbul:v3, gemini-2.5-flash-preview-tts
     device: Literal["cuda", "cpu"] = "cuda"
     # SONU's voice (Kokoro): af_heart, af_bella, am_michael, bm_george, … — `sonu voice test` to hear one.
     voice: str = Field(default="af_heart", pattern=r"^[a-z]{2}_[a-z]{1,20}$")
@@ -212,7 +217,8 @@ class CloudSettings(_Section):
     # reading : summaries of pages, documents and research (their text goes) (D94)
     # replies : the sentence SONU says back (your words and the results go; never a private result) (D94)
     # hearing : what you say after the SONU key or "Hey Sonu" — the audio goes ([voice] hearing) (D96)
-    use_for: list[CloudUse] = Field(default_factory=lambda: list(_DEFAULT_CLOUD_USES), max_length=6)
+    # speaking: what SONU says out loud, when it holds nothing private ([voice] speaking) (D98)
+    use_for: list[CloudUse] = Field(default_factory=lambda: list(_DEFAULT_CLOUD_USES), max_length=7)
     # hard: requests with several parts, `sonu --deep`, and ones the local model couldn't plan; always: all
     plan: Literal["hard", "always"] = "hard"
     think: bool = False
@@ -416,6 +422,9 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # stt_model = "large-v3-turbo"   # or "small.en" (lighter)
 # hearing = "local"                    # local | sarvam | groq | gemini (cloud: "hearing" in [cloud] use_for)
 # hearing_model = ""                    # "": the provider's best (saaras:v4, whisper-large-v3-turbo, …)
+# speaking = "local"                   # local (Kokoro) | sarvam | gemini ("speaking" in [cloud] use_for)
+# speaking_voice = ""                   # "": shubh (Sarvam), Kore (Gemini)
+# speaking_model = ""
 # device = "cuda"
 # voice = "af_heart"             # `sonu voice test` to hear the others
 # speed = 1.0

@@ -70,6 +70,8 @@ class VoiceSession:
     # Who hears the user's requests (D96): a cloud service, when chosen and allowed. None: the local ears.
     # "Hey Sonu", talking over SONU and a spoken password always use the local ears.
     request_ears: Any = None
+    # SONU's voice from the cloud (D98), when chosen and allowed. None: Kokoro. say(local=True) always Kokoro.
+    cloud_voice: Any = None
 
     async def hear(
         self, endpointing: Endpointing | None = None, *, hint: str | None = None, local: bool = False
@@ -109,32 +111,36 @@ class VoiceSession:
         """Say hello when the key is pressed — the cue to start talking (listening starts after it)."""
         await self.say(self.greeting(name), keep=True)
 
-    async def say(self, text: str, *, keep: bool = False, interruptible: bool = False) -> bool:
+    async def say(
+        self, text: str, *, keep: bool = False, interruptible: bool = False, local: bool = False
+    ) -> bool:
         """Say ``text``; ``keep``: remember the sound, so saying it again starts at once.
-        ``interruptible``: stop if the user talks over it — returns True then."""
+        ``interruptible``: stop if the user talks over it — returns True then. ``local``: Kokoro, never the
+        cloud voice (a reply holding something private, D98)."""
         if not text.strip():
             return False
+        voice = self.voice if local or self.cloud_voice is None else self.cloud_voice
         async with self._talking:
             if self.speaking is not None:
                 self.speaking(True)
             try:
-                return await self._say(text, keep=keep, interruptible=interruptible)
+                return await self._say(text, voice, keep=keep, interruptible=interruptible)
             finally:
                 if self.speaking is not None:
                     self.speaking(False)
 
-    async def _say(self, text: str, *, keep: bool, interruptible: bool) -> bool:
+    async def _say(self, text: str, voice: Any, *, keep: bool, interruptible: bool) -> bool:
         text = for_speech(text)  # paths, links and times the way a person says them
-        samples = self._spoken.get(text)
+        cached = voice is (self.cloud_voice or self.voice)  # the greetings were made in this voice
+        found = self._spoken.get(text) if cached else None
         # Said sentence by sentence (D85): the first starts as soon as it's made — not after the whole
         # reply (measured on the laptop: 0.6 s instead of 1.25 s for two sentences, more for longer ones).
-        parts = [text] if samples is not None or keep else sentences(text)
-        if samples is None:
-            samples = await asyncio.to_thread(self.voice.speak, parts[0])
-            if keep:
-                self._spoken[text] = samples
-        speaker = self._speaker = Speaker(self.voice.rate, self.speaker_argv)
-        speech = samples if len(parts) == 1 else self._pieces(samples, parts[1:])
+        parts = [text] if found is not None or keep else sentences(text)
+        samples: bytes = found if found is not None else await asyncio.to_thread(voice.speak, parts[0])
+        if found is None and keep and cached:
+            self._spoken[text] = samples
+        speaker = self._speaker = Speaker(voice.rate, self.speaker_argv)
+        speech = samples if len(parts) == 1 else self._pieces(voice, samples, parts[1:])
         playing = asyncio.create_task(speaker.play(speech))
         watching = (
             asyncio.create_task(self.interruptions(text)) if interruptible and self.interruptions else None
@@ -156,15 +162,15 @@ class VoiceSession:
                     await watching
             self._speaker = None
 
-    async def _pieces(self, first: bytes, rest: list[str]) -> AsyncIterator[bytes]:
+    async def _pieces(self, voice: Any, first: bytes, rest: list[str]) -> AsyncIterator[bytes]:
         """The first sentence's sound, then each next one — made while the one before plays."""
-        making = asyncio.ensure_future(asyncio.to_thread(self.voice.speak, rest[0]))
+        making = asyncio.ensure_future(asyncio.to_thread(voice.speak, rest[0]))
         try:
             yield first
             for index in range(len(rest)):
                 samples = await making
                 if index + 1 < len(rest):
-                    making = asyncio.ensure_future(asyncio.to_thread(self.voice.speak, rest[index + 1]))
+                    making = asyncio.ensure_future(asyncio.to_thread(voice.speak, rest[index + 1]))
                 yield samples
         finally:
             making.cancel()  # talked over: the rest isn't said (a sentence being made just finishes)
@@ -190,4 +196,4 @@ class VoiceSession:
         for line in GREETINGS:
             if name or "{name}" not in line:
                 text = line.format(name=name)
-                self._spoken[text] = await asyncio.to_thread(self.voice.speak, text)
+                self._spoken[text] = await asyncio.to_thread((self.cloud_voice or self.voice).speak, text)
