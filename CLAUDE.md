@@ -54,7 +54,7 @@ sonu eval                               # real planner model on the eval suite (
 
 ```
 src/sonu/
-  cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config,
+  cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config, settings,
                   audit, desktop, daemon, voice (+ `sonu listen` through the daemon), journal, mcp, browser
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
   browser/        extension/ (SONU's own, Chromium + Zen: tabs, a page's text, clicks, fields, scrolling), host.py (native messaging → a local socket), install.py
@@ -84,7 +84,8 @@ src/sonu/
                   speech.py (text said like a person: paths, links, times, long lists)
   llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
   hud/            shell.qml: SONU's HUD (its own Quickshell window; sonud starts it; ui/hud.py writes its state)
-  verify/ policy/ audit/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi, hud.py) integrations/ (rice, OBS,
+  config/         settings.py, catalog.py (what the Control Center may change), editing.py (comments kept, checked)
+  verify/ policy/ audit/ doctor/ ui/ (notify-send, rofi/fuzzel/wofi, hud.py) integrations/ (rice, OBS,
                   kitty = SONU-owned terminals, run_task = a command's exit code, browser = the extension's sockets,
                   browser_data = history and bookmarks from profile folders, mpv = SONU's music player,
                   claude_code = reading its screen, a11y + a11y_helper = AT-SPI)

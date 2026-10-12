@@ -304,7 +304,9 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 - Deep planner: `qwen3:8b` (installed, thinking on) measured 2026-10-11: **113 / 123, 10.9 s a plan** — worse and ten
   times slower than `qwen3.5:4b` (123 / 123, 1.0 s); misses: closing, reminders, memory, the screen, the journal, a
   prompt from an idea, an injected title. Not worth it; `qwen3.5:9b` isn't pulled. With cloud planning allowed,
-  `--deep` goes to `gpt-oss:120b-cloud` instead.
+  `--deep` goes to `gpt-oss:120b-cloud` instead. `qwen3.5:9b` measured 2026-10-12 (v44): **157 / 166, 3.7 s a plan** —
+  it doesn't fit the 8 GB GPU with the 16k context (25 % on the CPU) and SONU's rules were tuned on the 4b; not the
+  better local brain on this laptop.
 - NitroSense key: voice part 1 is press-to-talk (one press, SONU hears until you stop), so key release isn't needed.
   Hold-to-talk would need `wev` to show *released* arriving when a 2-second hold ends.
 - **Play on YouTube doesn't work on the laptop yet** (2026-09-27). Zen: the video opens **paused** (Firefox blocks
@@ -400,12 +402,14 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 | #77 | 2026-10-12 | Conversations remembered ([D86](DECISIONS.md)): each finished request — the user's words and what SONU told them — kept on the laptop (SQLite, 0600, 30 days; `[conversations] keep`), past the 10-minute conversation; `conversations.recall` ("what did we talk about yesterday?", "what did you tell me about kestrels?") and `conversations.forget` (asks); dry runs and looking back aren't kept; a planner check keeps it apart from the journal, memory and the web; eval suite v43 (165) |
 | #78 | 2026-10-12 | Sounding like a person ([D87](DECISIONS.md)): SONU decides the tone from the user's words (brief, annoyed, thanking), when the name is said (small talk, once a conversation — removed otherwise), and drops "anything else?" offers after replies; small talk knows the day and time and is cut at a sentence end (40 words) |
 | #79 | 2026-10-12 | Heads-ups ([D88](DECISIONS.md)), opt-in: sonud checks each minute and speaks up once — the battery low (and critical), the disk nearly full (once a day), the CPU staying hot (once an hour); shown on the HUD, said only with `speak = true` and never while another app records the mic (a call), over a fullscreen window or in the quiet hours (a critical battery still is, never during a call); each one in the audit log |
-| #80 | open | Corrections mid-sentence ([D89](DECISIONS.md)): "open kitty on 3, no, 4", "play lofi on spotify, actually on youtube" — corrected once, before anything reads the words (the model mostly understood; SONU's own word rules didn't); careful: "sorry to bother you", "what's actually using…", "when I say X I mean Y" stay as said; the words as said are in the audit log; also a planner check against "which browser?" for a named tab (an eval failing on main); eval suite v44 (166) |
+| #80 | 2026-10-12 | Corrections mid-sentence ([D89](DECISIONS.md)): "open kitty on 3, no, 4", "play lofi on spotify, actually on youtube" — corrected once, before anything reads the words (the model mostly understood; SONU's own word rules didn't); careful: "sorry to bother you", "what's actually using…", "when I say X I mean Y" stay as said; the words as said are in the audit log; also a planner check against "which browser?" for a named tab (an eval failing on main); eval suite v44 (166) |
+| #81 | open | Control Center, part 1 — the backend ([D90](DECISIONS.md)): `sonu settings list / set / models` — 38 settings in five groups without editing the file (comments kept, the whole file checked before writing, 0600); a change that loosens privacy or safety needs an OK; every change audited; sonud restarts in place once idle (the model stays on the GPU — on the laptop: answering again after 1.4 s, same pid, a new socket) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-12 | (D90, while building) `sonu settings list` went to the owner's sonud as a request ("settings list" → a chat reply; nothing acted on) — the daemon's client didn't know the new command | the command added to both lists; the existing test that every command is routed as a command caught it (#81) |
 | 10-12 | (evals, on main too — same code passed earlier today) "close the youtube tab" → "Which browser should I close the YouTube tab in?", every run | a planner check: no need to ask which browser for a tab the user named — the tab tools look in every browser (#80) |
 | 10-12 | (D89, dry runs) "play lofi on spotify, actually on youtube" would play on Spotify: "spotify" in the words decides the service; the planner itself got "3, no, 4", "30, sorry, 40", "firefox, I mean zen" right | the correction applied before anything reads the words (#80) |
 | 10-12 | (D87, the real model, 3 tries each) "Martin, …" in front of 26 of 27 replies; "good morning" at 17:23 → "Good morning Martin!"; small talk ending in an offer nearly every time ("Ready to tackle your day?", "Need another quick win today?"); "kitty 2" and "ugh just open kitty on 2 already" got the same chirpy sentence | SONU decides the name, the tone and the length; offers dropped; the time given (#78) |

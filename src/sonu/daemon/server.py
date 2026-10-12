@@ -24,6 +24,7 @@ import re
 import socket
 import sqlite3
 import struct
+import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -134,6 +135,11 @@ class _DesktopSession:
             return  # the HUD shows it: no notification as well
         if self.progress is not None:
             await asyncio.to_thread(self.progress.update, message)
+
+
+def _start_again() -> None:
+    """The same process, started again (systemd sees no exit): reads the settings file anew."""
+    os.execv(sys.executable, [sys.executable, *sys.argv])  # noqa: S606 — sonud itself, the same argv
 
 
 def _said(task: asyncio.Task[bool]) -> None:
@@ -318,6 +324,10 @@ class Daemon:
         self.system = SystemControl()
         self.watch = Watch(settings.heads_up)
         self._heads_up: asyncio.Task[None] | None = None
+        # New settings (D90): sonud restarts in place once idle — the model stays loaded on the GPU.
+        self._reloading: asyncio.Task[None] | None = None
+        self._stopped = False
+        self.restart: Callable[[], None] = _start_again  # tests record instead
 
     # -------------------------------------------------------------- lifetime
     async def start(self, path: Path | None = None) -> Path:
@@ -509,7 +519,18 @@ class Daemon:
         async with self._server:
             await self._server.serve_forever()
 
-    async def stop(self) -> None:
+    async def restart_when_idle(self) -> None:
+        """After the current request (if any), stop and start again with the new settings."""
+        async with self.lock:
+            logger.info("restarting for new settings")
+            await self.stop(unload=False)
+            self.restart()
+
+    async def stop(self, *, unload: bool = True) -> None:
+        """``unload``: give the GPU memory back (not when sonud restarts for new settings). Once only."""
+        if self._stopped:
+            return
+        self._stopped = True
         if self._warming is not None:
             self._warming.cancel()
         if self.hud is not None:
@@ -532,8 +553,9 @@ class Daemon:
             await self._server.wait_closed()
         with contextlib.suppress(FileNotFoundError, AttributeError):
             self.path.unlink()
-        with contextlib.suppress(OllamaError):
-            await self.ollama.load(self.model, keep_alive="0")  # give the GPU memory back
+        if unload:
+            with contextlib.suppress(OllamaError):
+                await self.ollama.load(self.model, keep_alive="0")  # give the GPU memory back
         await self.ollama.aclose()
 
     # -------------------------------------------------------------- one client
@@ -544,6 +566,11 @@ class Daemon:
             if pid is None:
                 return
             request = decode(await reader.readline())
+            if request.get("type") == "reload":  # the settings changed (D90): restart once idle
+                await session.send({"type": "reloading", "busy": self.lock.locked()})
+                if self._reloading is None:
+                    self._reloading = asyncio.create_task(self.restart_when_idle())
+                return
             if request.get("type") not in ("request", "listen"):
                 return
             if request["type"] == "listen" and self._voice is not None:

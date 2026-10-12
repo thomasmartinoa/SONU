@@ -24,6 +24,7 @@ _COMMANDS = {
     "eval",
     "doctor",
     "config",
+    "settings",
     "audit",
     "desktop",
     "daemon",
@@ -269,3 +270,21 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
         return code
     out.write(_style("✖ The SONU daemon stopped before answering", "31", out) + "\n")
     return 1
+
+
+def ask_reload() -> bool | None:
+    """Ask sonud to restart for new settings (it waits for a running request). None: it isn't running;
+    True: it's busy and will restart after the request."""
+    path = socket_path()
+    if not path.exists():
+        return None
+    conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    conn.settimeout(CONNECT_TIMEOUT_S)
+    try:
+        conn.connect(str(path))
+        with conn, conn.makefile("rb") as reader:
+            conn.sendall(encode({"type": "reload"}))
+            reply = decode(reader.readline())
+    except (OSError, ValueError):
+        return None
+    return bool(reply.get("busy"))
