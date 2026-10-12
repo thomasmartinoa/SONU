@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import stat
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -91,6 +93,11 @@ def test_the_command_opens_one_window(tmp_path: Path) -> None:
     runtime = tmp_path / "run"
     assert open_control(runtime, env) is True
     pid = int((runtime / "control.pid").read_text())
+    for _ in range(100):  # until it's running as the window (found on CI: checked a moment too soon once)
+        with contextlib.suppress(OSError):
+            if b"shell.qml" in Path(f"/proc/{pid}/cmdline").read_bytes():
+                break
+        time.sleep(0.02)
     try:
         assert open_control(runtime, env) is False  # already open: not a second window
     finally:
