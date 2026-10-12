@@ -47,6 +47,7 @@ works:
 | Volume and mic, brightness, Bluetooth, Wi-Fi, power mode, battery | ✅ | `wpctl`, `brightnessctl`, `rfkill` + `bluetoothctl`, `nmcli`, `powerprofilesctl`, sysfs |
 | Connect a saved Wi-Fi network, a paired Bluetooth device | ✅ | `nmcli connection up`, `bluetoothctl connect` |
 | CPU, memory, disk, temperature, GPU, uptime: "how's my laptop doing?" | 🧪 this batch | `/proc`, `/sys`, `nvidia-smi` (read-only) |
+| Research: "find out how kestrels hunt and summarise it", "look up X and tell me" | 🧪 #75 | your words searched; the top pages fetched by SONU (public addresses only, no cookies or scripts) and read by the local model; the answer names its sites ([D84](DECISIONS.md)) |
 | A briefing: "brief me", "catch me up", "what's my day like?" — battery, reminders, messages, notifications, yesterday's work, anything that went wrong; once a day by itself if you turn it on | 🧪 #74 | SONU's own read-only tools put together; `[briefing] daily` ([D83](DECISIONS.md)) |
 | What's busy: "what's using my CPU / memory / GPU?", "why is my fan loud?"; what went wrong: "did anything crash?"; "kill <program>" (asks) | 🧪 #72 | `/proc` (a program's processes together), fans, `nvidia-smi`, `systemctl --failed`, `coredumpctl`, `journalctl`; stopping: your own programs only, never the desktop's core, SIGTERM only ([D81](DECISIONS.md)) |
 | Night light, keep awake, do-not-disturb, clear notifications, lock the screen | 🧪 this batch | the rice's Quickshell switches (`qs ipc call nightlight/caffeine/notifications/lock`) |

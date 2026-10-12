@@ -69,6 +69,7 @@ class Effect(StrEnum):
     PAGE_INPUT = "page.input"  # clicks or types on a web page (SONU's browser extension, D72)
     PAGE_SCROLL = "page.scroll"  # scrolls a web page
     PROCESS_STOP = "process.stop"  # asks a program of the user's to quit (D81)
+    WEB_FETCH = "web.fetch"  # SONU itself searches with the user's words and reads pages (D84)
 
 
 class StepStatus(StrEnum):

@@ -56,6 +56,7 @@ from sonu.desktop.hyprland.ipc import HyprlandClient
 from sonu.integrations.browser import Browsers
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.integrations.mpv import SonuPlayer, music_folder
+from sonu.integrations.research import WebAccess
 from sonu.llm.ollama import OllamaClient, OllamaError
 from sonu.mcp.outside import OutsideServers
 from sonu.policy.engine import Policy
@@ -741,6 +742,7 @@ class Daemon:
             layouts=load_layouts(self.paths),
             browsers=Browsers(socket_folder({**self.env, **env})),
             music=SonuPlayer(music_folder({**self.env, **env})),
+            web=WebAccess(),
             wake=self.wake,
             journal=self.journal,
             notifications=self.notifications,

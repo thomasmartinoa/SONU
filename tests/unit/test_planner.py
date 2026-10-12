@@ -588,3 +588,15 @@ def test_a_document_of_the_users_is_files_read() -> None:
         _problems(_plan(("files.read", {"name": "invoice pdf"})), REGISTRY, "summarise my invoice pdf") == []
     )
     assert _problems(page, REGISTRY, "summarise this page") == []
+
+
+def test_research_or_a_search_in_the_browser() -> None:
+    """D84: a site the user named is searched in the browser; "find out / summarise" is answered by SONU."""
+    research = _plan(("web.research", {"query": "hyprland plugins"}))
+    [problem] = _problems(research, REGISTRY, "look up hyprland plugins on github")
+    assert '"tool": "web.search"' in problem
+    browser = _plan(("web.search", {"site": "web", "query": "how kestrels hunt"}))
+    [problem] = _problems(browser, REGISTRY, "find out how kestrels hunt and tell me")
+    assert '"tool": "web.research"' in problem
+    assert _problems(browser, REGISTRY, "search the web for how kestrels hunt") == []
+    assert _problems(research, REGISTRY, "find out about hyprland plugins") == []

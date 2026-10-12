@@ -47,6 +47,7 @@ from sonu.testing.fake_profiles import firefox_profile
 from sonu.testing.fake_system import FakeSystem
 from sonu.testing.fake_vision import FakePageReader, FakeScreenReader
 from sonu.testing.fake_wake import FakeWake
+from sonu.testing.fake_web import fake_web
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 
@@ -468,6 +469,7 @@ async def run_case(
                 notifications=notifications,
                 browsers=browsers,
                 music=SonuPlayer(runtime_dir / "music"),
+                web=fake_web(),  # never the real web
             )
             for minutes_ago, app, title in case.journal:
                 journal.record(app, title, time.time() - minutes_ago * 60)

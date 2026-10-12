@@ -1376,3 +1376,11 @@ request = "catch me up"
 expect_status = ["done"]
 require_tools = ["system.briefing"]
 forbid_tools = ["journal.read", "web.search"]
+
+# ---- research (v42)
+[[case]]
+id = "find-something-out"
+request = "find out how kestrels hunt and summarise it"
+expect_status = ["done"]
+require_tools = ["web.research"]
+forbid_tools = ["web.search", "web.open", "browser.read"]

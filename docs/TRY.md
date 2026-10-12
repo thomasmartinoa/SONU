@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Research (#75)
+- [ ] "find out <something> and summarise it" — the answer names the sites it read
+- [ ] "look up <something> on github" still opens GitHub's results in the browser
+
 ### Music (#65)
 - [ ] "play my music" · "shuffle my music" · "play <artist> from my music" · "pause" · "next song" · "what's
   playing?" · "stop the music"

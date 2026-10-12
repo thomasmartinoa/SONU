@@ -12,7 +12,7 @@ sonu eval --json                       # machine-readable
 sonu eval --cloud                      # also your [cloud] model (Ollama Cloud), planning as SONU will: no titles
 ```
 
-## The cases (v41, 162 cases)
+## The cases (v42, 163 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -134,6 +134,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-10-11 | `qwen3.5:4b` | v34: + `find-a-page-in-history`, `open-a-bookmark` (D73, a fake Zen profile in the fake home) | **147 / 147**, twice (~1.1 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v35: + `open-a-file-by-name`, `find-a-file` (D74, two older files in the fake home) | **149 / 149**, twice (~1.1 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v36: + `move-a-file`, `rename-a-file`, `delete-the-last-download` (D75, a fake `gio trash`) | **152 / 152**, twice (~1.0 s mean) | — |
+| 2026-10-12 | `qwen3.5:4b` | v42: + `find-something-out` (D84, a fake web) | **163 / 163**, twice | — |
 | 2026-10-12 | `qwen3.5:4b` | v41: + `brief-me` (D83) | **162 / 162**, twice | — |
 | 2026-10-12 | `qwen3.5:4b` | v40: + `summarise-a-document`, `ask-a-document` (D82, a fake pdftotext) | **161 / 161**, twice | — |
 | 2026-10-12 | `qwen3.5:4b` | v39: + `why-is-my-fan-loud`, `did-anything-crash`, `kill-a-program` (D81, two fake processes, a fake kill) | **159 / 159**, twice (~1.3 s mean) | — ; before four fixes `why-is-my-fan-loud` read only the temperature, `get-rid-of-an-app` stopped the app, `resume-song` paused (the model's plans shifted with the new rule) |

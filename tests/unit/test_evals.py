@@ -208,6 +208,7 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "summarise-a-document": steps(("files.read", {"name": "invoice pdf"})),
     "ask-a-document": steps(("files.read", {"name": "trip notes", "question": "what about parking?"})),
     "brief-me": steps(("system.briefing", {})),
+    "find-something-out": steps(("web.research", {"query": "how kestrels hunt"})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),
