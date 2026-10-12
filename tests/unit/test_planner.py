@@ -616,3 +616,16 @@ def test_what_we_talked_about_is_the_conversations() -> None:
     recall = _plan(("conversations.recall", {"when": "this_morning"}))
     assert _problems(recall, REGISTRY, "what did I ask you this morning?") == []
     assert _problems(journal, REGISTRY, "what was I doing yesterday?") == []
+
+
+def test_no_need_to_ask_which_browser_for_a_named_tab() -> None:
+    """Found in the evals (v44, on main too): "close the youtube tab" → "Which browser…?"."""
+    asked = _PlanModel(kind="ask", message="Which browser should I close the YouTube tab in?")
+    [problem] = _problems(asked, REGISTRY, "close the youtube tab")
+    assert '{"tool": "browser.close_tabs", "args": {"words": "youtube"}}' in problem
+    asked = _PlanModel(kind="ask", message="Which browser is the GitHub tab in?")
+    [problem] = _problems(asked, REGISTRY, "switch to the github tab")
+    assert '{"tool": "browser.tab", "args": {"words": "github"}}' in problem
+    assert (
+        _problems(_PlanModel(kind="ask", message="Which tab do you mean?"), REGISTRY, "close the tab") == []
+    )

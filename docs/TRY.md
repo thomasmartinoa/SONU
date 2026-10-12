@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Corrections mid-sentence (#80)
+- [ ] by voice: "open kitty on workspace 3, no, 4" · "play lofi on spotify, actually on youtube"
+- [ ] "open kitty, sorry to bother you" still just opens kitty
+
 ### Heads-ups (#79)
 - [ ] in `~/.config/sonu/config.toml`: `[heads_up]` `enabled = true` (and `speak = true` to hear them), then `systemctl --user restart sonud`
 - [ ] unplug and let the battery fall to 15%: "Battery's at 15% — time to plug in." once

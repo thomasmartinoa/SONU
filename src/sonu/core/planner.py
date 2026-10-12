@@ -535,6 +535,9 @@ def _recall_args(said: str) -> dict[str, str]:
     return {"when": "today"}
 
 
+_NAMED_TAB = re.compile(
+    r"\b(?P<verb>close|shut|switch to|go to|go back to)\s+(?:the\s+|my\s+)?(?P<words>[\w .'-]+?)\s+tabs?\b"
+)
 _ANSWER_ME = re.compile(r"\b(?:find out|research|summari[sz]e|and tell me|what do (?:people|they) say)\b")
 _WHY_HOT = re.compile(
     r"\bfans?\b.*\b(?:loud|noisy|spinning|fast|high)\b|\bwhy\b.*\b(?:hot|slow|laggy|loud)\b"
@@ -693,6 +696,13 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
             f"no need to ask: github.prs lists the user's open pull requests in all their repositories — "
             f"plan exactly this step: {wanted}"
         )
+    # Found in the evals (v44, on main too): "close the youtube tab" → "Which browser should I close the
+    # YouTube tab in?". The tab tools look in every browser the extension is in (and ask if two have it).
+    tab = _NAMED_TAB.search(said)
+    if plan.kind == "ask" and tab and "browser" in plan.message.lower():
+        tab_tool = "browser.close_tabs" if tab.group("verb") in ("close", "shut") else "browser.tab"
+        wanted = json.dumps({"tool": tab_tool, "args": {"words": tab.group("words")}})
+        problems.append(f"no need to ask which browser: SONU finds the tab in any browser — plan {wanted}")
     # Found in the evals (v26, after two examples were added): "close kitty" was planned as closing the
     # focused window — on a real desktop whatever window had the focus would have been closed.
     for index, step in enumerate(plan.steps):

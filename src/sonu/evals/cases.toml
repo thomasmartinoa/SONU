@@ -1399,3 +1399,13 @@ request = "what did you tell me about kestrels?"
 expect_status = ["done"]
 require_tools = ["conversations.recall"]
 forbid_tools = ["web.research", "web.search", "memory.list", "journal.read"]
+
+# ---- a correction mid-sentence (v44)
+[[case]]
+id = "corrected-mid-sentence"
+request = "play faded on spotify, actually on youtube"
+notes = "Found on the laptop: 'spotify' in the words decided the service — it played on Spotify (D89)."
+expect_status = ["done"]
+expect_windows = [{ class = "zen", title_contains = "youtube.com/watch" }]
+expect_system = { videos_playing = 1 }
+require_tools = ["media.play"]

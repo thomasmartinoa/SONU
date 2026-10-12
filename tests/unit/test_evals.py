@@ -211,6 +211,7 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "find-something-out": steps(("web.research", {"query": "how kestrels hunt"})),
     "what-did-we-talk-about": steps(("conversations.recall", {"when": "yesterday"})),
     "what-did-you-tell-me": steps(("conversations.recall", {"about": "kestrels"})),
+    "corrected-mid-sentence": steps(("media.play", {"query": "faded"})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),
