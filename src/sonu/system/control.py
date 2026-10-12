@@ -8,9 +8,13 @@ The exact behaviours copied from the rice (hypr-dotfiles) are noted where they m
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
+import os
 import re
 import shutil
+import signal
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -211,6 +215,68 @@ def parse_bluetooth_info(mac: str, text: str) -> BluetoothDevice:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class ProcessSample:
+    pid: int
+    program: str
+    ticks: int  # CPU time so far, clock ticks
+    rss: int  # memory, bytes
+    uid: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProgramUse:
+    """One program's processes together (Zen's tabs, Chromium's helpers): CPU % of one core, memory."""
+
+    program: str
+    cpu: float
+    memory: int
+    pids: tuple[int, ...]
+    uid: int
+
+
+# Programs whose many processes have their own names: counted as the program people know.
+_PROGRAM_NAMES = {
+    "zen-bin": "zen",
+    "firefox-bin": "firefox",
+    "Isolated Web Co": "zen",
+    "Web Content": "zen",
+    "llama-server": "ollama",  # found on the laptop: Ollama's model runner, SONU's own planner among them
+}
+
+
+def _program_name(program: str, comm: str) -> str:
+    name = _PROGRAM_NAMES.get(program) or _PROGRAM_NAMES.get(comm) or program
+    # Found on the laptop: Claude Code's program file is named after its version ("2.1.295"); an interpreter
+    # ("python3.12") is the program's own name less than the process's.
+    if re.fullmatch(r"[\d.]+", name) or re.fullmatch(r"python[\d.]*", name):
+        name = comm if not re.fullmatch(r"python[\d.]*", comm) else "python"
+    return name.removesuffix("-bin")
+
+
+def program_use(
+    first: dict[int, ProcessSample], second: dict[int, ProcessSample], elapsed_s: float, ticks_per_s: int
+) -> list[ProgramUse]:
+    """CPU use per program between two snapshots (processes that started in between count from zero),
+    busiest first."""
+    by_program: dict[str, list[tuple[ProcessSample, int]]] = {}
+    for pid, now in second.items():
+        before = first.get(pid)
+        used = now.ticks - before.ticks if before is not None and before.program == now.program else 0
+        by_program.setdefault(now.program, []).append((now, max(0, used)))
+    uses = [
+        ProgramUse(
+            program,
+            100.0 * sum(used for _, used in rows) / (ticks_per_s * elapsed_s) if elapsed_s > 0 else 0.0,
+            sum(sample.rss for sample, _ in rows),
+            tuple(sorted(sample.pid for sample, _ in rows)),
+            rows[0][0].uid,
+        )
+        for program, rows in by_program.items()
+    ]
+    return sorted(uses, key=lambda u: (-u.cpu, -u.memory))
+
+
 class SystemControl:
     def __init__(
         self,
@@ -222,6 +288,9 @@ class SystemControl:
         home: Path | None = None,
     ) -> None:
         self.runner: CommandRunner = runner or SubprocessRunner()
+        # Signals a process (D81). A fake system records instead: its /proc is made up, and a made-up pid
+        # may be a real process on the machine running the tests.
+        self.kill: Callable[[int, int], None] = getattr(self.runner, "kill", os.kill)
         self.power_supply = power_supply
         self.proc = proc
         self.sys = sys
@@ -725,6 +794,127 @@ class SystemControl:
         except (ValueError, IndexError):
             return None
         return util, temp, used, total
+
+    # ------------------------------------------------------------------ programs and problems (D81)
+    def proc_snapshot(self) -> dict[int, ProcessSample]:
+        """Every process the user can see: its program, CPU time so far (clock ticks), memory, owner."""
+        found: dict[int, ProcessSample] = {}
+        page = os.sysconf("SC_PAGE_SIZE")
+        for entry in self.proc.iterdir() if self.proc.is_dir() else []:
+            if not entry.name.isdigit():
+                continue
+            try:
+                stat = (entry / "stat").read_text()
+                comm = stat[stat.index("(") + 1 : stat.rindex(")")]
+                fields = stat[stat.rindex(")") + 2 :].split()
+                ticks = int(fields[11]) + int(fields[12])  # utime + stime
+                rss = int((entry / "statm").read_text().split()[1]) * page
+                uid = entry.stat().st_uid
+            except (OSError, ValueError, IndexError):
+                continue
+            try:
+                program = (entry / "exe").readlink().name.removesuffix(" (deleted)")
+            except OSError:
+                program = comm
+            found[int(entry.name)] = ProcessSample(
+                int(entry.name), _program_name(program, comm), ticks, rss, uid
+            )
+        return found
+
+    async def processes(self, sample_s: float = 0.8) -> list[ProgramUse]:
+        """Programs by CPU use over ``sample_s`` (a program's processes together: a browser's tabs)."""
+        first = await asyncio.to_thread(self.proc_snapshot)
+        await asyncio.sleep(sample_s)
+        second = await asyncio.to_thread(self.proc_snapshot)
+        return program_use(first, second, sample_s, os.sysconf("SC_CLK_TCK"))
+
+    def fans(self) -> list[int]:
+        """Fan speeds (RPM) the laptop reports (hwmon fan*_input; the owner's Acer: two fans)."""
+        speeds: list[int] = []
+        for fan in sorted((self.sys / "class" / "hwmon").glob("hwmon*/fan*_input")):
+            try:
+                speeds.append(int(fan.read_text().strip()))
+            except (OSError, ValueError):
+                continue
+        return speeds
+
+    async def gpu_programs(self) -> list[tuple[str, int]]:
+        """(program, MiB) of what's using the NVIDIA GPU's memory."""
+        result = await self.runner.run(
+            ("nvidia-smi", "--query-compute-apps=process_name,used_memory", "--format=csv,noheader,nounits")
+        )
+        found: list[tuple[str, int]] = []
+        for line in result.stdout.splitlines() if result.ok else []:
+            name, _, used = line.rpartition(",")
+            with contextlib.suppress(ValueError):
+                found.append((Path(name.strip()).name, int(used.strip())))
+        return found
+
+    async def failed_units(self) -> list[str]:
+        """Services that failed: the system's and the user's (``systemctl --failed``)."""
+        units: list[str] = []
+        for scope in ((), ("--user",)):
+            result = await self.runner.run(("systemctl", *scope, "--failed", "--no-legend", "--plain"))
+            for line in result.stdout.splitlines() if result.ok else []:
+                if line.split():
+                    units.append(line.split()[0] + (" (user)" if scope else ""))
+        return units
+
+    async def crashes(self, since: str = "-1d") -> list[tuple[float, str, int]]:
+        """(time, program, signal) of programs that crashed since ``since`` (``coredumpctl``)."""
+        result = await self.runner.run(
+            ("coredumpctl", "list", "--since", since, "--json=short", "--no-pager")
+        )
+        try:
+            rows = json.loads(result.stdout) if result.ok and result.stdout.strip() else []
+        except ValueError:
+            return []
+        return [
+            (float(r.get("time", 0)) / 1e6, Path(str(r.get("exe", "?"))).name, int(r.get("sig", 0)))
+            for r in rows
+            if isinstance(r, dict)
+        ]
+
+    async def journal_errors(self, since: str = "-1h") -> list[tuple[str, str]]:
+        """(program, message) of errors logged since ``since`` — the system's and the user's journal."""
+        found: list[tuple[str, str]] = []
+        for scope in ((), ("--user",)):
+            result = await self.runner.run(
+                ("journalctl", *scope, "-p", "err", "--since", since, "-q", "--no-pager", "-o", "json"),
+                timeout_s=10.0,
+            )
+            for line in result.stdout.splitlines() if result.ok else []:
+                with contextlib.suppress(ValueError):
+                    entry = json.loads(line)
+                    who = entry.get("SYSLOG_IDENTIFIER") or entry.get("_COMM") or "?"
+                    message = entry.get("MESSAGE")
+                    found.append((str(who), message if isinstance(message, str) else ""))
+        return found
+
+    def stop_processes(self, pids: list[int]) -> list[int]:
+        """Politely ask the user's own processes to quit (SIGTERM; never SIGKILL). The ones asked."""
+        asked: list[int] = []
+        for pid in pids:
+            try:
+                if (self.proc / str(pid)).stat().st_uid != os.getuid():
+                    continue
+                self.kill(pid, signal.SIGTERM)
+                asked.append(pid)
+            except (OSError, ProcessLookupError):
+                continue
+        return asked
+
+    def running(self, pids: list[int]) -> list[int]:
+        """The ones still alive (a zombie counts as gone)."""
+        alive: list[int] = []
+        for pid in pids:
+            try:
+                state = (self.proc / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()[0]
+            except (OSError, IndexError):
+                continue
+            if state != "Z":
+                alive.append(pid)
+        return alive
 
     # ------------------------------------------------------------------ power mode (powerprofilesctl)
     async def power_mode(self) -> str:

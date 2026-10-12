@@ -551,3 +551,26 @@ def test_the_instructions_leave_room_in_the_context() -> None:
     prompt = build_system_prompt(REGISTRY, WorldSnapshot(windows=()))
     assert len(prompt) / 4 < OllamaSettings().num_ctx * 0.5, len(prompt)
     assert context_full(15_000, 16_384) and not context_full(9_000, 16_384) and not context_full(9_000, 0)
+
+
+def test_stopping_the_music_isnt_stopping_a_program() -> None:
+    stop = _plan(("system.stop_program", {"program": "music"}))
+    [problem] = _problems(stop, REGISTRY, "stop the music")
+    assert "media.control" in problem
+    assert _problems(_plan(("system.stop_program", {"program": "chromium"})), REGISTRY, "kill chromium") == []
+
+
+def test_a_loud_fan_is_the_busy_programs() -> None:
+    """Found on the laptop (dry run): "why is my fan so loud?" was planned as a temperature reading."""
+    temp = _plan(("system.status", {"what": ["temperature"]}))
+    [problem] = _problems(temp, REGISTRY, "why is my fan so loud?")
+    assert "system.processes" in problem
+    assert _problems(temp, REGISTRY, "what's my temperature?") == []
+
+
+def test_getting_rid_of_an_app_isnt_stopping_it() -> None:
+    """Found in the evals (v39): "get rid of <app>" (uninstall) was planned as stopping a program."""
+    stop = _plan(("system.stop_program", {"program": "spotify"}))
+    [problem] = _problems(stop, REGISTRY, "get rid of spotify")
+    assert "packages.remove" in problem
+    assert _problems(stop, REGISTRY, "force quit spotify") == []

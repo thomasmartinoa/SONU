@@ -67,6 +67,10 @@ missing.
 - [ ] by voice: "where are my <files>?" — SONU says the first three with their folders ("… in Documents"), then
   "and N more" (#68)
 
+### Inside the laptop (#72)
+- [ ] "what's using my CPU?" · "why is my fan so loud?" · "what's eating my memory?" · "did anything crash today?"
+- [ ] start something you don't need, then "kill <it>" (asks first; never the desktop's own programs)
+
 ### Music (#65)
 - [ ] "play my music" · "shuffle my music" · "play <artist> from my music" · "pause" · "next song" · "what's
   playing?" · "stop the music"

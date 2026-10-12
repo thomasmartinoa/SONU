@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **156 / 156** on the v38 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **159 / 159** on the v39 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying and two for local music; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music and three for what's inside the laptop; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -390,13 +390,15 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 | #67 | 2026-10-12 | The planner's context 8,192 → 16,384 tokens ([D78](DECISIONS.md)): the instructions (~7,000 tokens) left no room on a busy desktop — measured: ~40 extra windows cut the plan off, ~60 made Ollama drop the start of the prompt; +0.3 GB GPU memory, same planning time; a warning when a prompt fills over 85 %, a test keeping the instructions under half the context; the page reader scales with it. A reliability pass first: the v38 suite five times in a row, 780 / 780 |
 | #68 | 2026-10-12 | Spoken replies said like a person ([D79](DECISIONS.md)): paths as their folder, links as their site, times as "6 PM" / "9 oh 5 AM" (espeak-ng read "tilde slash", every letter of a link, "eighteen zero zero"); a long private list read as its first three and "and N more"; "where are my invoices?" finds "invoice …" files |
 | #69 | 2026-10-12 | "What can you do?" told the truth again: the abilities list small talk uses still said SONU couldn't see the screen or type into apps, and left out files, music, the browser, history, projects, layouts, messages, notifications, the journal, memory and more — rewritten; a test maps every tool to words in it, so a new tool fails until the list mentions it. "can you play my own music?" looked for songs named "own" |
-| #70 | open | One "your own words" check (`grounding.not_own_words`) instead of five copies in the browser, history, file, clipboard and music tools — a copy that drifted could have let a tool act on words the user didn't say |
+| #70 | 2026-10-12 | One "your own words" check (`grounding.not_own_words`) instead of five copies in the browser, history, file, clipboard and music tools — a copy that drifted could have let a tool act on words the user didn't say |
 | #71 | 2026-10-12 | **SONU's HUD** ([D80](DECISIONS.md), the owner chose the full HUD at the top centre): its own Quickshell window sonud starts — listening / thinking / working, the steps as they happen, the result and reply, questions with buttons instead of the picker; the rice's colours; hides after 6 s; a `sonu doctor` line; checked on the laptop with a real request asked on it and answered by a real click |
+| #72 | open | Inside the laptop ([D81](DECISIONS.md)): `system.processes` (the busiest programs, memory, GPU, fans, temperature), `system.problems` (failed services, crashes, errors), `system.stop_program` (your own programs only, never the desktop's core, high risk, SIGTERM only); signalling injected so fakes never signal; planner checks (a loud fan, stop words, removing isn't stopping, music isn't a program); "resume" means play; eval suite v39 (159) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-12 | (D81, dry runs and evals) "why is my fan so loud?" planned as a temperature reading; "kill sonu-nonexistent-program" matched SONU's own process (refused); "get rid of obs studio" became stopping it; "resume song" planned as pause; Claude Code's processes named "2.1.295" | a loud fan is the busy programs; a program must contain the user's words; stopping needs kill / quit / stop / end, removing is packages.remove; the user's word decides play or pause; versioned and interpreter programs named by their process (#72) |
 | 10-12 | "what can you do?" — the list behind it said SONU couldn't see the screen or type into apps (it can since M6) and named none of the newer abilities; "can you play my own music?" → "No songs matching “my own music”" | the list rewritten, a test ties every tool to it; "own" isn't a song's name (#69) |
 | 10-12 | (espeak-ng -x, D79) by voice a file list would be "tilde slash documents …", a link letter by letter, "18:00" "eighteen zero zero"; and "where are my invoices?" found nothing (files named "invoice …") | paths, links and times said like a person; long lists cut to three and "and N more"; plurals match (#68) |
 | 10-12 | (measured, D78) the planner's prompt was 7,095 of 8,192 tokens on a 5-window desktop; ~40 more windows cut the plan's JSON off, ~60 made Ollama silently drop the rules at the start | `[ollama] num_ctx` 16,384 by default; a warning near the limit; a test on the instructions' size (#67) |

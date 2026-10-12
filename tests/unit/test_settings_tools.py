@@ -376,3 +376,23 @@ async def test_bluetooth_device_by_name_and_disconnect(rig: Rig) -> None:
 async def test_bluetooth_device_not_paired(rig: Rig) -> None:
     report, _ = await rig.run(("settings.bluetooth_device", {"device": "speaker"}))
     assert report.lines()[0].startswith("✖ No paired Bluetooth device matches 'speaker' — pair it once")
+
+
+@pytest.mark.anyio
+async def test_resume_means_play_whatever_the_plan_says(rig: Rig) -> None:
+    """Found in the evals (v39): "resume song" was planned as pause."""
+    rig.system.player = "Paused"
+
+    async def run(request: str, action: str) -> TaskReport:
+        engine = Engine(
+            planner=ScriptedPlanner({request: steps_plan(("media.control", {"action": action}))}),
+            registry=ToolRegistry(),
+            ctx=rig.ctx,
+            policy=Policy("confirm-risky"),
+        )
+        return await engine.run(request, confirm=Confirmations(True))
+
+    report = await run("resume song", "pause")
+    assert report.lines() == ["✔ Media playing"] and rig.system.player == "Playing"
+    report = await run("pause the song", "play")
+    assert report.lines() == ["✔ Media paused"] and rig.system.player == "Paused"

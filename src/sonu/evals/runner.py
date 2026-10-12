@@ -382,6 +382,16 @@ async def run_case(
                 (workdir / name).write_text(text)
             desktop = await HyprlandDesktop.connect(fake.instance)
             system = FakeSystem(**case.system)
+            system.proc = (
+                workdir / "proc"
+            )  # a program asked to quit is gone from it; nothing is signalled (D81)
+            for pid, program, ticks in ((4100, "chromium", 900), (4200, "kitty", 40)):
+                running = workdir / "proc" / str(pid)
+                running.mkdir(parents=True, exist_ok=True)
+                (running / "stat").write_text(
+                    f"{pid} ({program}) S 1 1 1 0 -1 0 0 0 0 0 {ticks} 0 0 0 20 0 1 0\n"
+                )
+                (running / "statm").write_text("1000 40000 0 0 0 0 0\n")
             system.trash_dir = workdir / ".local" / "share" / "Trash"  # gio trash (D75)
             fake.on_url = system.page_opened
             mpv = FakeMpv(runtime_dir / "music")  # SONU's own music player (D77)

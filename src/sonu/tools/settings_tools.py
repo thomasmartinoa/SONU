@@ -317,6 +317,15 @@ class MediaControl(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(MediaArgs, args)
+        # Found in the evals (v39): "resume song" was planned as pause. The user's word decides.
+        said = ctx.request_text.casefold()
+        if re.search(r"\b(?:resume|continue|unpause|keep playing)\b", said) and a.action in (
+            "pause",
+            "toggle",
+        ):
+            a = a.model_copy(update={"action": "play"})
+        elif re.search(r"\bpause\b", said) and "unpause" not in said and a.action in ("play", "toggle"):
+            a = a.model_copy(update={"action": "pause"})
         # SONU's own music (D77) needs no playerctl: mpv answers on its socket.
         if (ctx.music is None or not await ctx.music.running()) and (problem := _missing(ctx, "playerctl")):
             return problem

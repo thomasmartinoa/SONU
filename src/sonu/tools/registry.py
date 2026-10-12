@@ -20,6 +20,7 @@ from sonu.tools.everyday_tools import EVERYDAY_TOOLS
 from sonu.tools.file_change_tools import FILE_CHANGE_TOOLS
 from sonu.tools.file_tools import FILE_TOOLS
 from sonu.tools.github_tools import GITHUB_TOOLS
+from sonu.tools.health_tools import HEALTH_TOOLS
 from sonu.tools.history_tools import HISTORY_TOOLS
 from sonu.tools.journal_tools import JOURNAL_TOOLS
 from sonu.tools.layout_tools import LAYOUT_TOOLS
@@ -72,6 +73,7 @@ class ToolRegistry:
             *FILE_CHANGE_TOOLS,
             *CLIPBOARD_TOOLS,
             *MUSIC_TOOLS,
+            *HEALTH_TOOLS,
             *MEDIA_TOOLS,
             *SETTINGS_TOOLS,
             *EVERYDAY_TOOLS,

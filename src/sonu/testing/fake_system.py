@@ -56,6 +56,8 @@ ALL_PROGRAMS = frozenset(
         "git",
         "gio",
         "mpv",
+        "coredumpctl",
+        "journalctl",
     }
 )
 # A repository for `git` in the fake home's projects: on a branch with one commit not pushed, two files
@@ -72,6 +74,16 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 class FakeSystem:
     installed: set[str] = field(default_factory=lambda: set(ALL_PROGRAMS))
     trash_dir: Path | None = None  # gio trash's trash (D75); None: gio trash fails
+    # What went wrong (D81): failed services, crashes (time, program, signal), errors (program, message).
+    failed_units: list[str] = field(default_factory=list)
+    failed_user_units: list[str] = field(default_factory=list)
+    crashed: list[tuple[float, str, int]] = field(default_factory=list)
+    errors: list[tuple[str, str]] = field(default_factory=list)
+    user_errors: list[tuple[str, str]] = field(default_factory=list)
+    gpu_apps: list[tuple[str, int]] = field(default_factory=lambda: [("/usr/bin/ollama", 3600)])
+    signals: list[tuple[int, int]] = field(default_factory=list)  # (pid, signal) asked to quit
+    proc: Path | None = None  # the fake /proc a quit process disappears from
+    stubborn: set[int] = field(default_factory=set)
     speaker: float = 0.5
     speaker_muted: bool = False
     mic: float = 0.8
@@ -306,6 +318,13 @@ class FakeSystem:
 
     def available(self, program: str) -> bool:
         return program in self.installed
+
+    def kill(self, pid: int, sig: int) -> None:
+        """A process asked to quit (D81) — recorded, never sent: the fake /proc's pids are made up. A
+        program in ``stubborn`` ignores it; the others are gone from ``proc`` (when it's set)."""
+        self.signals.append((pid, sig))
+        if self.proc is not None and pid not in self.stubborn:
+            shutil.rmtree(self.proc / str(pid), ignore_errors=True)
 
     async def run(
         self,
@@ -697,6 +716,9 @@ class FakeSystem:
         return 0, f"Running timer as unit: {unit}.timer\n", ""
 
     def _systemctl(self, args: list[str]) -> tuple[int, str, str]:
+        if "--failed" in args:  # D81: services that failed (system, or the user's with --user)
+            units = self.failed_user_units if "--user" in args else self.failed_units
+            return 0, "".join(f"{unit} loaded failed failed {unit}\n" for unit in units), ""
         if args[0] in ("suspend", "reboot", "poweroff"):
             self.power_requests.append(args[0])
             return (
@@ -834,7 +856,23 @@ class FakeSystem:
         return 1, "", f"No target {target} in shell\n"
 
     def _nvidia_smi(self, args: list[str]) -> tuple[int, str, str]:
+        if any(a.startswith("--query-compute-apps") for a in args):
+            return 0, "".join(f"{name}, {mib}\n" for name, mib in self.gpu_apps), ""
         return 0, self.gpu_line + "\n", ""
+
+    def _coredumpctl(self, args: list[str]) -> tuple[int, str, str]:
+        rows = [
+            {"time": int(when * 1e6), "exe": exe, "sig": sig, "pid": 1} for when, exe, sig in self.crashed
+        ]
+        return (0, json.dumps(rows), "") if rows else (1, "", "No coredumps found.\n")
+
+    def _journalctl(self, args: list[str]) -> tuple[int, str, str]:
+        logged = self.user_errors if "--user" in args else self.errors
+        return (
+            0,
+            "".join(json.dumps({"SYSLOG_IDENTIFIER": who, "MESSAGE": text}) + "\n" for who, text in logged),
+            "",
+        )
 
     def _powerprofilesctl(self, args: list[str]) -> tuple[int, str, str]:
         if args == ["get"]:

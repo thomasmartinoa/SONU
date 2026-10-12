@@ -47,6 +47,7 @@ works:
 | Volume and mic, brightness, Bluetooth, Wi-Fi, power mode, battery | ✅ | `wpctl`, `brightnessctl`, `rfkill` + `bluetoothctl`, `nmcli`, `powerprofilesctl`, sysfs |
 | Connect a saved Wi-Fi network, a paired Bluetooth device | ✅ | `nmcli connection up`, `bluetoothctl connect` |
 | CPU, memory, disk, temperature, GPU, uptime: "how's my laptop doing?" | 🧪 this batch | `/proc`, `/sys`, `nvidia-smi` (read-only) |
+| What's busy: "what's using my CPU / memory / GPU?", "why is my fan loud?"; what went wrong: "did anything crash?"; "kill <program>" (asks) | 🧪 #72 | `/proc` (a program's processes together), fans, `nvidia-smi`, `systemctl --failed`, `coredumpctl`, `journalctl`; stopping: your own programs only, never the desktop's core, SIGTERM only ([D81](DECISIONS.md)) |
 | Night light, keep awake, do-not-disturb, clear notifications, lock the screen | 🧪 this batch | the rice's Quickshell switches (`qs ipc call nightlight/caffeine/notifications/lock`) |
 | Reminders and timers: "remind me in 20 minutes to stretch", "at 18:30" | 🧪 this batch | `systemd-run --user` timers that show a notification; checked with `systemctl --user` |
 | List and cancel reminders (`reminders.list`, `reminders.cancel`) | ✅ | `systemctl --user list-timers 'sonu-reminder-*'`; only SONU's own timers are stopped; several matches → you pick |
