@@ -472,10 +472,10 @@ and processes and asks first.
 | Notifications through your shell's notification server (`notify-send`) | M1 | Results and confirmations |
 | `sonud` daemon (systemd user service) + JSON-RPC over `$XDG_RUNTIME_DIR/sonu/sonud.sock` (`0600`, peer-UID check) | M2 | Needed for the journal and voice |
 | Voice: push-to-talk, then "Hey Sonu" wake word; spoken replies | M3 | English |
-| **Bar widget** (Quickshell command module or QML plugin): idle / listening / thinking / acting | M3 | Your bar already loads command modules and QML plugins |
+| **Bar widget** (Quickshell command module or QML plugin): idle / listening / thinking / acting | M3 → the HUD 🧪 #71 | Built as SONU's own HUD instead (D80): its own Quickshell window, so the bar stays the owner's |
 | **MCP server mode** (SONU's safe tools for Claude Code / Codex CLI / Gemini CLI) | M5 | Legit way to use your Claude Pro plan (§2.7) |
 | **MCP client** (import external tools, untrusted by default, policy-wrapped) | M5 | |
-| Overlay panel (Quickshell) showing the live plan + confirm buttons | M3+ | Matches your rice's look via `colors.json` |
+| Overlay panel (Quickshell) showing the live plan + confirm buttons | 🧪 #71 | **The HUD** (D80): top centre; steps as they happen, the result, Yes/No and choices as buttons; the rice's `colors.json` |
 
 SONU also reads (never writes) your rice's defaults in `~/.config/hypr-theme/defaults/` so "open my browser" means
 Zen and "open a terminal" means kitty — implemented in M0 detection, used from M1.

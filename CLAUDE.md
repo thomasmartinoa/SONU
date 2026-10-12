@@ -79,7 +79,8 @@ src/sonu/
                   wake.py ("Hey Sonu"),
                   speech.py (text said like a person: paths, links, times, long lists)
   llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
-  verify/ policy/ audit/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi) integrations/ (rice, OBS,
+  hud/            shell.qml: SONU's HUD (its own Quickshell window; sonud starts it; ui/hud.py writes its state)
+  verify/ policy/ audit/ doctor/ config/ ui/ (notify-send, rofi/fuzzel/wofi, hud.py) integrations/ (rice, OBS,
                   kitty = SONU-owned terminals, run_task = a command's exit code, browser = the extension's sockets,
                   browser_data = history and bookmarks from profile folders, mpv = SONU's music player,
                   claude_code = reading its screen, a11y + a11y_helper = AT-SPI)

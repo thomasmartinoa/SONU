@@ -26,6 +26,13 @@ missing.
 - [ ] **Local music**: put some songs in `~/Music`. Optional: `sudo pacman -S mpv-mpris` so the rice's media keys
   control SONU's music too.
 
+## The HUD (#71)
+
+- [ ] press the SONU key and ask something: the HUD at the top centre shows listening → what you said → each step
+  → the result, then hides
+- [ ] "delete <a file you don't need>" from the key: the question appears with **Yes / No** buttons on the HUD
+- [ ] switch the rice's theme: the HUD follows its colours
+
 ## Try by voice (or typed)
 
 ### Projects and terminals (#52, #53)

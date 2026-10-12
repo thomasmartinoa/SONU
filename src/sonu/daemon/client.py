@@ -212,6 +212,9 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
         for raw in reader:
             message = decode(raw)
             kind = message["type"]
+            if kind == "hud":  # SONU's HUD shows this request: no notification as well (D80)
+                progress = None
+                continue
             if progress is not None:
                 progress.update(message)
             if kind == "plan" and message.get("kind") == "steps" and not as_json:

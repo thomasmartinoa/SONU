@@ -465,3 +465,19 @@ async def test_the_local_music_line(xdg_env: dict[str, str], tmp_path: Path) -> 
     (context.home / ".config" / "mpv" / "scripts" / "mpris.so").write_bytes(b"")
     result = by_id(await check_integrations(context))["integration.music"]
     assert (result.status, result.summary) == ("ok", "2 songs in ~/Music · media keys: on (mpv-mpris)")
+
+
+@pytest.mark.anyio
+async def test_the_hud_line(xdg_env: dict[str, str]) -> None:
+    import dataclasses
+
+    from sonu.config.settings import HudSettings
+    from sonu.doctor.checks import check_integrations
+
+    base = make_context(xdg_env, hypr=None, ollama=None)
+    on = dataclasses.replace(base, which=lambda name: f"/usr/bin/{name}")
+    assert by_id(await check_integrations(on))["integration.hud"].summary.startswith("on — top centre")
+    missing = dataclasses.replace(base, which=lambda name: None)
+    assert by_id(await check_integrations(missing))["integration.hud"].hint == "sudo pacman -S quickshell"
+    off = dataclasses.replace(on, settings=on.settings.model_copy(update={"hud": HudSettings(enabled=False)}))
+    assert by_id(await check_integrations(off))["integration.hud"].summary == "off ([hud] enabled = false)"

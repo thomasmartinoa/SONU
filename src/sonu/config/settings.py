@@ -132,6 +132,13 @@ class JournalSettings(_Section):
     exclude_apps: list[str] = Field(default_factory=list, max_length=50)
 
 
+class HudSettings(_Section):
+    # SONU's HUD (D80): its own Quickshell window at the top centre — listening, thinking, the steps as they
+    # happen, the result, and questions with buttons. sonud starts it when Quickshell (`qs`) is installed.
+    enabled: bool = True
+    hide_after_s: float = Field(default=6.0, ge=1.0, le=120.0)
+
+
 class NotificationsSettings(_Section):
     # "What was that notification?" (D69): sonud keeps the latest notifications in memory only (never on
     # disk), shown and said only to you. Off unless turned on: notifications can carry message previews.
@@ -219,6 +226,7 @@ class Settings(_Section):
     voice: VoiceSettings = VoiceSettings()
     journal: JournalSettings = JournalSettings()
     notifications: NotificationsSettings = NotificationsSettings()
+    hud: HudSettings = HudSettings()
     cloud: CloudSettings = CloudSettings()
     mcp: McpSettings = McpSettings()
 
@@ -348,6 +356,12 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # remember = false
 # keep_minutes = 60
 # exclude_apps = []              # apps never kept, e.g. ["signal"]
+
+[hud]
+# SONU's HUD at the top centre of the screen: what it's doing, each step, and questions with buttons.
+# Its own Quickshell window (your shell is untouched); sonud starts it when `qs` is installed.
+# enabled = true
+# hide_after_s = 6               # after a result
 
 [cloud]
 # Ollama Cloud models, reached through your local Ollama after `ollama signin`. Nothing is sent unless
