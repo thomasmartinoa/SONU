@@ -1409,3 +1409,13 @@ expect_status = ["done"]
 expect_windows = [{ class = "zen", title_contains = "youtube.com/watch" }]
 expect_system = { videos_playing = 1 }
 require_tools = ["media.play"]
+
+# ---- SONU's Control Center (v45)
+[[case]]
+id = "open-sonu-settings"
+request = "open your settings"
+notes = "SONU's own Control Center (D90) — not a system setting."
+expect_status = ["done"]
+expect_windows = [{ class = "org.quickshell", title_contains = "SONU Control Center" }]
+require_tools = ["control.open"]
+forbid_tools = ["settings.volume", "settings.brightness", "apps.launch"]

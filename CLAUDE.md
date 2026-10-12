@@ -83,6 +83,7 @@ src/sonu/
                   wake.py ("Hey Sonu"),
                   speech.py (text said like a person: paths, links, times, long lists)
   llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
+  control/        shell.qml + __init__.py: SONU's Control Center window (`sonu control`, control_tools.py)
   hud/            shell.qml: SONU's HUD (its own Quickshell window; sonud starts it; ui/hud.py writes its state)
   config/         settings.py, catalog.py (what the Control Center may change), editing.py (comments kept, checked)
   verify/ policy/ audit/ doctor/ ui/ (notify-send, rofi/fuzzel/wofi, hud.py) integrations/ (rice, OBS,

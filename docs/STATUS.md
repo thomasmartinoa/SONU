@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **166 / 166** on the v44 suite, twice (2026-10-12, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **167 / 167** on the v45 suite, twice (2026-10-12, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents, one for a briefing, one for research, two for past conversations and one for a correction mid-sentence; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents, one for a briefing, one for research, two for past conversations, one for a correction mid-sentence and one for the Control Center; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -403,7 +403,8 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 | #78 | 2026-10-12 | Sounding like a person ([D87](DECISIONS.md)): SONU decides the tone from the user's words (brief, annoyed, thanking), when the name is said (small talk, once a conversation — removed otherwise), and drops "anything else?" offers after replies; small talk knows the day and time and is cut at a sentence end (40 words) |
 | #79 | 2026-10-12 | Heads-ups ([D88](DECISIONS.md)), opt-in: sonud checks each minute and speaks up once — the battery low (and critical), the disk nearly full (once a day), the CPU staying hot (once an hour); shown on the HUD, said only with `speak = true` and never while another app records the mic (a call), over a fullscreen window or in the quiet hours (a critical battery still is, never during a call); each one in the audit log |
 | #80 | 2026-10-12 | Corrections mid-sentence ([D89](DECISIONS.md)): "open kitty on 3, no, 4", "play lofi on spotify, actually on youtube" — corrected once, before anything reads the words (the model mostly understood; SONU's own word rules didn't); careful: "sorry to bother you", "what's actually using…", "when I say X I mean Y" stay as said; the words as said are in the audit log; also a planner check against "which browser?" for a named tab (an eval failing on main); eval suite v44 (166) |
-| #81 | open | Control Center, part 1 — the backend ([D90](DECISIONS.md)): `sonu settings list / set / models` — 38 settings in five groups without editing the file (comments kept, the whole file checked before writing, 0600); a change that loosens privacy or safety needs an OK; every change audited; sonud restarts in place once idle (the model stays on the GPU — on the laptop: answering again after 1.4 s, same pid, a new socket) |
+| #81 | 2026-10-12 | Control Center, part 1 — the backend ([D90](DECISIONS.md)): `sonu settings list / set / models` — 38 settings in five groups without editing the file (comments kept, the whole file checked before writing, 0600); a change that loosens privacy or safety needs an OK; every change audited; sonud restarts in place once idle (the model stays on the GPU — on the laptop: answering again after 1.4 s, same pid, a new socket) |
+| #82 | open | Control Center, part 2 — the window ([D90](DECISIONS.md)): `sonu control` or "open your settings" (`control.open`) opens SONU's own Quickshell window — Brain, Voice, Proactive, Privacy, Look; switches, choices, model dropdowns with sizes, steppers, text — every change through `sonu settings set` (a loosening one asked in the window first); one window at a time, floating; SONU's screen tools refuse to act in it; eval suite v45 (167) |
 
 ### Found on real hardware → fixed
 

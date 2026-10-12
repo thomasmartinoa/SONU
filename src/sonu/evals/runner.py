@@ -59,6 +59,9 @@ EVAL_APPS: dict[str, FakeApp] = {
     "chromium": FakeApp("chromium", "New Tab - Chromium"),
     "zen-browser": FakeApp("zen", "New Tab - Zen Browser"),
     "kitty": FakeApp("kitty", "zsh"),
+    "qs": FakeApp(
+        "org.quickshell", "SONU Control Center", shows_pages=False
+    ),  # SONU's own Control Center (D90)
     "thunar": FakeApp("Thunar", "Thunar"),
     "imv": FakeApp("imv", "imv"),
     "obs": FakeApp("com.obsproject.Studio", "OBS 32.2.2 - Profile: Untitled"),

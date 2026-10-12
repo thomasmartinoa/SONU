@@ -78,6 +78,11 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### The Control Center (#82)
+- [ ] `sonu control` (or say "open your settings"): Brain, Voice, Proactive, Privacy, Look
+- [ ] switch heads-ups on; Cloud models → allow asks "are you sure?" first — then set it back to never
+- [ ] a keybind for it, if you like: `bind = SUPER, comma, exec, ~/.local/bin/sonu control` (your dotfiles — your step)
+
 ### Settings without the file (#81)
 - [ ] `sonu settings list` — everything you can change, with its value
 - [ ] `sonu settings set heads_up.enabled on` — sonud restarts by itself; `sonu settings set privacy.cloud allow` asks first

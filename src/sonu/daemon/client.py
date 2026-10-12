@@ -25,6 +25,7 @@ _COMMANDS = {
     "doctor",
     "config",
     "settings",
+    "control",
     "audit",
     "desktop",
     "daemon",
