@@ -419,7 +419,9 @@ notifications.
 - apps.launch only opens installed apps. A website (YouTube, GitHub, a link) is web.open; \
 searching one is web.search with the user's own words as the query. If the user named a \
 browser, pass it as browser.
-- "all", "every" or "both" windows means all: true. Otherwise leave all and new_window false.
+- "all", "every" or "both" windows means all: true. "Another / a new / one more <app>" or "a new window" \
+is apps.launch with new_window: true (never a question about which app). Otherwise leave all and \
+new_window false.
 - One step per app or window, in the order the user gave. At most {max_steps} steps.
 - A workspace is a number like 3 unless the user named it.
 - Words like it, that, there, again and the same refer to the recent conversation below (when there is \
@@ -509,6 +511,10 @@ _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 _LOCAL_MUSIC = re.compile(
     r"\bshuffle\b|\b(?:from|in)\s+my\s+(?:music|songs)\b|\bplay\s+my\s+(?:music|songs)\b"
 )
+_COPY_PATH = re.compile(
+    r"\bcopy (?:the )?(?:path|location|full path) (?:of|to) (?:my |the )?(?P<name>[\w .'-]+?)\s*$"
+)
+_ANOTHER = re.compile(r"\b(?:another|one more|a second|a new|new (?:\w+ )?window)\b")
 _ABOUT_US = re.compile(
     r"\b(?:we (?:talk|talked|discuss|discussed|chat|chatted|spoke)|did i (?:ask|tell|say to) you"
     r"|did you (?:tell|say to|answer|find out for) me|you (?:told|said to) me"
@@ -829,6 +835,24 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                         f"step {index + 1} (system.stop_program) is only for 'kill / quit / stop "
                         "<program>' — closing a window is windows.close"
                     )
+    # Found in the evals (v47, after a rule was added): "copy the path of my invoice" planned files.find and
+    # copied nothing. Copying a file's path is clipboard.copy (it finds the file itself).
+    copying = _COPY_PATH.search(said)
+    if copying and "clipboard.copy" not in {step.tool for step in plan.steps}:
+        wanted = json.dumps(
+            {"tool": "clipboard.copy", "args": {"what": "path", "name": copying.group("name")}}
+        )
+        problems.append(f"copying a file's path is one step that finds the file itself — plan {wanted}")
+    # Found on the laptop: "open another browser" was asked "which browser?", and "open one another browser in
+    # workspace 2" moved the open one. "Another / a new / one more" is a new window of that app.
+    if _ANOTHER.search(said):
+        if plan.kind == "ask" and any(
+            word in plan.message.lower() for word in ("which", "browser", "window")
+        ):
+            problems.append('"another / a new <app>" is clear: plan apps.launch with new_window: true')
+        for index, step in enumerate(plan.steps):
+            if step.tool == "apps.launch" and not step.args.get("new_window"):
+                problems.append(f"step {index + 1}: the user asked for another window — set new_window: true")
     # What we talked about (D86) is the conversations, not the journal, memory or the web.
     if _ABOUT_US.search(said):
         tools = {step.tool for step in plan.steps}

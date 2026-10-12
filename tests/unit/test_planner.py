@@ -629,3 +629,34 @@ def test_no_need_to_ask_which_browser_for_a_named_tab() -> None:
     assert (
         _problems(_PlanModel(kind="ask", message="Which tab do you mean?"), REGISTRY, "close the tab") == []
     )
+
+
+def test_another_means_a_new_window() -> None:
+    """Found on the laptop: "open another browser" was asked "which browser?"."""
+    asked = _PlanModel(kind="ask", message="Which browser would you like me to open?")
+    [problem] = _problems(asked, REGISTRY, "i need you to open another browser")
+    assert "new_window: true" in problem
+    plain = _plan(("apps.launch", {"app": "browser", "workspace": 2}))
+    [problem] = _problems(plain, REGISTRY, "open one more browser on workspace 2")
+    assert "new_window: true" in problem
+    assert (
+        _problems(
+            _plan(("apps.launch", {"app": "browser", "new_window": True})), REGISTRY, "open another browser"
+        )
+        == []
+    )
+
+
+def test_copying_a_path_is_one_copy_step() -> None:
+    """Found in the evals (v47): "copy the path of my invoice" planned files.find and copied nothing."""
+    found = _plan(("files.find", {"name": "invoice"}))
+    [problem] = _problems(found, REGISTRY, "copy the path of my invoice")
+    assert '{"tool": "clipboard.copy", "args": {"what": "path", "name": "invoice"}}' in problem
+    assert (
+        _problems(
+            _plan(("clipboard.copy", {"what": "path", "name": "invoice"})),
+            REGISTRY,
+            "copy the path of my invoice",
+        )
+        == []
+    )

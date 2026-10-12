@@ -220,6 +220,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "open-sonu-settings": steps(("control.open", {})),
     "second-try-opens-it": steps(("windows.move", {"window": {"app": "zen"}, "workspace": 4})),
     "second-try-adds-nothing": steps(("windows.close", {"window": {"app": "thunar"}})),
+    "browser-on-a-workspace-is-a-new-one": steps(("apps.launch", {"app": "browser", "workspace": 2})),
+    "another-browser": steps(("apps.launch", {"app": "browser", "new_window": True})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),

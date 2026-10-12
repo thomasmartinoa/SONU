@@ -131,7 +131,7 @@ async def test_misplaced_window_is_moved_and_reported_honestly(harness: Harness)
     report = await harness.engine(two_apps_plan()).run(REQUEST, confirm=Confirmations(False))
     assert report.status == "done"
     assert harness.workspace_of("chromium") == [2]
-    assert "it appeared on 1; moved it" in report.steps[1].outcome.summary
+    assert "it opened on 1, so SONU moved the new window there" in report.steps[1].outcome.summary
 
 
 @pytest.mark.anyio
@@ -881,3 +881,17 @@ async def test_a_second_try_never_redoes_what_worked(harness: Harness) -> None:
     report = await recovering_engine(harness, retry, first).run(MOVE_ZEN, confirm=Confirmations(True))
     assert report.status == "done"
     assert len(harness.fake.windows_of_class("kitty")) == 1  # one kitty, not two
+
+
+@pytest.mark.anyio
+async def test_a_browser_asked_for_on_a_workspace_opens_there_and_leaves_yours(harness: Harness) -> None:
+    """Found on the laptop: "open my browser on workspace 2" moved the open Zen away from workspace 3."""
+    harness.fake.windows = [make_window("0xb1", "zen", "Inbox — Zen Browser", workspace_id=3, stable_id="b1")]
+    plans = {"open my browser on 2": steps_plan(("apps.launch", {"app": "browser", "workspace": 2}))}
+    report = await harness.engine(plans).run("open my browser on 2", confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert harness.workspace_of("zen") == [2, 3]  # a new one on 2; yours still on 3
+    plans = {"open my browser": steps_plan(("apps.launch", {"app": "browser"}))}
+    launched = len(harness.fake.launched)
+    await harness.engine(plans).run("open my browser", confirm=Confirmations(False))
+    assert len(harness.fake.launched) == launched  # no workspace named: the open one is brought up

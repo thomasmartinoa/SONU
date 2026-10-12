@@ -182,11 +182,18 @@ class _LaunchPlan:
     window: Window | None = None
 
 
+def _many_windows(entry: AppEntry) -> bool:
+    """Apps where another window is normal (a browser, a file manager): asked for on a workspace, a new one
+    opens there instead of the open one moving."""
+    return any(kind in entry.categories for kind in ("WebBrowser", "FileManager"))
+
+
 class LaunchApp(Tool):
     name = "apps.launch"
     description = (
         "Open an installed app, optionally on a workspace. If the app is already open, its existing window "
-        "is moved there (or focused) instead, unless new_window is true. Terminals always open a new window."
+        "is moved there (or focused) instead, unless new_window is true. Terminals always open a new window; "
+        "a browser or file manager asked for on another workspace opens a new window there."
     )
     risk = Risk.LOW
     effects = frozenset({Effect.APP_LAUNCH, Effect.WINDOW_MOVE, Effect.WINDOW_FOCUS})
@@ -213,8 +220,15 @@ class LaunchApp(Tool):
         ]
         # A terminal is opened fresh: "open kitty" means another terminal, never the one you're typing in.
         reuse = ctx.settings.apps.reuse_existing and not a.new_window and not _is_terminal(entry)
+        if existing and reuse and target and _many_windows(entry):
+            # Found on the laptop: "open my browser on workspace 2" moved the open Zen away from 3. A browser
+            # or a file manager opens another window where it was asked for; the one you have stays put
+            # (unless one is already there: nothing to open).
+            reuse = any(window.workspace.name == target.value for window in existing)
         if existing and reuse:
-            window = snapshot.by_recency(existing)[0]
+            window = snapshot.by_recency(
+                [w for w in existing if target is None or w.workspace.name == target.value] or existing
+            )[0]
             if target and window.workspace.name != target.value:
                 return Prepared(
                     f"Move the open {entry.name} window to workspace {target.value}",
@@ -324,8 +338,8 @@ class LaunchApp(Tool):
                 return moved
             return outcome_from_checks(
                 [window_exists(snapshot, ref, entry.name), *moved],
-                f"Opened {entry.name} on workspace {plan.target.value} "
-                f"(it appeared on {opened_on}; moved it)",
+                f"Opened a new {entry.name} window on workspace {plan.target.value} "
+                f"(it opened on {opened_on}, so SONU moved the new window there)",
                 f"Opened {entry.name} on workspace {opened_on}, but could not move it to {plan.target.value}",
                 windows=[window.address],
             )
