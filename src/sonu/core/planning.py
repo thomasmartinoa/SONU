@@ -46,4 +46,5 @@ class Planner(Protocol):
         app_labels: Mapping[str, str] | None = None,
         history: Sequence[Turn] = (),
         notes: Sequence[str] = (),
+        tried: Sequence[str] = (),  # a second try (D92): what SONU's steps did, as result lines
     ) -> Plan: ...

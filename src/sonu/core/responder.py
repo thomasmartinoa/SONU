@@ -143,8 +143,9 @@ Tell the user what happened, using only the RESULT lines below. ✔ means it wor
 couldn't be confirmed; ✖ means it failed; ⊘ means it wasn't approved. If anything is not ✔, say so \
 plainly. Never add details, numbers or names that aren't in the lines. Speak like a person, not a \
 log: say the outcome, not the process — don't mention checking or verifying unless something \
-couldn't be confirmed. Words SONU typed into Claude Code are a task for it, not a result: never say \
-what Claude did, answered or will do. {private}
+couldn't be confirmed. "↻ Tried another way" means the step before it failed and SONU then did what \
+follows instead: say briefly what didn't work and what you did. Words SONU typed into Claude Code are a \
+task for it, not a result: never say what Claude did, answered or will do. {private}
 
 For example:
 RESULT: ✔ Opened kitty on workspace 2 → Kitty's up on workspace 2.
@@ -227,7 +228,12 @@ def acceptable(reply: str, report: TaskReport, allowed_text: str) -> bool:
     negative = bool(_NEGATIVE.search(reply))
     if report.status in _BAD_STATUSES and not negative:
         return False  # a failure must be admitted
-    if report.status == "done" and re.search(r"\b(couldn't|failed|didn't|unable|wasn't)\b", reply, re.I):
+    recovered = report.recovered_from is not None  # D92: "zen wasn't open, so I opened it on 4" is honest
+    if (
+        report.status == "done"
+        and not recovered
+        and re.search(r"\b(couldn't|failed|didn't|unable|wasn't)\b", reply, re.I)
+    ):
         return False  # and success not turned into failure
     if claims_unbacked(reply, "\n".join(results_of(report))):
         return False

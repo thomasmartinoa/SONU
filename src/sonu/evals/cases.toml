@@ -1419,3 +1419,21 @@ expect_status = ["done"]
 expect_windows = [{ class = "org.quickshell", title_contains = "SONU Control Center" }]
 require_tools = ["control.open"]
 forbid_tools = ["settings.volume", "settings.brightness", "apps.launch"]
+
+# ---- a second try after a failure (v46)
+[[case]]
+id = "second-try-opens-it"
+request = "move zen to workspace 4"
+notes = "Zen isn't open, so moving it fails; the second try (D92) opens it on workspace 4 — the user's goal."
+windows = []
+expect_status = ["done"]
+expect_windows = [{ class = "zen", workspace = 4 }]
+
+[[case]]
+id = "second-try-adds-nothing"
+request = "close the thunar window"
+notes = "Thunar isn't open: nothing to close. The second try (D92) must not open anything the user didn't ask for."
+windows = []
+expect_status = ["failed", "cannot", "done", "ask"]
+expect_absent = ["Thunar"]
+forbid_tools = ["apps.launch", "dev.folder", "files.open"]

@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### A second try (#85)
+- [ ] with Zen closed: "move zen to workspace 4" — "↻ Tried another way", Zen opens on 4
+- [ ] "close the thunar window" with Thunar closed — nothing gets opened
+
 ### The brain switch (#84)
 - [ ] Control Center → Brain → "For harder requests": same (recommended on this laptop) or deep
 - [ ] a new model you pull: `sonu eval --harder <model> -c complex-three-questions` before switching
