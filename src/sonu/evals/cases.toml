@@ -1437,3 +1437,20 @@ windows = []
 expect_status = ["failed", "cannot", "done", "ask"]
 expect_absent = ["Thunar"]
 forbid_tools = ["apps.launch", "dev.folder", "files.open"]
+
+# ---- found on the owner's test run (v47)
+[[case]]
+id = "browser-on-a-workspace-is-a-new-one"
+request = "open my browser on workspace 2"
+notes = "Found on the laptop: the open Zen on 3 was moved to 2. A new window opens on 2; the open one stays."
+windows = [{ class = "zen", title = "Inbox — Zen Browser", workspace = 3, focused = true }]
+expect_status = ["done"]
+expect_windows = [{ class = "zen", workspace = 2 }, { class = "zen", workspace = 3 }]
+
+[[case]]
+id = "another-browser"
+request = "open another browser"
+notes = "Found on the laptop: SONU asked 'which browser?'. Another one is a new window."
+windows = [{ class = "zen", title = "Inbox — Zen Browser", workspace = 3, focused = true }]
+expect_status = ["done"]
+expect_windows = [{ class = "zen", count = 2 }]

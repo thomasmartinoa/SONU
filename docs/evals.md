@@ -12,7 +12,7 @@ sonu eval --json                       # machine-readable
 sonu eval --cloud                      # also your [cloud] model (Ollama Cloud), planning as SONU will: no titles
 ```
 
-## The cases (v46, 169 cases)
+## The cases (v47, 171 cases)
 
 Defined in [`src/sonu/evals/cases.toml`](../src/sonu/evals/cases.toml). They cover launching (plain, on a workspace,
 by role: "browser", "terminal"), placing two apps on two workspaces, moving windows by app / focus / title, switching
@@ -134,6 +134,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-10-11 | `qwen3.5:4b` | v34: + `find-a-page-in-history`, `open-a-bookmark` (D73, a fake Zen profile in the fake home) | **147 / 147**, twice (~1.1 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v35: + `open-a-file-by-name`, `find-a-file` (D74, two older files in the fake home) | **149 / 149**, twice (~1.1 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v36: + `move-a-file`, `rename-a-file`, `delete-the-last-download` (D75, a fake `gio trash`) | **152 / 152**, twice (~1.0 s mean) | — |
+| 2026-10-13 | `qwen3.5:4b` | v47: + `browser-on-a-workspace-is-a-new-one`, `another-browser` (D95); `copy-a-files-path` slipped after the new rule — a planner check | **171 / 171**, twice | — |
 | 2026-10-12 | `qwen3.5:4b` | v46: + `second-try-opens-it`, `second-try-adds-nothing` (D92) | **169 / 169**, twice | — |
 | 2026-10-12 | `qwen3.5:4b` + `qwen3.5:9b` for harder requests (`--harder`, D91) | v45, the 12 hard cases | 11 / 12, 15.5 s a plan (4b alone: 12 / 12, 1.8 s) | complex-three-questions |
 | 2026-10-12 | `qwen3.5:4b` | v45: + `open-sonu-settings` (D90) | **167 / 167**, twice | — |
