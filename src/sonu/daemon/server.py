@@ -70,6 +70,7 @@ from sonu.tools.base import Choices, Risk, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 from sonu.ui.desktop_ui import Picker
+from sonu.ui.hud import Hud, hud_chooser, hud_confirmer, hud_folder
 from sonu.voice.audio import RECORD_ARGV, Endpointing
 from sonu.voice.echo import SINK as ECHO_SINK
 from sonu.voice.echo import EchoCanceller
@@ -102,8 +103,11 @@ class _Session:
     reader: asyncio.StreamReader
     writer: asyncio.StreamWriter
     answers: dict[int, asyncio.Future[Any]]
+    hud: Hud | None = None  # the HUD shows the same progress (D80)
 
     async def send(self, message: dict[str, Any]) -> None:
+        if self.hud is not None:
+            self.hud.feed(message)
         self.writer.write(encode(message))
         await self.writer.drain()
 
@@ -115,8 +119,12 @@ class _DesktopSession:
     def __init__(self, progress: Progress | None) -> None:
         self.progress = progress
         self.answers: dict[int, asyncio.Future[Any]] = {}
+        self.hud: Hud | None = None
 
     async def send(self, message: dict[str, Any]) -> None:
+        if self.hud is not None:
+            self.hud.feed(message)
+            return  # the HUD shows it: no notification as well
         if self.progress is not None:
             await asyncio.to_thread(self.progress.update, message)
 
@@ -273,6 +281,8 @@ class Daemon:
             NotificationLog(notes.keep_minutes, notes.exclude_apps) if notes.remember else None
         )
         self._watching: asyncio.Task[None] | None = None
+        # SONU's HUD (D80), started in start(); None: turned off or no Quickshell
+        self.hud: Hud | None = None
 
     # -------------------------------------------------------------- lifetime
     async def start(self, path: Path | None = None) -> Path:
@@ -289,6 +299,14 @@ class Daemon:
             self._journaling = asyncio.create_task(self.keep_journal())
         if self.notifications is not None:
             self._watching = asyncio.create_task(watch_notifications(self.notifications, self.env))
+        if self.settings.hud.enabled and self.env.get("WAYLAND_DISPLAY"):  # a desktop to show it on
+            hud = Hud(hud_folder(self.env), self.settings.hud.hide_after_s)
+            try:
+                started = await hud.start(env=self.env)
+            except OSError as exc:
+                logger.warning("SONU's HUD didn't start: %s", exc)
+                started = False
+            self.hud = hud if started else None
         return path
 
     def _journal_instance(self) -> HyprlandInstance:
@@ -359,6 +377,8 @@ class Daemon:
     async def stop(self) -> None:
         if self._warming is not None:
             self._warming.cancel()
+        if self.hud is not None:
+            await self.hud.stop()
         for task in (self._journaling, self._watching):
             if task is not None:
                 task.cancel()
@@ -423,6 +443,10 @@ class Daemon:
             return
         relay = _Relay(session, self.model)
         mode = request.get("confirm", "terminal")
+        if self.hud is not None:
+            session.hud = self.hud
+            if mode == "gui" and isinstance(session, _Session):
+                await session.send({"type": "hud"})  # the key's client: the HUD shows it, no notification
         confirm, choose = self._askers(session, relay, mode)
         if request["type"] != "listen":
             report = await self._run(
@@ -497,6 +521,8 @@ class Daemon:
         request: dict[str, Any],
     ) -> TaskReport | None:
         """One request through the engine, streaming progress; None if the client went away."""
+        if session.hud is not None:
+            session.hud.begin(text)
 
         async def run() -> TaskReport:
             return await engine.run(
@@ -580,7 +606,16 @@ class Daemon:
             if request.risk is Risk.HIGH:
                 await voice.say(f"This one needs your OK on screen: {request.description}.")
                 return bool(await physical(request))
-            return await voice.confirm_by_voice(request)
+            if session.hud is not None:
+                session.hud.show(
+                    state="asking",
+                    question={"id": 0, "text": f"{request.description}?", "note": "Say yes or no"},
+                )
+            try:
+                return await voice.confirm_by_voice(request)
+            finally:
+                if session.hud is not None:
+                    session.hud.show(state="acting", question=None)
 
         return confirm
 
@@ -630,6 +665,8 @@ class Daemon:
             return confirm, choose
         from sonu.cli.ask_cmd import gui_chooser, gui_confirmer  # the same dialogs the CLI uses
 
+        if mode == "gui" and self.hud is not None:
+            return hud_confirmer(self.hud), hud_chooser(self.hud)  # buttons on SONU's HUD (D80)
         picker = Picker.detect() if mode == "gui" else None
         if picker is None:
 

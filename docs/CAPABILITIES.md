@@ -109,6 +109,10 @@ works:
 
 | Ability | State | How |
 |---|---|---|
+| **The HUD**: a window at the top centre while SONU works — listening, thinking, each step as it happens, the result and reply; questions with Yes / No or the choices as buttons | 🧪 #71 | SONU's own Quickshell window (your shell untouched), your rice's colours; sonud starts it; `[hud]` in the config ([D80](DECISIONS.md)) |
+
+| Ability | State | How |
+|---|---|---|
 | Faster replies: the model stays loaded, `sonu` hands requests to the daemon (~0.8 s instead of 1.6–2.5 s) | ✅ M2 part 1 | `sonud` (`sonu daemon install`), a thin client |
 | Natural replies after everything ("Kitty's up on workspace 2.", "I couldn't find a recipes folder…"), small talk, one conversation ("move **it** to 4", "play it again") | ✅ M2 part 2 | a reply written from the verified results and checked in code; the last few turns go to the planner |
 | "Remember …": what an app name means ("when I say editor I mean Visual Studio Code"), your name ("call me …"), notes; "what do you remember?", "forget …" | ✅ M2 part 3 | a local memory file; aliases feed the app resolver |

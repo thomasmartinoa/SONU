@@ -600,3 +600,31 @@ async def test_notifications_are_kept_only_when_turned_on(short_tmp: Path, xdg_e
     daemon = Daemon(on, SonuPaths.from_env(xdg_env), xdg_env, ollama_transport=ollama.transport)
     assert daemon.notifications is not None
     assert not daemon.notifications.add("Signal", "Carol", "hi")
+
+
+@pytest.mark.anyio
+async def test_from_the_desktop_the_hud_asks_and_shows(rig: Rig, short_tmp: Path) -> None:
+    """D80: with SONU's HUD on, a request with no terminal asks there (buttons), not in the picker, and the
+    key's client shows no notification of its own."""
+    from sonu.ui.hud import Hud
+
+    hud = Hud(short_tmp / "hud")
+    rig.daemon.hud = hud
+
+    async def click_yes() -> None:
+        for _ in range(100):
+            await asyncio.sleep(0.05)
+            state = json.loads(hud.state_file.read_text()) if hud.state_file.exists() else {}
+            if state.get("state") == "asking" and state.get("question", {}).get("options"):
+                hud.answer_file.write_text(json.dumps({"id": state["question"]["id"], "value": True}))
+                return
+
+    clicking = asyncio.ensure_future(click_yes())
+    code, out = await rig.run("--confirm", "gui", "close", "zen")
+    await clicking
+    assert code == 0 and "✔ Closed zen" in out
+    assert not rig.fake.windows_of_class("zen")
+    shown = json.loads(hud.state_file.read_text())
+    assert shown["state"] == "done" and shown["request"] == "close zen"
+    assert shown["steps"] == [{"text": "Closed zen", "status": "done"}]
+    assert rig.notices == []  # the HUD showed it: no notification as well

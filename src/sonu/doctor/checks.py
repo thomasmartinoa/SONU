@@ -923,6 +923,20 @@ async def _browser_result(ctx: DoctorContext) -> CheckResult:
 _MPRIS_PLUGIN = ("/etc/mpv/scripts/mpris.so", ".config/mpv/scripts/mpris.so")
 
 
+def _hud_result(ctx: DoctorContext) -> CheckResult:
+    """SONU's HUD (D80): sonud starts it (its own Quickshell window) when it's on and `qs` is installed."""
+    check_id, group, title = "integration.hud", "Integrations", "HUD"
+    if not ctx.settings.hud.enabled:
+        return CheckResult(check_id, group, title, "info", "off ([hud] enabled = false)")
+    if not ctx.which("qs"):
+        return CheckResult(
+            check_id, group, title, "info", "Quickshell isn't installed", hint="sudo pacman -S quickshell"
+        )
+    return CheckResult(
+        check_id, group, title, "ok", "on — top centre: what SONU is doing, each step, questions with buttons"
+    )
+
+
 def _music_result(ctx: DoctorContext) -> CheckResult:
     """Local music (D77): mpv, how many songs are in the music folder, and the optional media-keys plugin."""
     check_id, group, title = "integration.music", "Integrations", "Local music"
@@ -946,6 +960,7 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
     mcp = _mcp_result(ctx)
     browser = await _browser_result(ctx)
     music = _music_result(ctx)
+    hud = _hud_result(ctx)
     info = detect_hypr_theme(ctx.home)
     if not info.detected:
         return [
@@ -959,6 +974,7 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
             mcp,
             browser,
             music,
+            hud,
         ]
     parts = []
     if info.theme_dir_present:
@@ -998,6 +1014,7 @@ async def check_integrations(ctx: DoctorContext) -> list[CheckResult]:
         mcp,
         browser,
         music,
+        hud,
     ]
 
 
