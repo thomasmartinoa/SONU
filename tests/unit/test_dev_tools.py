@@ -26,7 +26,7 @@ from sonu.testing.fake_apps import write_desktop_files
 from sonu.testing.fake_hyprland import FakeApp, FakeHyprland, make_window
 from sonu.testing.fake_planner import ScriptedPlanner, steps_plan
 from sonu.testing.fake_system import FakeSystem
-from sonu.tools.base import Risk
+from sonu.tools.base import Risk, StepStatus
 from sonu.tools.context import ToolContext
 from sonu.tools.registry import ToolRegistry
 
@@ -367,3 +367,16 @@ def test_the_written_prompt_is_tidied() -> None:
     from sonu.core.prompt_writer import tidy
 
     assert tidy("```\n## Goal\n**Build** a todo app.\n```") == "Goal\nBuild a todo app."
+
+
+@pytest.mark.anyio
+async def test_no_folder_named_asks_with_your_projects(rig: Rig) -> None:
+    """Found on the laptop: "open a terminal and Claude Code in it" failed with "Which folder?"."""
+    for name in ("SONU", "blog"):
+        (rig.home / "dev_works" / name / ".git").mkdir(parents=True, exist_ok=True)
+    report = await rig.run("open claude code", ("dev.claude_open", {}))
+    outcome = report.steps[0].outcome
+    assert outcome.status is StepStatus.NEEDS_INPUT and outcome.choices is not None
+    picks = [Path(option.value) for option in outcome.choices.options]
+    assert set(picks[:2]) == {rig.home / "dev_works" / "SONU", rig.home / "dev_works" / "blog"}
+    assert picks[-1] == rig.home  # and your home folder, last

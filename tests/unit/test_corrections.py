@@ -34,6 +34,9 @@ from sonu.tools.registry import ToolRegistry
         ("set volume to 3, no, 4, sorry, 5", "set volume to 5"),
         ("remind me at 5, no, 6 to call mom", "remind me at 6 to call mom"),
         ("open the browser, I mean the terminal", "open the terminal"),
+        # found on the laptop: Whisper wrote the correction after a full stop, with "no" twice
+        ("Open kitty on Workspace 4. No, no. 5.", "Open kitty on Workspace 5."),
+        ("set the volume to 30. Sorry, 40", "set the volume to 40"),
     ],
 )
 def test_a_correction_is_applied(said: str, meant: str) -> None:
@@ -49,6 +52,8 @@ def test_a_correction_is_applied(said: str, meant: str) -> None:
         "open kitty, sorry to bother you",
         "no, open kitty",
         "is it raining, no idea",
+        "is it raining? No idea.",
+        "open kitty. No, I'm fine.",
         "open zen, actually",
         "turn off wifi, no wait",
         "open kitty",

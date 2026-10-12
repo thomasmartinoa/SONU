@@ -142,3 +142,14 @@ async def test_words_left_out_of_the_plan_come_from_the_request(rig: Rig) -> Non
     report = await rig.run("copy the path of the SONU readme", {"what": "path", "name": "the SONU readme"})
     assert report.status == "done", lines(report)
     assert rig.system.clipboard_text == str(readme)
+
+
+def test_the_name_stops_at_the_next_step() -> None:
+    """Found on the laptop: "copy the path of parking notes then paste it in somewhere" looked for a file
+    named "parking notes then paste it in somewhere"."""
+    from sonu.tools.clipboard_tools import _name_said
+
+    assert _name_said("Copy the path of parking notes then paste it in somewhere") == "parking notes"
+    assert _name_said("Copy the path of my room and paste it somewhere") == "my room"
+    assert _name_said("copy hello from sonu, then open kitty") == "hello from sonu"
+    assert _name_said("copy salt and pepper") == "salt and pepper"  # a plain "and" is part of it

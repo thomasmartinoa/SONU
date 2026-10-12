@@ -69,6 +69,21 @@ def _names(folder: Path, place: str) -> bool:
     return bool(wanted) and have[-len(wanted) :] == wanted
 
 
+def _recent_projects(home: Path, limit: int = 5) -> list[Path]:
+    """Folders with a git repository one or two levels below home (``~/x``, ``~/dev_works/x``), newest
+    first."""
+    found: list[Path] = []
+    for pattern in ("*/.git", "*/*/.git"):
+        found += [git.parent for git in home.glob(pattern) if not git.parent.name.startswith(".")]
+    found = [
+        path
+        for path in dict.fromkeys(found)
+        if not any(p.startswith(".") for p in path.relative_to(home).parts)
+    ]
+    found.sort(key=lambda path: (path / ".git").stat().st_mtime, reverse=True)
+    return found[:limit]
+
+
 def _pick_folder(ctx: ToolContext, place: str | None, choice: str | None) -> Path | ToolOutcome:
     """The folder the user means: their words, the folder this task made, or the one they picked."""
     home = ctx.system.home
@@ -83,7 +98,15 @@ def _pick_folder(ctx: ToolContext, place: str | None, choice: str | None) -> Pat
     if task is not None and (not place or _names(task, place)):
         return task
     if not place:
-        return ToolOutcome(StepStatus.FAILED, "Which folder? Say its name (“open Claude Code in shop-app”)")
+        # Found on the laptop: "open a terminal and Claude Code in it" failed with "Which folder?". A question
+        # with the likely answers instead: your recent projects, and your home folder.
+        options = tuple(Choice(_where(ctx, path), str(path)) for path in [*_recent_projects(home), home])
+        return ToolOutcome(
+            StepStatus.NEEDS_INPUT,
+            "Which folder?",
+            question="Open Claude Code in which folder?",
+            choices=Choices("Open Claude Code in which folder?", options),
+        )
     found = find_folders(place, home)
     if not found:
         return ToolOutcome(

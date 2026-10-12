@@ -466,3 +466,12 @@ async def test_notifications_are_cleared_only_when_the_user_says_so(rig: Rig) ->
     report = await rig.run("turn the night light off", ("desktop.shell", {"action": "clear_notifications"}))
     assert report.lines() == ["✖ You didn't ask to clear your notifications — none cleared"]
     assert rig.system.notifications == 3
+
+
+@pytest.mark.anyio
+async def test_a_locale_warning_isnt_read_as_the_switchs_state(rig: Rig) -> None:
+    """Found on the laptop: from the SONU key, "keep my laptop awake" failed — Quickshell's locale warning was
+    read as the switch's state."""
+    rig.system.qs_locale_warning = True
+    report = await rig.run("keep my laptop awake", ("desktop.shell", {"action": "keep_awake_on"}))
+    assert report.lines() == ["✔ Keep awake is on"]

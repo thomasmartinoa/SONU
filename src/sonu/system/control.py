@@ -179,6 +179,19 @@ def parse_audio_streams(text: str) -> list[AudioStream]:
     return streams
 
 
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_QS_LOG = re.compile(r"^\s*(?:DEBUG|INFO|WARN|ERROR|FATAL)\s*:", re.IGNORECASE)
+
+
+def shell_answer(output: str) -> str:
+    """What a ``qs ipc call`` returned, without Quickshell's own log lines (found on the laptop: from the SONU
+    key "keep my laptop awake" read "WARN: Detected locale "C" …" as the switch's state and failed)."""
+    # The answer is one value, printed last; a warning can run over several lines before it.
+    lines = [_ANSI.sub("", line).strip() for line in output.splitlines()]
+    answers = [line for line in lines if line and not _QS_LOG.match(line)]
+    return answers[-1] if answers else ""
+
+
 def parse_mic_users(text: str) -> list[str]:
     """``pw-dump`` (JSON) → the apps recording the microphone right now (a call, OBS) — never SONU itself:
     its ``pw-record`` and its echo canceller's capture (found on the laptop: "echo-cancel-capture",
@@ -760,7 +773,7 @@ class SystemControl:
         """``qs ipc call target function`` → its return value (the rice's own switches)."""
         if not (_SHELL_WORD.match(target) and _SHELL_WORD.match(function)):
             raise CommandError(f"Not a shell switch: {target}.{function}")
-        return (await self._run("qs", "ipc", "call", target, function)).stdout.strip()
+        return shell_answer((await self._run("qs", "ipc", "call", target, function)).stdout)
 
     # ------------------------------------------------------------------ laptop health (read-only)
     def _cpu_times(self) -> tuple[int, int]:
