@@ -83,8 +83,8 @@ missing.
 - [ ] Control Center → Brain: Cloud provider = openrouter, Cloud model = a `:free` model, Cloud models = allow (asks), Use the cloud for = planning — then a long request plans in the cloud (`sonu audit tail` shows cloud.send)
 - [ ] read [MODELS.md](MODELS.md) for which model fits which job
 
-### The new HUD (#86)
-- [ ] press the SONU key: the rings breathe while it listens, spin while it thinks, the arc fills with the steps
+### The new HUD (#86, #89)
+- [ ] press the SONU key: the island's bars bounce while it listens, the glow sweeps its edge while it works, dots fill with the steps
 - [ ] a long answer: the HUD stays until SONU stops talking, then hides a few seconds later
 
 ### A second try (#85)
