@@ -25,7 +25,7 @@ Laptop, 8 GB); everything else is cited and marked when it comes from a vendor. 
 | Reading (pages, documents, research) | **A lot** — and more text fits than the 4B's 16k context | `[cloud] use_for` "reading" |
 | Prompts for Claude Code | **A lot** | `[cloud] use_for` "prompts" |
 | Seeing the screen | **A lot** — small local vision models misread screens | `[cloud] use_for` "vision", `vision_provider` |
-| Hearing | Depends on your accent | `[voice] stt_model` (cloud: next PR) |
+| Hearing | Depends on your accent | `[voice] stt_model` (local), `[voice] hearing` (sarvam, groq, gemini) |
 | Speaking | Style only (Indian English voices) | `[voice] voice` (cloud: next PR) |
 
 ## Measured on the laptop (planning, SONU's eval suite)

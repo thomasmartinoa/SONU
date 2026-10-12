@@ -45,6 +45,8 @@ BUILT_IN: dict[str, Provider] = {
     "groq": Provider("groq", "openai", "https://api.groq.com/openai/v1", "Groq"),
     "openrouter": Provider("openrouter", "openai", "https://openrouter.ai/api/v1", "OpenRouter"),
     "omniroute": Provider("omniroute", "openai", "http://127.0.0.1:20128/v1", "OmniRoute (on this laptop)"),
+    # Hearing (D96) and voices: Indian English and Hinglish — not a brain
+    "sarvam": Provider("sarvam", "sarvam", "https://api.sarvam.ai", "Sarvam"),
 }
 
 

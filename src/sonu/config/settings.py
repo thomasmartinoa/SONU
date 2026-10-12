@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 AutonomyMode = Literal["suggest", "confirm-each", "confirm-risky", "trusted"]
 CloudPolicy = Literal["never", "ask", "allow"]
-CloudUse = Literal["prompts", "planning", "vision", "reading", "replies"]
+CloudUse = Literal["prompts", "planning", "vision", "reading", "replies", "hearing"]
 
 
 class _Section(BaseModel):
@@ -109,6 +109,11 @@ class AuditSettings(_Section):
 class VoiceSettings(_Section):
     # Speech recognition: "large-v3-turbo" (best with accents and noise) or "small.en" (lighter).
     stt_model: str = Field(default="large-v3-turbo", pattern=r"^[A-Za-z0-9._-]{1,60}$")
+    # Who hears your requests (D96): "local" (Whisper above), or "sarvam" (Indian English, Hinglish), "groq"
+    # (Whisper large-v3, hosted), "gemini" — only with [privacy] cloud = "allow" and "hearing" in
+    # [cloud] use_for. "Hey Sonu", talking over SONU and a spoken password always stay local.
+    hearing: Literal["local", "sarvam", "groq", "gemini"] = "local"
+    hearing_model: str = Field(default="", max_length=80)  # "": the provider's best (saaras:v4, …)
     device: Literal["cuda", "cpu"] = "cuda"
     # SONU's voice (Kokoro): af_heart, af_bella, am_michael, bm_george, … — `sonu voice test` to hear one.
     voice: str = Field(default="af_heart", pattern=r"^[a-z]{2}_[a-z]{1,20}$")
@@ -185,7 +190,7 @@ class ProviderSettings(_Section):
     """A cloud provider for SONU's brains (D94). Anthropic, Gemini, Groq, OpenRouter and OmniRoute are built
     in; this adds another (or changes one): any service with the OpenAI chat API is `kind = "openai"`."""
 
-    kind: Literal["anthropic", "gemini", "openai"] = "openai"
+    kind: Literal["anthropic", "gemini", "openai", "sarvam"] = "openai"
     base_url: str = Field(min_length=8, max_length=300, pattern=r"^https?://")
     label: str = Field(default="", max_length=40)
     # Where its API key is: "keyring" (`sonu settings key <name>`), "env:NAME", or "none" (a local gateway).
@@ -206,7 +211,8 @@ class CloudSettings(_Section):
     # vision  : screenshots for "what's on my screen?" and clicking by looking — anything visible goes
     # reading : summaries of pages, documents and research (their text goes) (D94)
     # replies : the sentence SONU says back (your words and the results go; never a private result) (D94)
-    use_for: list[CloudUse] = Field(default_factory=lambda: list(_DEFAULT_CLOUD_USES), max_length=5)
+    # hearing : what you say after the SONU key or "Hey Sonu" — the audio goes ([voice] hearing) (D96)
+    use_for: list[CloudUse] = Field(default_factory=lambda: list(_DEFAULT_CLOUD_USES), max_length=6)
     # hard: requests with several parts, `sonu --deep`, and ones the local model couldn't plan; always: all
     plan: Literal["hard", "always"] = "hard"
     think: bool = False
@@ -293,6 +299,12 @@ class Settings(_Section):
         ):
             if name not in known:
                 raise ValueError(f"[cloud] {field} = {name!r}: not a provider ({', '.join(sorted(known))})")
+            own = self.providers.get(name)
+            kind = own.kind if own else BUILT_IN[name].kind if name in BUILT_IN else ""
+            if kind == "sarvam":
+                raise ValueError(
+                    f"[cloud] {field} = {name!r}: Sarvam is for hearing and voices, not SONU's brain"
+                )
         return self
 
 
@@ -402,6 +414,8 @@ DEFAULT_CONFIG_TEMPLATE = """\
 [voice]
 # Talking to SONU needs the voice extra and `sonu voice setup` (downloads the models).
 # stt_model = "large-v3-turbo"   # or "small.en" (lighter)
+# hearing = "local"                    # local | sarvam | groq | gemini (cloud: "hearing" in [cloud] use_for)
+# hearing_model = ""                    # "": the provider's best (saaras:v4, whisper-large-v3-turbo, …)
 # device = "cuda"
 # voice = "af_heart"             # `sonu voice test` to hear the others
 # speed = 1.0

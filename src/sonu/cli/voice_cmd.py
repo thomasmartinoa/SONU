@@ -105,18 +105,26 @@ def voice_status(ctx: typer.Context) -> None:
 def voice_check(
     ctx: typer.Context,
     model: list[str] = typer.Option(  # noqa: B008
-        ["large-v3-turbo", "large-v3"], "--model", "-m", help="Speech models to compare (repeatable)."
+        ["large-v3-turbo", "large-v3"],
+        "--model",
+        "-m",
+        help="Speech models to compare (repeatable): Whisper sizes, or sarvam / groq / gemini (their key).",
     ),
 ) -> None:
     """Read ten short requests aloud; SONU shows how well each speech model hears you. Nothing is kept."""
     import gc
     import os
     import time
+    from typing import Any
 
+    from sonu.audit.log import AuditLog
     from sonu.daemon.server import speech_hint
     from sonu.desktop.apps.catalog import AppCatalog
+    from sonu.llm.providers import lookup_key
+    from sonu.runtime import provider_for
     from sonu.voice.accuracy import SENTENCES, Score, word_errors
     from sonu.voice.audio import Endpointing, record
+    from sonu.voice.cloud_ears import HEARING, CloudEars, CloudHearingError
     from sonu.voice.engines import WhisperEars, silero_detector
 
     state = get_state(ctx)
@@ -147,18 +155,32 @@ def voice_check(
 
     scores: list[Score] = []
     for name in model:
-        typer.echo(f"\n… listening back with {name} (the first time, it downloads the model)")
-        ears = WhisperEars(name, state.settings.voice.device)
-        try:
-            ears.load()
-        except VoiceUnavailable as exc:
-            typer.echo(f"✖ {exc}", err=True)
-            continue
+        ears: Any
+        if name in HEARING:  # a cloud service (D96): only these test sentences go, nothing else
+            provider = provider_for(state.settings, name)
+            ears = CloudEars(
+                provider, lookup_key(provider, os.environ), audit=AuditLog(state.paths.audit_file)
+            )
+            typer.echo(f"\n… listening back with {ears.name} (the test sentences go to it)")
+        else:
+            typer.echo(f"\n… listening back with {name} (the first time, it downloads the model)")
+            ears = WhisperEars(name, state.settings.voice.device)
+            try:
+                ears.load()
+            except VoiceUnavailable as exc:
+                typer.echo(f"✖ {exc}", err=True)
+                continue
         score = Score(name)
         for sentence, audio in recordings:
             started = time.perf_counter()
-            heard = ears.transcribe(audio, hint)
+            try:
+                heard = ears.transcribe(audio, hint)
+            except CloudHearingError as exc:
+                typer.echo(f"✖ {exc}", err=True)
+                break
             score.add(sentence, heard, time.perf_counter() - started)
+        if len(score.heard) < len(recordings):
+            continue
         scores.append(score)
         del ears
         gc.collect()  # one model on the GPU at a time

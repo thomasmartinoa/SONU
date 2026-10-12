@@ -67,15 +67,21 @@ class VoiceSession:
     _talking: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
     # Told when SONU starts and stops talking (the HUD stays up until it's done — found on the laptop).
     speaking: Callable[[bool], None] | None = None
+    # Who hears the user's requests (D96): a cloud service, when chosen and allowed. None: the local ears.
+    # "Hey Sonu", talking over SONU and a spoken password always use the local ears.
+    request_ears: Any = None
 
-    async def hear(self, endpointing: Endpointing | None = None, *, hint: str | None = None) -> str:
+    async def hear(
+        self, endpointing: Endpointing | None = None, *, hint: str | None = None, local: bool = False
+    ) -> str:
         """Record until the user stops talking; their words ("" if nothing was said). ``hint``: instead
-        of the usual one ("" for a password, so app names can't bend it)."""
+        of the usual one ("" for a password, so app names can't bend it). ``local``: never the cloud."""
         utterance = await self.recorder(endpointing, self.detector)
         if not utterance.spoke:
             return ""
+        ears = self.ears if local or self.request_ears is None else self.request_ears
         return await asyncio.to_thread(
-            self.ears.transcribe, utterance.audio(), self.hint if hint is None else hint
+            ears.transcribe, utterance.audio(), self.hint if hint is None else hint
         )
 
     async def hear_secret(self, prompt: str) -> str | None:
@@ -83,7 +89,10 @@ class VoiceSession:
         screen, the audit log, the conversation or a model. The period Whisper ends a sentence with and the
         spaces between spoken parts are dropped."""
         await self.say(prompt)
-        heard = await self.hear(Endpointing(start_timeout_s=10.0, silence_s=1.0, max_s=15.0), hint="")
+        # a password is never sent anywhere — only this laptop hears it (D96)
+        heard = await self.hear(
+            Endpointing(start_timeout_s=10.0, silence_s=1.0, max_s=15.0), hint="", local=True
+        )
         secret = (
             heard.strip().removesuffix(".").replace(" ", "")
         )  # Whisper's sentence period; "!" may be real
