@@ -340,6 +340,8 @@ file, "screenshot" for the last screenshot, "link" for this page's link, "text" 
 (by cpu, memory or gpu); "did anything crash? / any errors?" is system.problems; "kill / force quit / stop \
 <program>" is system.stop_program (closing an app's window is windows.close; stopping music or a recording \
 is media.control or obs.record).
+- "Brief me", "catch me up", "what's my day like?", "what did I miss?", "morning briefing" is \
+system.briefing (a plain "good morning" is just a greeting).
 - Suspend (sleep), restart, shut down and log out are system.power, always the last step.
 - Recording the screen is obs.record (OBS Studio); OBS scenes are obs.scene; streaming, the \
 virtual camera and the replay buffer are obs.control; muting a source in OBS is obs.mute; "is OBS \

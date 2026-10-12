@@ -123,3 +123,23 @@ async def test_nobody_answers(tmp_path: Path) -> None:
     hud = Hud(tmp_path / "hud")
     assert await hud.ask("Go ahead?", [("Yes", True), ("No", False)], timeout_s=0.3) is None
     assert state(hud)["question"] is None
+
+
+@pytest.mark.anyio
+async def test_progress_that_arrives_late_doesnt_hide_the_question(tmp_path: Path) -> None:
+    """Found by a flaky test (#74): a "step started" sonud had queued arrived while the question was open,
+    switched the HUD to "working", and the buttons went — nobody could answer."""
+    hud = Hud(tmp_path / "hud")
+    hud.begin("close zen")
+
+    async def late_progress_then_click() -> None:
+        await asyncio.sleep(0.15)
+        hud.feed({"type": "step_start", "description": "Close zen"})
+        hud.feed({"type": "plan", "kind": "steps", "steps": 1})
+        assert state(hud)["state"] == "asking" and state(hud)["question"]["options"]
+        hud.answer_file.write_text(json.dumps({"id": state(hud)["question"]["id"], "value": True}))
+
+    task = asyncio.ensure_future(late_progress_then_click())
+    assert await hud.ask("Close zen?", [("Yes", True), ("No", False)], timeout_s=3) is True
+    await task
+    assert state(hud)["state"] == "acting" and state(hud)["question"] is None

@@ -52,6 +52,7 @@ class Hud:
         self.seq = 0
         self._ids = itertools.count(1)
         self._process: asyncio.subprocess.Process | None = None
+        self._after_question: str | None = None
 
     @property
     def state_file(self) -> Path:
@@ -104,8 +105,23 @@ class Hud:
             logger.debug("the HUD's state wasn't written: %s", exc)
 
     def show(self, **fields: Any) -> None:
+        # Found by a flaky test (#74): progress sonud had queued before a question ("step started") arrived
+        # while it was open and switched the HUD to "working" — the buttons went, nobody could answer. A
+        # question stays until it's answered (ask() closes it itself).
+        if self._asking() and "question" not in fields:
+            if "state" in fields:
+                self._after_question = str(fields["state"])  # where the HUD goes once it's answered
+            fields = {k: v for k, v in fields.items() if k != "state"}
         self.state.update(fields)
         self._write()
+
+    def _asking(self) -> bool:
+        question = self.state.get("question")
+        return (
+            self.state.get("state") == "asking"
+            and isinstance(question, dict)
+            and bool(question.get("options"))
+        )
 
     def begin(self, request: str = "", state: str = "thinking") -> None:
         self.state = {"state": state, "request": request, "steps": []}
@@ -180,6 +196,7 @@ class Hud:
         with contextlib.suppress(FileNotFoundError):
             self.answer_file.unlink()
         before = self.state.get("state", "acting")
+        self._after_question = None
         self.show(
             state="asking",
             details=details,
@@ -205,7 +222,8 @@ class Hud:
         finally:
             with contextlib.suppress(FileNotFoundError):
                 self.answer_file.unlink()
-            self.show(state=before if before != "asking" else "acting", question=None, details="")
+            after = self._after_question or (before if before != "asking" else "acting")
+            self.show(state=after, question=None, details="")
         return answer
 
     def _read_answer(self, question_id: int) -> Any:

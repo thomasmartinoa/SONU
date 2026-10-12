@@ -207,6 +207,7 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "kill-a-program": steps(("system.stop_program", {"program": "chromium"})),
     "summarise-a-document": steps(("files.read", {"name": "invoice pdf"})),
     "ask-a-document": steps(("files.read", {"name": "trip notes", "question": "what about parking?"})),
+    "brief-me": steps(("system.briefing", {})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),

@@ -136,6 +136,8 @@ async def rig(
     monkeypatch.setenv("HYPRLAND_INSTANCE_SIGNATURE", fake_hypr.signature)
     settings = Settings(apps=AppsSettings(launch_timeout_s=2.0), verify=VerifySettings(timeout_s=1.0))
     daemon = Daemon(settings, SonuPaths.from_env(env), env, ollama_transport=ollama.transport)
+    notices: list[tuple[str, str]] = []
+    daemon.notice = lambda: NoticeLog(notices)  # never a real notification on the machine running the tests
     await daemon.start(runtime / "sonu" / "sonud.sock")
     serving = asyncio.create_task(daemon.serve_forever())
 
@@ -146,7 +148,6 @@ async def rig(
         code = await asyncio.to_thread(try_run, list(argv), out, NoticeLog(notices))
         return code, out.getvalue()
 
-    notices: list[tuple[str, str]] = []
     yield Rig(fake_hypr, ollama, run, daemon, notices)
     serving.cancel()
     await daemon.stop()
@@ -612,7 +613,7 @@ async def test_from_the_desktop_the_hud_asks_and_shows(rig: Rig, short_tmp: Path
     rig.daemon.hud = hud
 
     async def click_yes() -> None:
-        for _ in range(100):
+        for _ in range(600):  # up to 30 s: a slow CI runner took longer than 5 (Python 3.14, #74)
             await asyncio.sleep(0.05)
             state = json.loads(hud.state_file.read_text()) if hud.state_file.exists() else {}
             if state.get("state") == "asking" and state.get("question", {}).get("options"):
@@ -628,3 +629,22 @@ async def test_from_the_desktop_the_hud_asks_and_shows(rig: Rig, short_tmp: Path
     assert shown["state"] == "done" and shown["request"] == "close zen"
     assert shown["steps"] == [{"text": "Closed zen", "status": "done"}]
     assert rig.notices == []  # the HUD showed it: no notification as well
+
+
+@pytest.mark.anyio
+async def test_the_daily_briefing_shows_once_a_day(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    """D83: past its time, once; the briefing's content is stubbed (the real one reads this machine)."""
+    from datetime import datetime
+
+    from sonu.daemon import server
+    from sonu.tools.base import StepStatus, ToolOutcome
+
+    async def fake_brief(ctx: object) -> ToolOutcome:
+        return ToolOutcome(StepStatus.DONE, "Good morning — Battery: 76%.", private=True)
+
+    monkeypatch.setattr(server, "brief", fake_brief)
+    assert not await rig.daemon.brief_if_due(datetime(2026, 10, 12, 7, 30))  # before 08:00
+    assert await rig.daemon.brief_if_due(datetime(2026, 10, 12, 9, 0))
+    assert rig.notices == [("SONU — your briefing", "Good morning — Battery: 76%.")]
+    assert not await rig.daemon.brief_if_due(datetime(2026, 10, 12, 15, 0))  # shown today
+    assert await rig.daemon.brief_if_due(datetime(2026, 10, 13, 8, 1))  # the next day

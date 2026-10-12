@@ -67,6 +67,7 @@ src/sonu/
                   settings_tools.py, everyday_tools.py, file_tools.py (folders, files by name, recent),
                   file_change_tools.py (move, rename, the trash, restore), clipboard_tools.py, music_tools.py,
                   health_tools.py (what's busy, what went wrong, stopping a program), document_tools.py,
+                  briefing_tools.py,
                   rice_tools.py, power_tools.py, obs_tools.py, voice_tools.py, dev_tools.py (folders, Claude
                   Code), project_tools.py (VS Code, a project's commands, git, a terminal in a folder),
                   layout_tools.py, message_tools.py, browser_tools.py, history_tools.py (bookmarks, history),
