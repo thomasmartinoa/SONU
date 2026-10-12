@@ -130,10 +130,10 @@ async def test_only_private_results_need_no_reply() -> None:
 
 @pytest.mark.anyio
 async def test_small_talk_gets_a_conversational_answer_with_the_name() -> None:
-    model = FakeTextModel(say="Pretty good, Martin! What are we up to?")
+    model = FakeTextModel(say="Pretty good, Martin! How about you?")
     report = TaskReport(request="hey sonu how's it going", plan=Plan("reply", "Hello."))
     reply = await Responder(model, name="Sonu", user_name="Martin").reply(report)
-    assert reply == "Pretty good, Martin! What are we up to?"
+    assert reply == "Pretty good, Martin! How about you?"
     system = model.seen[0][0].content
     assert "You are Sonu" in system and "Martin" in system
 
@@ -366,3 +366,60 @@ def test_small_talk_knows_every_tool() -> None:
     assert names - _SAID.keys() == set(), "new tools: add them to ABILITIES and to _SAID"
     assert [name for name, words in _SAID.items() if words not in text] == []
     assert "see the screen yet" not in text and "type into other apps" not in text
+
+
+# ---------------------------------------------------------------- sounding like a person (D87)
+def test_how_the_user_sounds() -> None:
+    """Found on the laptop: "kitty 2" and "ugh just open kitty on 2 already" got the same chirpy sentence."""
+    from sonu.core.responder import tone
+
+    assert "annoyed" in tone("ugh just open kitty on 2 already")
+    assert "thanking" in tone("thanks, that's perfect")
+    assert "brief" in tone("kitty 2")
+    assert tone("hey sonu") == "" and tone("could you open kitty on workspace 2 for me") == ""
+
+
+@pytest.mark.anyio
+async def test_the_name_once_a_conversation_and_only_in_small_talk() -> None:
+    """Found on the laptop: "use it now and then" put "Martin, …" in front of nearly every reply."""
+    chat = TaskReport(request="hey sonu how's it going", plan=Plan("reply", "Hello."))
+    model = FakeTextModel(say="Pretty good, Martin! How about you?")
+    responder = Responder(model, user_name="Martin")
+    earlier = [Turn("hi", "Hey Martin!", (), 0.0)]
+    assert await responder.reply(chat, earlier) == "Pretty good! How about you?"  # said once already
+    assert "Martin" not in model.seen[-1][0].content
+    model.say = "Martin, Kitty's up on workspace 2."
+    assert await responder.reply(report_with(DONE, request="open kitty on 2")) == "Kitty's up on workspace 2."
+
+
+@pytest.mark.anyio
+async def test_small_talk_knows_the_time_and_doesnt_sell() -> None:
+    """Found on the laptop at 17:23: "good morning sonu" → "Good morning Martin! Ready to tackle today's tasks
+    or need a quick briefing? Just let me know what you want to focus on first." """
+    from datetime import datetime
+
+    model = FakeTextModel(say="Evening, actually! Ready to tackle today's tasks? Just let me know.")
+    responder = Responder(model, clock=lambda: datetime(2026, 10, 12, 17, 23))
+    reply = await responder.reply(TaskReport(request="good morning sonu", plan=Plan("reply", "Hi.")))
+    assert reply == "Evening, actually!"
+    assert "Monday, 17:23 — evening" in model.seen[-1][0].content
+    model.say = "Kitty is up on workspace 2. Ready when you are."
+    assert (
+        await responder.reply(report_with(DONE, request="open kitty on 2")) == "Kitty is up on workspace 2."
+    )
+    model.say = "Kitty is up on workspace 2. Ready to switch over?"
+    assert (
+        await responder.reply(report_with(DONE, request="open kitty on 2")) == "Kitty is up on workspace 2."
+    )
+    model.say = " ".join(["This is a long sentence about many things."] * 8)
+    reply = await responder.reply(TaskReport(request="tell me something", plan=Plan("reply", "Hi.")))
+    assert len(reply.split()) <= 40 and reply.endswith(".")  # cut at a sentence, never mid-way
+
+
+def test_the_name_comes_out_cleanly() -> None:
+    from sonu.core.responder import without_name
+
+    assert without_name("Martin, Kitty's up on workspace 2.", "Martin") == "Kitty's up on workspace 2."
+    assert without_name("Thanks, Martin!", "Martin") == "Thanks!"
+    assert without_name("Good morning Martin, how was lunch?", "Martin") == "Good morning, how was lunch?"
+    assert without_name("Hey Martin!", "Martin") == "Hey!"

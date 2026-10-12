@@ -78,6 +78,11 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Sounding like a person (#78)
+- [ ] "kitty 2" — a short answer; "ugh, open kitty already" — a plain one
+- [ ] "good morning" in the evening; "how's it going?" — short, no "anything else I can do?"
+- [ ] your name (if SONU knows it): now and then in a chat, not in front of every reply
+
 ### Conversations remembered (#77)
 - [ ] ask a few things, then the next day: "what did we talk about yesterday?"
 - [ ] after "find out how kestrels hunt…": "what did you tell me about kestrels?"
