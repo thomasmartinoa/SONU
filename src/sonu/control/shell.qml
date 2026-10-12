@@ -24,6 +24,8 @@ ShellRoot {
     property var found: null         // what the data page shows (parsed from `sonu … --json`)
     property var rows: []
     property var models: []          // installed local models that can plan: { name, gb }
+    property string mode: ""         // the preset the settings are (D99): local, balanced, cloud, custom
+    property var providers: []       // cloud providers, and whether each has a key (never the key)
     property string status: ""
     property bool busy: false
     property var asking: null        // { title, text, yes, act } waiting for "are you sure?"
@@ -82,7 +84,28 @@ ShellRoot {
     function sure(title, text, yes, command) {  // deleting: always asked here first
         root.asking = { title: title, text: text, yes: yes, act: () => root.run(command, "Working…") }
     }
-    function reload() { lister.running = true }
+    function reload() { lister.running = true; modeReader.running = true; providerLister.running = true }
+    function choosePreset(name) {  // more cloud is asked first; going local isn't (D99)
+        if (name === root.mode) return
+        const command = [root.sonu, "settings", "preset", name, "--yes"]
+        if (name === "local") { run(command, "Going fully local…"); return }
+        root.asking = {
+            title: (name === "cloud" ? "Full cloud" : "Balanced") + "?",
+            text: name === "cloud"
+                ? "Planning, replies, reading, prompts, the screen, hearing and speaking may all go to your cloud providers (your private results are still spoken on this laptop)."
+                : "Hard requests, reading pages and documents, prompts and the screen may go to your cloud provider; your voice stays on this laptop.",
+            yes: "Yes, change it",
+            act: () => root.run(command, "Changing the mode…")
+        }
+    }
+    function saveKey(name, key) {  // the key goes on standard input, never in the command line
+        if (!key) return
+        keySetter.pending = key
+        root.busy = true
+        root.status = "Saving the key in your keyring…"
+        keySetter.command = [root.sonu, "settings", "key", name, "--stdin"]
+        keySetter.running = true
+    }
     function loadData() {
         if (!root.onData) return
         root.found = null
@@ -104,6 +127,32 @@ ShellRoot {
             }
         }
         stderr: StdioCollector { onStreamFinished: if (text.trim()) root.status = text.trim() }
+    }
+    Process {
+        id: modeReader
+        command: [root.sonu, "settings", "preset", "--json"]
+        running: true
+        stdout: StdioCollector { onStreamFinished: { try { root.mode = JSON.parse(text).mode } catch (e) {} } }
+    }
+    Process {
+        id: providerLister
+        command: [root.sonu, "settings", "providers", "--json"]
+        running: true
+        stdout: StdioCollector { onStreamFinished: { try { root.providers = JSON.parse(text).filter(p => p.name !== "ollama") } catch (e) {} } }
+    }
+    Process {
+        id: keySetter
+        property string pending: ""
+        stdinEnabled: true
+        stdout: StdioCollector { id: keyOut }
+        stderr: StdioCollector { id: keyErr }
+        onStarted: { write(pending + "\n"); pending = "" }
+        onExited: (code, status) => {
+            const said = (code === 0 ? keyOut.text : keyErr.text || keyOut.text).trim().split("\n")
+            root.status = said[said.length - 1].replace(/\[[^\]]*\]/g, "")
+            root.busy = false
+            root.reload()
+        }
     }
     Process {
         id: modelLister
@@ -431,6 +480,86 @@ ShellRoot {
                         id: list
                         anchors { left: parent.left; right: parent.right; top: parent.top; margins: 18 }
                         spacing: 14
+
+                        // the mode: how much goes to the cloud, in one click (D99)
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            visible: root.group === "Brain"
+                            spacing: 6
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "Mode"; font.bold: true }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    text: root.mode === "custom" ? "your own mix" : ""
+                                    color: root.c.accentMid; font.family: root.font; font.pixelSize: 12
+                                }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: "Fully local: nothing leaves this laptop. Balanced: the cloud for hard requests, reading, prompts and the screen. Full cloud: everything, your voice too. Fine-tune each one below."
+                                color: root.c.accentDim; font.family: root.font; font.pixelSize: 11; wrapMode: Text.Wrap
+                            }
+                            Flow {
+                                spacing: 6
+                                Chip { text: "Fully local"; on: root.mode === "local"; onClicked: root.choosePreset("local") }
+                                Chip { text: "Balanced"; on: root.mode === "balanced"; onClicked: root.choosePreset("balanced") }
+                                Chip { text: "Full cloud"; on: root.mode === "cloud"; onClicked: root.choosePreset("cloud") }
+                            }
+                        }
+
+                        // API keys: kept in your keyring, typed here, never shown again
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            visible: root.group === "Brain" && root.providers.length > 0
+                            spacing: 6
+                            Label { text: "API keys"; font.bold: true }
+                            Text {
+                                Layout.fillWidth: true
+                                text: "Kept in your system keyring, never in a file. Only what you allow below is sent."
+                                color: root.c.accentDim; font.family: root.font; font.pixelSize: 11; wrapMode: Text.Wrap
+                            }
+                            Repeater {
+                                model: root.providers
+                                delegate: RowLayout {
+                                    id: keyRow
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    Text {
+                                        Layout.preferredWidth: 190
+                                        text: keyRow.modelData.label
+                                        color: root.c.fg; font.family: root.font; font.pixelSize: 13; elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        Layout.preferredWidth: 60
+                                        text: keyRow.modelData.key ? "✔ key" : "no key"
+                                        color: keyRow.modelData.key ? root.c.accentBright : root.c.accentDim
+                                        font.family: root.font; font.pixelSize: 12
+                                    }
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        implicitHeight: keyInput.implicitHeight + 12
+                                        radius: root.radius; color: root.c.bg1
+                                        border.width: 1; border.color: keyInput.activeFocus ? root.c.accentMid : root.c.border
+                                        TextInput {
+                                            id: keyInput
+                                            anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 8 }
+                                            echoMode: TextInput.Password
+                                            color: root.c.fg; font.family: root.font; font.pixelSize: 12
+                                            onAccepted: { root.saveKey(keyRow.modelData.name, text); text = "" }
+                                        }
+                                        Text {
+                                            anchors { left: parent.left; leftMargin: 8; verticalCenter: parent.verticalCenter }
+                                            visible: keyInput.text === "" && !keyInput.activeFocus
+                                            text: keyRow.modelData.key ? "replace the key…" : "paste a key, press Enter"
+                                            color: root.c.accentDim; font.family: root.font; font.pixelSize: 12
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         Repeater {
                             model: root.rows.filter(r => r.group === root.group)
                             delegate: ColumnLayout {

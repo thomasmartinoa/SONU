@@ -113,3 +113,34 @@ def test_sonu_settings_set_asks_audits_and_lists(env: dict[str, str]) -> None:
     assert {row["key"]: row["value"] for row in listed}["privacy.cloud"] == "allow"
     unknown = runner.invoke(app, ["settings", "set", "ollama.host", "x"], env=env)
     assert unknown.exit_code == 1
+
+
+def test_a_preset_is_written_together_and_asked_first(env: dict[str, str]) -> None:
+    """D99: Fully local / Balanced / Full cloud in one checked write; more cloud needs an OK."""
+    runner = CliRunner()
+    assert runner.invoke(app, ["settings", "preset"], env=env).output.strip() == "Fully local"
+    refused = runner.invoke(app, ["settings", "preset", "balanced"], env=env)
+    assert refused.exit_code == 1 and "needs your OK" in refused.output
+    done = runner.invoke(app, ["settings", "preset", "cloud", "--yes"], env=env)
+    assert done.exit_code == 0, done.output
+    assert "hearing stays local" in done.output  # no Sarvam / Gemini / Groq key here
+    shown = json.loads(runner.invoke(app, ["settings", "preset", "--json"], env=env).stdout)
+    assert shown == {"mode": "cloud", "label": "Full cloud"}
+    back = runner.invoke(app, ["settings", "preset", "local"], env=env)  # less cloud: no question
+    assert (
+        back.exit_code == 0
+        and json.loads(runner.invoke(app, ["settings", "preset", "--json"], env=env).stdout)["mode"]
+        == "local"
+    )
+    audit = AuditLog(SonuPaths.from_env(env).audit_file)
+    assert [r.data["preset"] for r in audit.records() if r.kind == "settings.preset"] == ["cloud", "local"]
+
+
+def test_a_preset_is_all_or_nothing(tmp_path: Path) -> None:
+    from sonu.config.editing import change_many
+
+    path = tmp_path / "config.toml"
+    path.write_text(MINE)
+    with pytest.raises(SettingsError):
+        change_many(path, {"heads_up.enabled": True, "heads_up.quiet": "late"})
+    assert path.read_text() == MINE  # the good one wasn't written either

@@ -139,3 +139,22 @@ def test_keys_come_from_the_keyring_or_a_named_variable() -> None:
     assert lookup_key(named, {}) is None
     local = Provider("omni", "openai", "http://127.0.0.1:20128/v1", "OmniRoute", "none")
     assert lookup_key(local, {}) == ""  # a local gateway without a key
+
+
+def test_without_a_keyring_the_key_is_kept_in_a_private_file(tmp_path: Any) -> None:
+    """Found on the owner's laptop: no Secret Service runs, so `secret-tool store` fails."""
+    import stat as stat_module
+
+    from sonu.llm.providers import store_key
+
+    def no_keyring(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, 1, stderr="The name is not activatable")
+
+    env = {"HOME": str(tmp_path), "XDG_DATA_HOME": str(tmp_path / "data")}
+    where = store_key("sarvam", "sk-sarvam", env, run=no_keyring)
+    assert where is not None and "readable only by you" in where
+    path = tmp_path / "data" / "sonu" / "keys" / "sarvam"
+    assert stat_module.S_IMODE(path.stat().st_mode) == 0o600
+    assert stat_module.S_IMODE(path.parent.stat().st_mode) == 0o700
+    assert lookup_key(BUILT_IN["sarvam"], env, run=no_keyring) == "sk-sarvam"
+    assert lookup_key(BUILT_IN["sarvam"], {"PATH": ""}) is None  # no HOME (tests): no file looked at

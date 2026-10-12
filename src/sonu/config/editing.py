@@ -81,7 +81,15 @@ def loosens(entry: Entry, old: Any, new: Any) -> bool:
 def change(path: Path, key: str, value: Any) -> tuple[Settings, Any]:
     """Set ``key`` to ``value`` in the config file; returns the new settings and the old value. Nothing is
     written when the result isn't valid."""
-    entry_for(key)
+    settings, old = change_many(path, {key: value})
+    return settings, old[key]
+
+
+def change_many(path: Path, values: dict[str, Any]) -> tuple[Settings, dict[str, Any]]:
+    """Set several settings in one write (a preset, D99): all checked together, all or nothing. Returns the
+    new settings and the old values."""
+    for key in values:
+        entry_for(key)
     try:
         text = path.read_text(encoding="utf-8") if path.exists() else ""
         document = tomlkit.parse(text)
@@ -92,25 +100,27 @@ def change(path: Path, key: str, value: Any) -> tuple[Settings, Any]:
         raise SettingsError(
             f"{path} has a problem already — fix it by hand first: {exc.errors()[0]['msg']}"
         ) from None
-    *tables, name = key.split(".")
-    table: Any = document
-    for part in tables:
-        if part not in table:
-            table[part] = tomlkit.table()
-        table = table[part]
-    if value is None:
-        table.pop(name, None)  # back to the default
-    else:
-        table[name] = value
+    for key, value in values.items():
+        *tables, name = key.split(".")
+        table: Any = document
+        for part in tables:
+            if part not in table:
+                table[part] = tomlkit.table()
+            table = table[part]
+        if value is None:
+            table.pop(name, None)  # back to the default
+        else:
+            table[name] = value
     new_text = tomlkit.dumps(document)
     try:
         settings = Settings.model_validate(tomllib.loads(new_text))
     except ValidationError as exc:
         error = exc.errors()[0]
-        raise SettingsError(f"{key}: {error['msg']}") from None
+        where = ".".join(str(part) for part in error.get("loc", ())) or ", ".join(values)
+        raise SettingsError(f"{where}: {error['msg']}") from None
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     temporary.write_text(new_text, encoding="utf-8")
     temporary.chmod(0o600)
     temporary.replace(path)
-    return settings, value_of(old_settings, key)
+    return settings, {key: value_of(old_settings, key) for key in values}

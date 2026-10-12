@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Modes and keys (#92)
+- [ ] `sonu control` → Brain → Mode: Balanced asks first; Fully local doesn't; "your own mix" when you've tuned it
+- [ ] Brain → API keys: paste a key, press Enter → "✔ key" (kept in ~/.local/share/sonu/keys, since no keyring runs)
+
 ### SONU's voice from the cloud (#91)
 - [ ] with a Sarvam key: Control Center → Voice → Who speaks = sarvam, Cloud voice = ritu (or shubh, kabir…), Brain → Use the cloud for → speaking (asks); then "what's my battery?"
 - [ ] "any new messages?" is still said in Kokoro's voice (private)

@@ -19,10 +19,12 @@ import subprocess
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
 
+from sonu.config.paths import SonuPaths
 from sonu.llm.chat import ChatMessage, ChatModelError, ChatModelLimited, ChatResult
 
 KEYRING_SERVICE = "sonu"
@@ -58,6 +60,14 @@ class KeyMissing(ChatModelError):
     pass
 
 
+def key_file(name: str, env: Mapping[str, str]) -> Path | None:
+    """Where a key is kept when no system keyring runs (found on the owner's laptop: no Secret Service):
+    SONU's private data folder, 0600 in a 0700 folder — never the config file. None without a HOME (tests)."""
+    if not env.get("HOME"):
+        return None
+    return SonuPaths.from_env(env).data_dir / "keys" / name
+
+
 def lookup_key(
     provider: Provider, env: Mapping[str, str], run: Any = subprocess.run, which: Any = shutil.which
 ) -> str | None:
@@ -66,6 +76,9 @@ def lookup_key(
         return ""
     if provider.key.startswith("env:"):
         return env.get(provider.key.removeprefix("env:")) or None
+    stored = key_file(provider.name, env)
+    if stored is not None and stored.is_file():
+        return stored.read_text(encoding="utf-8").strip() or None
     if which("secret-tool", path=env.get("PATH")) is None:  # the environment's PATH: tests give none
         return None
     try:
@@ -83,17 +96,42 @@ def lookup_key(
     return found.stdout.strip() or None
 
 
-def store_key(name: str, key: str, run: Any = subprocess.run) -> bool:
-    """Keep an API key in the system keyring (never in a file of SONU's)."""
-    stored = run(
-        ["secret-tool", "store", "--label", f"SONU · {name}", "service", KEYRING_SERVICE, "provider", name],
-        input=key,
-        capture_output=True,
-        text=True,
-        timeout=10,
-        check=False,
-    )
-    return bool(stored.returncode == 0)
+def store_key(name: str, key: str, env: Mapping[str, str], run: Any = subprocess.run) -> str | None:
+    """Keep an API key in the system keyring, or — when none runs — in SONU's private data folder. Returns
+    where it went ("your keyring" / the file), None if nowhere."""
+    try:
+        stored = run(
+            [
+                "secret-tool",
+                "store",
+                "--label",
+                f"SONU · {name}",
+                "service",
+                KEYRING_SERVICE,
+                "provider",
+                name,
+            ],
+            input=key,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if stored.returncode == 0:
+            return "your keyring"
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    path = key_file(name, env)
+    if path is None:
+        return None
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.parent.chmod(0o700)
+    temporary = path.with_suffix(".tmp")
+    temporary.touch(mode=0o600)
+    temporary.chmod(0o600)
+    temporary.write_text(key + "\n", encoding="utf-8")
+    temporary.replace(path)
+    return f"{path} (readable only by you — no system keyring is running)"
 
 
 def _image_media(data: str) -> str:
