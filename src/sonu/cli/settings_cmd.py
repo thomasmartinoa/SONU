@@ -17,7 +17,9 @@ import typer
 from sonu.audit.log import AuditError, AuditLog
 from sonu.cli.state import get_state
 from sonu.config.catalog import CATALOG
-from sonu.config.editing import SettingsError, change, entry_for, loosens, parse, value_of
+from sonu.config.editing import SettingsError, change, change_many, entry_for, loosens, parse, value_of
+from sonu.config.presets import LABELS, preset
+from sonu.config.presets import current as current_mode
 from sonu.daemon.client import ask_reload
 from sonu.llm.ollama import OllamaClient, OllamaError
 from sonu.llm.providers import BUILT_IN, lookup_key, store_key
@@ -175,13 +177,14 @@ def settings_key(
     if not key:
         state.err.print("Nothing stored (no key given).")
         raise typer.Exit(1)
-    if not store_key(found.name, key):
-        state.err.print("[red]✖[/] the keyring refused it (is `secret-tool` / a keyring running?)")
+    where = store_key(found.name, key, os.environ)
+    if where is None:
+        state.err.print("[red]✖[/] couldn't keep it anywhere (no keyring, and no home folder)")
         raise typer.Exit(1)
     if state.settings.audit.enabled:  # that a key was set — never the key
         with contextlib.suppress(OSError, AuditError):
             AuditLog(state.paths.audit_file).append("settings.key", {"provider": found.name})
-    state.console.print(f"[green]✔[/] {found.label}'s key is in your keyring.")
+    state.console.print(f"[green]✔[/] {found.label}'s key is kept in {where}.", highlight=False)
 
 
 @app.command("providers")
@@ -215,3 +218,52 @@ def settings_providers(
         if row["name"] == "ollama":
             mark = "[dim]`ollama signin`[/]"
         state.console.print(f"  {row['name']:<11} {row['label']:<28} {mark}", highlight=False)
+
+
+@app.command("preset")
+def settings_preset(
+    ctx: typer.Context,
+    name: str = typer.Argument("", help="local, balanced or cloud; none: show which one you're on"),
+    yes: bool = typer.Option(False, "--yes", help="Already confirmed by the user (the Control Center asks)."),
+    as_json: bool = typer.Option(False, "--json", help="Print JSON (for the Control Center)."),
+) -> None:
+    """Fully local, Balanced or Full cloud in one go (D99): every related setting, checked together."""
+    state = get_state(ctx)
+    state.require_valid_config()
+    if not name:
+        mode = current_mode(state.settings)
+        print(json.dumps({"mode": mode, "label": LABELS[mode]})) if as_json else state.console.print(
+            LABELS[mode]
+        )
+        return
+
+    def has_key(provider: str) -> bool:
+        return lookup_key(provider_for(state.settings, provider), os.environ) is not None
+
+    try:
+        values, notes = preset(name, has_key)
+    except ValueError as exc:
+        state.err.print(f"[red]✖[/] {exc}")
+        raise typer.Exit(2) from None
+    old = {key: value_of(state.settings, key) for key in values}
+    more = [key for key, value in values.items() if loosens(entry_for(key), old[key], value)]
+    if more and not yes:
+        question = f"{LABELS[name]}: more goes to the cloud ({', '.join(more)}). Are you sure?"
+        if not sys.stdin.isatty() or not typer.confirm(question, default=False):
+            state.err.print(f"Not changed: {LABELS[name]} needs your OK (add --yes once you're sure).")
+            raise typer.Exit(1)
+    try:
+        _, old = change_many(state.paths.config_file, values)
+    except SettingsError as exc:
+        state.err.print(f"[red]✖[/] {exc}", highlight=False)
+        raise typer.Exit(1) from None
+    if state.settings.audit.enabled:
+        with contextlib.suppress(OSError, AuditError):
+            AuditLog(state.paths.audit_file).append(
+                "settings.preset", {"preset": name, "old": old, "new": values}
+            )
+    busy = ask_reload()
+    when = "SONU will use it when it next starts" if busy is None else "SONU restarts to use it"
+    state.console.print(f"[green]✔[/] {LABELS[name]} — {when}", highlight=False)
+    for note in notes:
+        state.console.print(f"  [yellow]▲[/] {note}", highlight=False)
