@@ -346,6 +346,8 @@ _SAID = {
     "web.open": "open sites",
     "web.search": "search",
     "web.research": "look things up on the web",
+    "conversations.recall": "what you and the user talked about earlier",
+    "conversations.forget": "what you and the user talked about earlier",
     "windows.close": "close them",
     "windows.focus": "switch",
     "windows.move": "move",

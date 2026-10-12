@@ -600,3 +600,19 @@ def test_research_or_a_search_in_the_browser() -> None:
     assert '"tool": "web.research"' in problem
     assert _problems(browser, REGISTRY, "search the web for how kestrels hunt") == []
     assert _problems(research, REGISTRY, "find out about hyprland plugins") == []
+
+
+def test_what_we_talked_about_is_the_conversations() -> None:
+    """D86: not the activity journal, memory or the web."""
+    journal = _plan(("journal.read", {"when": "yesterday"}))
+    [problem] = _problems(journal, REGISTRY, "what did we talk about yesterday?")
+    assert '{"tool": "conversations.recall", "args": {"when": "yesterday"}}' in problem
+    memory = _plan(("memory.list", {}))
+    [problem] = _problems(memory, REGISTRY, "what did you tell me about kestrels?")
+    assert '{"tool": "conversations.recall", "args": {"about": "kestrels"}}' in problem
+    forget = _plan(("journal.forget", {"since": "everything"}))
+    [problem] = _problems(forget, REGISTRY, "forget our conversations")
+    assert '"conversations.forget"' in problem
+    recall = _plan(("conversations.recall", {"when": "this_morning"}))
+    assert _problems(recall, REGISTRY, "what did I ask you this morning?") == []
+    assert _problems(journal, REGISTRY, "what was I doing yesterday?") == []

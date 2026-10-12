@@ -62,12 +62,13 @@ src/sonu/
                   client.py + outside.py + schema.py: other MCP servers' tools for SONU (untrusted, D63)
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
                   responder.py (replies), conversation.py, memory.py, layouts.py, notifications.py,
-                  prompt_writer.py, screen_reader.py, page_reader.py (a page's text → the local model)
+                  prompt_writer.py, screen_reader.py, page_reader.py (a page's text → the local model),
+                  talks.py (what the user and SONU said, kept 30 days)
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py (folders, files by name, recent),
                   file_change_tools.py (move, rename, the trash, restore), clipboard_tools.py, music_tools.py,
                   health_tools.py (what's busy, what went wrong, stopping a program), document_tools.py,
-                  briefing_tools.py, research_tools.py (web research: integrations/research.py),
+                  briefing_tools.py, conversation_tools.py, research_tools.py (web research: integrations/research.py),
                   rice_tools.py, power_tools.py, obs_tools.py, voice_tools.py, dev_tools.py (folders, Claude
                   Code), project_tools.py (VS Code, a project's commands, git, a terminal in a folder),
                   layout_tools.py, message_tools.py, browser_tools.py, history_tools.py (bookmarks, history),

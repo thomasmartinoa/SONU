@@ -67,6 +67,7 @@ from sonu.runtime import (
     load_memory,
     model_parts,
     open_journal,
+    open_talks,
     outside_tools,
 )
 from sonu.tools.base import Choices, Risk, StepStatus
@@ -300,6 +301,7 @@ class Daemon:
         self._wake_request_task: asyncio.Task[None] | None = None
         self._quiet_until = 0.0  # SONU just spoke: its own voice isn't a wake word
         self.journal = open_journal(settings, paths)
+        self.talks = open_talks(settings, paths)
         self._journaling: asyncio.Task[None] | None = None
         self.journal_retry_s = 5.0  # Hyprland restarted or isn't up yet: try again this often
         notes = settings.notifications
@@ -446,6 +448,8 @@ class Daemon:
                     await task
         if self.journal is not None:
             self.journal.close()
+        if self.talks is not None:
+            self.talks.close()
         if self.outside is not None:
             await self.outside.aclose()
         await self.wake.stop()
@@ -774,6 +778,7 @@ class Daemon:
             web=WebAccess(),
             wake=self.wake,
             journal=self.journal,
+            talks=self.talks,
             notifications=self.notifications,
             writer=self.models.writer,
             reader=self.models.reader,

@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **163 / 163** on the v42 suite, twice (2026-10-11, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **165 / 165** on the v43 suite, twice (2026-10-12, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents, one for a briefing and one for research; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents, one for a briefing, one for research and two for past conversations; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -396,7 +396,8 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 | #73 | 2026-10-12 | Reading your documents ([D82](DECISIONS.md)): `files.read` — a text file, a PDF (`pdftotext`) or a Word / OpenDocument file (LibreOffice under SONU's own profile) to the local model only, a private answer; hidden files refused; the page reader reads documents too; planner rule and checks (a document isn't a page, a screen look or opening it); a browser name the user didn't say is dropped, not refused; eval suite v40 (161) |
 | #74 | 2026-10-12 | Proactive, opt-in ([D83](DECISIONS.md)): a long project command ends with a desktop notification (passed / failed, how long) — only when it outlived SONU's own wait; `system.briefing` ("brief me", "catch me up") from SONU's read-only tools; `[briefing] daily` shows it once a day on the HUD (off by default); daemon tests never post a real notification; eval suite v41 (162) |
 | #75 | 2026-10-12 | Research ([D84](DECISIONS.md)): `web.research` — the user's words searched (DuckDuckGo's HTML search), the top pages fetched by SONU (public addresses only on every hop, no cookies or scripts, 2 MB / 8 s), read by the local model, the answer naming its sites; a site named still opens the browser (a check both ways); a fake web for tests and evals; eval suite v42 (163) |
-| #76 | open | Talking sooner ([D85](DECISIONS.md)): a reply is said sentence by sentence into one player — the first plays while the next is made (measured on the laptop with the real voice: a research answer's first sound after 1.3 s instead of 4.8 s, two sentences 0.6 s instead of 1.3 s); a spoken request whose step is still running after 1.5 s gets "One moment." (once, taking turns with three other lines); one thing is said at a time |
+| #76 | 2026-10-12 | Talking sooner ([D85](DECISIONS.md)): a reply is said sentence by sentence into one player — the first plays while the next is made (measured on the laptop with the real voice: a research answer's first sound after 1.3 s instead of 4.8 s, two sentences 0.6 s instead of 1.3 s); a spoken request whose step is still running after 1.5 s gets "One moment." (once, taking turns with three other lines); one thing is said at a time |
+| #77 | open | Conversations remembered ([D86](DECISIONS.md)): each finished request — the user's words and what SONU told them — kept on the laptop (SQLite, 0600, 30 days; `[conversations] keep`), past the 10-minute conversation; `conversations.recall` ("what did we talk about yesterday?", "what did you tell me about kestrels?") and `conversations.forget` (asks); dry runs and looking back aren't kept; a planner check keeps it apart from the journal, memory and the web; eval suite v43 (165) |
 
 ### Found on real hardware → fixed
 

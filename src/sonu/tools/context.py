@@ -15,6 +15,7 @@ from sonu.core.notifications import NotificationLog
 from sonu.core.page_reader import PageReader
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.screen_reader import ScreenReader
+from sonu.core.talks import Talks
 from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
@@ -103,6 +104,8 @@ class ToolContext:
     ask_secret: Callable[[str], Awaitable[str | None]] | None = None
     # The activity journal (which window had the focus, when); sonud records it. None: not available.
     journal: Journal | None = None
+    # What the user and SONU said to each other (D86). None: not kept.
+    talks: Talks | None = None
     # The latest notifications (D69), kept by sonud when the user turned it on. None: not kept.
     notifications: NotificationLog | None = None
     # SONU's browser extension (D70), through its hosts' sockets. None: no browser (tests and evals never

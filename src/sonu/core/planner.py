@@ -357,6 +357,9 @@ reminders.list.
 do this morning?") is journal.read with when; "when did I last use / open / look at <thing>?" is \
 journal.read with about = the user's words for the thing (no when). "Pause / resume the journal" is \
 journal.recording; "delete / forget today's journal" is journal.forget — never memory.forget.
+- What the user and SONU said earlier ("what did we talk about yesterday?", "what did I ask you this \
+morning?", "what did you tell me about <thing>?") is conversations.recall: when, or about = the user's \
+words for the thing. "Forget our conversations / what I asked you" is conversations.forget.
 - Claude Code: "open Claude Code in <folder>" is dev.claude_open (no folder: the one this request \
 made); "tell it / tell Claude / type: <words>" is dev.type with text = exactly the user's words \
 after that (never rewrite them); "switch it to Sonnet/Opus/Haiku" is dev.claude_model; "what is \
@@ -504,6 +507,34 @@ _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 _LOCAL_MUSIC = re.compile(
     r"\bshuffle\b|\b(?:from|in)\s+my\s+(?:music|songs)\b|\bplay\s+my\s+(?:music|songs)\b"
 )
+_ABOUT_US = re.compile(
+    r"\b(?:we (?:talk|talked|discuss|discussed|chat|chatted|spoke)|did i (?:ask|tell|say to) you"
+    r"|did you (?:tell|say to|answer|find out for) me|you (?:told|said to) me"
+    r"|our (?:conversations?|chats?|talks?))\b"
+)
+_RECALL_WHEN = (
+    ("yesterday", "yesterday"),
+    ("this morning", "this_morning"),
+    ("this afternoon", "this_afternoon"),
+    ("this evening", "this_evening"),
+    ("tonight", "this_evening"),
+    ("this week", "this_week"),
+    ("last week", "this_week"),
+    ("last hour", "last_hour"),
+    ("today", "today"),
+)
+
+
+def _recall_args(said: str) -> dict[str, str]:
+    """conversations.recall's arguments from the user's words: a time they named, or what it was about."""
+    for words, when in _RECALL_WHEN:
+        if words in said:
+            return {"when": when}
+    if (about := said.partition(" about ")[2].strip()) and about not in ("it", "that"):
+        return {"about": about}
+    return {"when": "today"}
+
+
 _ANSWER_ME = re.compile(r"\b(?:find out|research|summari[sz]e|and tell me|what do (?:people|they) say)\b")
 _WHY_HOT = re.compile(
     r"\bfans?\b.*\b(?:loud|noisy|spinning|fast|high)\b|\bwhy\b.*\b(?:hot|slow|laggy|loud)\b"
@@ -786,6 +817,15 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                         f"step {index + 1} (system.stop_program) is only for 'kill / quit / stop "
                         "<program>' — closing a window is windows.close"
                     )
+    # What we talked about (D86) is the conversations, not the journal, memory or the web.
+    if _ABOUT_US.search(said):
+        tools = {step.tool for step in plan.steps}
+        forgetting = bool(re.search(r"\b(?:forget|delete|erase|clear)\b", said))
+        wanted_tool = "conversations.forget" if forgetting else "conversations.recall"
+        if wanted_tool not in tools:
+            args = {"since": "everything"} if forgetting else _recall_args(said)
+            wanted = json.dumps({"tool": wanted_tool, "args": args})
+            problems.append(f"the user asks about what they and SONU said — plan {wanted}")
     # Research (D84): a site the user named is searched in the browser; "find out / summarise" is answered.
     named_site = sites_named_in(request)
     for step in plan.steps:

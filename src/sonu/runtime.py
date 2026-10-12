@@ -25,6 +25,7 @@ from sonu.core.planning import Planner
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.responder import Responder
 from sonu.core.screen_reader import ScreenReader
+from sonu.core.talks import Talks
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
@@ -74,6 +75,13 @@ def open_journal(settings: Settings, paths: SonuPaths) -> Journal | None:
         exclude_apps=settings.journal.exclude_apps,
         pause_file=paths.data_dir / "journal-paused",
     )
+
+
+def open_talks(settings: Settings, paths: SonuPaths) -> Talks | None:
+    """What the user and SONU said to each other (D86). None when it's off in the config."""
+    if not settings.conversations.keep:
+        return None
+    return Talks(paths.data_dir / "conversations.sqlite3", keep_days=settings.conversations.keep_days)
 
 
 def app_aliases(settings: Settings, memory: Memory) -> dict[str, str]:
@@ -198,6 +206,8 @@ class Runtime:
         await self.ollama.aclose()
         if self.engine.ctx.journal is not None:
             self.engine.ctx.journal.close()
+        if self.engine.ctx.talks is not None:
+            self.engine.ctx.talks.close()
 
 
 async def build_runtime(
@@ -232,6 +242,7 @@ async def build_runtime(
         music=SonuPlayer(music_folder(dict(env))),
         web=WebAccess(),
         journal=open_journal(settings, paths),
+        talks=open_talks(settings, paths),
     )
 
     client = OllamaClient(

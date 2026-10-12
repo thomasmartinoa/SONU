@@ -78,6 +78,11 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Conversations remembered (#77)
+- [ ] ask a few things, then the next day: "what did we talk about yesterday?"
+- [ ] after "find out how kestrels hunt…": "what did you tell me about kestrels?"
+- [ ] "forget our conversations" asks first, then "what did we talk about today?" finds nothing
+
 ### Talking sooner (#76)
 - [ ] press the SONU key, "find out how kestrels hunt and summarise it": "One moment." while it reads, and the answer starts after about a second
 - [ ] a long reply: it should sound like one answer, with no odd gaps between sentences

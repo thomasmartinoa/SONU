@@ -132,6 +132,13 @@ class JournalSettings(_Section):
     exclude_apps: list[str] = Field(default_factory=list, max_length=50)
 
 
+class ConversationsSettings(_Section):
+    # What you and SONU said to each other (D86), for "what did we talk about yesterday?". Local only (0600),
+    # deleted after keep_days; "forget our conversations" deletes them. false: nothing is kept.
+    keep: bool = True
+    keep_days: int = Field(default=30, ge=1, le=365)
+
+
 class BriefingSettings(_Section):
     # A briefing once a day, by itself (D83): sonud shows it on the HUD (or as a notification) the first time
     # it's running after `at` each day. Off unless turned on; "good morning" / "brief me" work either way.
@@ -235,6 +242,7 @@ class Settings(_Section):
     notifications: NotificationsSettings = NotificationsSettings()
     hud: HudSettings = HudSettings()
     briefing: BriefingSettings = BriefingSettings()
+    conversations: ConversationsSettings = ConversationsSettings()
     cloud: CloudSettings = CloudSettings()
     mcp: McpSettings = McpSettings()
 
@@ -370,6 +378,12 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # Its own Quickshell window (your shell is untouched); sonud starts it when `qs` is installed.
 # enabled = true
 # hide_after_s = 6               # after a result
+
+[conversations]
+# What you and SONU said to each other: "what did we talk about yesterday?", "what did you tell me about …?".
+# Only on this computer; "forget our conversations" deletes them.
+# keep = true
+# keep_days = 30
 
 [briefing]
 # A briefing once a day by itself (battery, reminders, messages, yesterday's work, problems), shown on the HUD
