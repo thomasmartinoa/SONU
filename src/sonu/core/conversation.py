@@ -19,6 +19,7 @@ from sonu.core.report import ICONS, TaskReport
 
 MAX_TURNS = 6
 PRIVATE = "(private result)"
+TRIED_ANOTHER_WAY = "↻ Tried another way:"
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,10 +35,14 @@ def results_of(report: TaskReport) -> tuple[str, ...]:
     """The report's result lines, with private ones replaced (they never reach the model)."""
     if report.plan is None or report.plan.kind != "steps":
         return ()
-    return tuple(
-        f"{ICONS[record.outcome.status]} {PRIVATE if record.outcome.private else record.outcome.summary}"
-        for record in report.steps
-    ) + tuple(report.not_done)
+    lines: list[str] = []
+    for index, record in enumerate(report.steps):
+        if index == report.recovered_from:
+            lines.append(TRIED_ANOTHER_WAY)  # D92: what follows is a second try after the failure above
+        lines.append(
+            f"{ICONS[record.outcome.status]} {PRIVATE if record.outcome.private else record.outcome.summary}"
+        )
+    return tuple(lines) + tuple(report.not_done)
 
 
 @dataclass

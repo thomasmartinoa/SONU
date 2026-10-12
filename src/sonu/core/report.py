@@ -77,6 +77,19 @@ class TaskReport:
     error: str | None = None
     dry_run: bool = False
     reply: str = ""  # what SONU says back, in natural words (core/responder.py)
+    # A second try (D92): the steps from here on are another way after a failure — the failed steps before
+    # it no longer count against the request (they're still shown).
+    recovered_from: int | None = None
+
+    def counted(self) -> list[StepRecord]:
+        """The steps the request's status is judged by."""
+        if self.recovered_from is None:
+            return self.steps
+        return [
+            record
+            for index, record in enumerate(self.steps)
+            if index >= self.recovered_from or record.outcome.status is not StepStatus.FAILED
+        ]
 
     @property
     def status(self) -> TaskStatus:
@@ -84,7 +97,7 @@ class TaskReport:
             return "error"
         if self.plan.kind != "steps":
             return self.plan.kind
-        statuses = [record.outcome.status for record in self.steps]
+        statuses = [record.outcome.status for record in self.counted()]
         if not statuses:
             return "cannot"
         if StepStatus.NEEDS_INPUT in statuses:
@@ -101,7 +114,7 @@ class TaskReport:
             return "partial" if self.plan.unsupported else "unverified"
         if StepStatus.DONE in statuses:
             return "partial"
-        if all(record.outcome.status is StepStatus.DENIED and record.asked for record in self.steps):
+        if all(record.outcome.status is StepStatus.DENIED and record.asked for record in self.counted()):
             return "declined"
         return "failed"
 
@@ -125,7 +138,9 @@ class TaskReport:
             return ["✖ no plan"]
         if self.plan.kind != "steps" or not self.steps:
             return [self.plan.message or "I couldn't turn that into actions."]
-        for record in self.steps:
+        for index, record in enumerate(self.steps):
+            if index == self.recovered_from:
+                out.append("↻ Tried another way:")  # conversation.TRIED_ANOTHER_WAY
             summary = record.outcome.summary
             if self.dry_run and record.outcome.status is StepStatus.SKIPPED:
                 summary = f"would: {record.description}"

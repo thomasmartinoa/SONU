@@ -459,6 +459,7 @@ async def test_planner_gets_app_labels(harness: Harness) -> None:
             app_labels: Any = None,
             history: Any = (),
             notes: Any = (),
+            tried: Any = (),
         ) -> Plan:
             captured["labels"] = app_labels
             return Plan("reply", "ok")
@@ -811,3 +812,72 @@ async def test_a_web_search_goes_to_the_site_the_user_named(harness: Harness) ->
     plans = {request: steps_plan(("web.search", {"query": "username thomasmartinoa github"}))}
     await harness.engine(plans).run(request, confirm=Confirmations(False))
     assert harness.fake.launched[-1][-1] == "https://github.com/search?q=thomasmartinoa&type=users"
+
+
+# ---------------------------------------------------------------- a second try (D92)
+MOVE_ZEN = "move zen to workspace 4"
+
+
+def recovering_engine(harness: Harness, recovery: Plan | None, first: Plan | None = None) -> Engine:
+    planner = ScriptedPlanner(
+        {MOVE_ZEN: first or steps_plan(("windows.move", {"window": {"app": "zen"}, "workspace": 4}))},
+        recoveries={MOVE_ZEN: recovery} if recovery else None,
+    )
+    return Engine(
+        planner=planner,
+        registry=ToolRegistry(),
+        ctx=harness.ctx,
+        policy=Policy("confirm-risky"),
+        audit=harness.audit,
+    )
+
+
+@pytest.mark.anyio
+async def test_a_failed_step_gets_a_second_try(harness: Harness) -> None:
+    """Zen isn't open, so it can't be moved: the second plan opens it on workspace 4 — the user's goal."""
+    engine = recovering_engine(harness, steps_plan(("apps.launch", {"app": "zen", "workspace": 4})))
+    report = await engine.run(MOVE_ZEN, confirm=Confirmations(True))
+    assert report.status == "done", report.lines()
+    assert harness.workspace_of("zen") == [4]
+    lines = report.lines()
+    assert lines[0].startswith("✖") and lines[1] == "↻ Tried another way:" and lines[2].startswith("✔")
+    planner = engine.planner
+    assert isinstance(planner, ScriptedPlanner) and planner.tried[0][0].startswith("✖")  # what it saw
+    assert [r.kind for r in harness.audit.records()].count("task.retry") == 1
+
+
+@pytest.mark.anyio
+async def test_no_other_way_leaves_the_failure_said(harness: Harness) -> None:
+    report = await recovering_engine(harness, None).run(MOVE_ZEN, confirm=Confirmations(True))
+    assert report.status == "failed" and report.recovered_from is None
+    assert "↻ Tried another way:" not in report.lines()
+
+
+@pytest.mark.anyio
+async def test_no_second_try_after_a_no_or_in_a_dry_run(harness: Harness) -> None:
+    harness.fake.windows.append(make_window("0xa1", "kitty", "zsh", workspace_id=1, stable_id="k1"))
+    first = steps_plan(
+        ("windows.close", {"window": {"app": "kitty"}}),  # asked — and the user says no
+        ("windows.move", {"window": {"app": "zen"}, "workspace": 4}),  # fails
+    )
+    retry = steps_plan(("apps.launch", {"app": "zen", "workspace": 4}))
+    engine = recovering_engine(harness, retry, first)
+    report = await engine.run(MOVE_ZEN, confirm=Confirmations(False))
+    assert report.recovered_from is None and harness.workspace_of("zen") == []  # their no stands
+    dry = await recovering_engine(harness, retry).run(MOVE_ZEN, confirm=Confirmations(True), dry_run=True)
+    assert dry.recovered_from is None
+
+
+@pytest.mark.anyio
+async def test_a_second_try_never_redoes_what_worked(harness: Harness) -> None:
+    first = steps_plan(
+        ("apps.launch", {"app": "kitty", "workspace": 2}),
+        ("windows.move", {"window": {"app": "zen"}, "workspace": 4}),
+    )
+    retry = steps_plan(
+        ("apps.launch", {"app": "kitty", "workspace": 2}),  # already done: skipped
+        ("apps.launch", {"app": "zen", "workspace": 4}),
+    )
+    report = await recovering_engine(harness, retry, first).run(MOVE_ZEN, confirm=Confirmations(True))
+    assert report.status == "done"
+    assert len(harness.fake.windows_of_class("kitty")) == 1  # one kitty, not two

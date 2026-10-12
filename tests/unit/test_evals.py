@@ -13,6 +13,11 @@ def steps(*items: tuple[str, dict[str, Any]]) -> dict[str, Any]:
     return {"kind": "steps", "message": "", "steps": [{"tool": tool, "args": args} for tool, args in items]}
 
 
+# The second plan, for the cases whose first plan fails by design (D92).
+RETRY: dict[str, dict[str, Any]] = {
+    "second-try-opens-it": steps(("apps.launch", {"app": "zen", "workspace": 4})),
+}
+
 # A correct plan for every case: proves each case is achievable with SONU's real tools.
 GOLDEN: dict[str, dict[str, Any]] = {
     "launch-one": steps(("apps.launch", {"app": "kitty"})),
@@ -213,6 +218,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "what-did-you-tell-me": steps(("conversations.recall", {"about": "kestrels"})),
     "corrected-mid-sentence": steps(("media.play", {"query": "faded"})),
     "open-sonu-settings": steps(("control.open", {})),
+    "second-try-opens-it": steps(("windows.move", {"window": {"app": "zen"}, "workspace": 4})),
+    "second-try-adds-nothing": steps(("windows.close", {"window": {"app": "thunar"}})),
     "ask-about-a-tab": steps(
         ("browser.read", {"question": "what does the github tab say about installing?", "words": "github"})
     ),
@@ -296,8 +303,15 @@ def test_cases_load_and_all_have_golden_plans() -> None:
 @pytest.mark.anyio
 async def test_golden_plans_pass_every_case(tmp_path: Path) -> None:
     cases = load_cases()
-    by_request = {case.request: GOLDEN[case.id] for case in cases}
-    summary = await run_eval(cases, ScriptedChatModel(by_request, name="golden"), tmp_path)
+    by_request = {case.request: case.id for case in cases}
+
+    def golden(message: str) -> dict[str, Any]:
+        request, _, tried = message.partition("\n\nSONU ALREADY TRIED THIS")
+        if tried:  # a second try (D92)
+            return RETRY.get(by_request[request], {"kind": "cannot", "message": "No other way.", "steps": []})
+        return GOLDEN[by_request[request]]
+
+    summary = await run_eval(cases, ScriptedChatModel(golden, name="golden"), tmp_path)
     failures = {r.case_id: r.failures for r in summary.results if not r.passed}
     assert failures == {}
     assert summary.score == 1.0

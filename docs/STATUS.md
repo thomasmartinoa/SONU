@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **167 / 167** on the v45 suite, twice (2026-10-12, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **169 / 169** on the v46 suite, twice (2026-10-12, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents, one for a briefing, one for research, two for past conversations, one for a correction mid-sentence and one for the Control Center; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents, one for a briefing, one for research, two for past conversations, one for a correction mid-sentence, one for the Control Center and two for a second try; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -406,7 +406,8 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 | #81 | 2026-10-12 | Control Center, part 1 — the backend ([D90](DECISIONS.md)): `sonu settings list / set / models` — 38 settings in five groups without editing the file (comments kept, the whole file checked before writing, 0600); a change that loosens privacy or safety needs an OK; every change audited; sonud restarts in place once idle (the model stays on the GPU — on the laptop: answering again after 1.4 s, same pid, a new socket) |
 | #82 | 2026-10-12 | Control Center, part 2 — the window ([D90](DECISIONS.md)): `sonu control` or "open your settings" (`control.open`) opens SONU's own Quickshell window — Brain, Voice, Proactive, Privacy, Look; switches, choices, model dropdowns with sizes, steppers, text — every change through `sonu settings set` (a loosening one asked in the window first); one window at a time, floating; SONU's screen tools refuse to act in it; eval suite v45 (167) |
 | #83 | 2026-10-12 | Control Center, part 3 — your data ([D90](DECISIONS.md)): pages for Memory (each thing, forget one or all), Conversations (today / yesterday / this week / all; delete the last hour, today, everything), Activity (the journal's summary; pause / resume; delete), the Audit log (the latest 60, local times); `sonu memory list/forget`, `sonu conversations list/forget`, `sonu journal show --json`; deleting asks first and is audited (how many, never what) |
-| #84 | open | Control Center, part 4 — the brain switch ([D91](DECISIONS.md)): `[models] harder = "deep"` (Brain → "For harder requests") sends requests with several parts, and any the planner couldn't plan, to the deep planner's model — all on the laptop; the cloud still comes first when it's allowed; `sonu eval --harder MODEL` measures it. Measured: 4b alone 12/12 hard cases at 1.8 s, 4b + 9b 11/12 at 15.5 s — the default stays "same" |
+| #84 | 2026-10-12 | Control Center, part 4 — the brain switch ([D91](DECISIONS.md)): `[models] harder = "deep"` (Brain → "For harder requests") sends requests with several parts, and any the planner couldn't plan, to the deep planner's model — all on the laptop; the cloud still comes first when it's allowed; `sonu eval --harder MODEL` measures it. Measured: 4b alone 12/12 hard cases at 1.8 s, 4b + 9b 11/12 at 15.5 s — the default stays "same" |
+| #85 | open | A second try ([D92](DECISIONS.md)): when a step fails (and nothing was declined, denied or left waiting), SONU plans once more with what happened — the same words, rules and questions — and runs only what's still needed (never redoing a ✔ step); the report shows "↻ Tried another way:" and the earlier failure no longer counts; the reply may say what didn't work; audited (`task.retry`); eval suite v46 (169) |
 
 ### Found on real hardware → fixed
 

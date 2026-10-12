@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -58,6 +58,15 @@ class Observer:
         """A step finished (or was stopped before running)."""
 
 
+def recoverable(report: TaskReport) -> bool:
+    """Worth a second try (D92): a step failed — and nothing was declined, denied or left waiting for the
+    user (then their answer stands)."""
+    if report.dry_run or report.plan is None or report.plan.kind != "steps":
+        return False
+    statuses = {record.outcome.status for record in report.steps}
+    return StepStatus.FAILED in statuses and not statuses & {StepStatus.DENIED, StepStatus.NEEDS_INPUT}
+
+
 def enforce_verification(tool: Tool, outcome: ToolOutcome) -> ToolOutcome:
     """A side-effecting step is only DONE when it has checks and all of them passed."""
     if tool.risk is Risk.READ_ONLY or outcome.status is not StepStatus.DONE:
@@ -83,7 +92,9 @@ class Engine:
         audit: AuditLog | None = None,
         conversation: Conversation | None = None,
         responder: Responder | None = None,
+        recover: bool = True,  # a second try when a step fails (D92)
     ) -> None:
+        self.recover = recover
         self.planner = planner
         self.registry = registry
         self.ctx = ctx
@@ -174,23 +185,83 @@ class Engine:
             observer.on_plan(plan)
 
         if plan.kind == "steps":
-            for index, step in enumerate(plan.steps[:MAX_STEPS]):
-                record = await self._run_step(
-                    index,
-                    step.tool,
-                    step.args,
-                    confirm=confirm,
-                    choose=choose,
-                    dry_run=dry_run,
-                    observer=observer,
-                )
-                report.steps.append(record)
-                self.ctx.task_windows += tuple(str(a) for a in record.outcome.data.get("windows", ()))
-                self._audit("step.result", record.audit_data())
-                if observer:
-                    observer.on_step(record)
+            await self._run_steps(
+                plan, report, confirm=confirm, choose=choose, dry_run=dry_run, observer=observer
+            )
+            if self.recover and recoverable(report):
+                await self._try_another_way(report, labels, history, confirm, choose, observer)
 
         return await self._finish(report, history)
+
+    async def _run_steps(
+        self,
+        plan: Plan,
+        report: TaskReport,
+        *,
+        confirm: Confirmer,
+        choose: Chooser | None,
+        dry_run: bool,
+        observer: Observer | None,
+    ) -> None:
+        done = {(r.tool, repr(r.args)) for r in report.steps if r.outcome.status is StepStatus.DONE}
+        for step in plan.steps[: MAX_STEPS - len(report.steps)]:
+            if (step.tool, repr(step.args)) in done:
+                continue  # a second try never redoes what worked (D92)
+            record = await self._run_step(
+                len(report.steps),
+                step.tool,
+                step.args,
+                confirm=confirm,
+                choose=choose,
+                dry_run=dry_run,
+                observer=observer,
+            )
+            report.steps.append(record)
+            self.ctx.task_windows += tuple(str(a) for a in record.outcome.data.get("windows", ()))
+            self._audit("step.result", record.audit_data())
+            if observer:
+                observer.on_step(record)
+
+    async def _try_another_way(
+        self,
+        report: TaskReport,
+        labels: Mapping[str, str],
+        history: list[Turn],
+        confirm: Confirmer,
+        choose: Chooser | None,
+        observer: Observer | None,
+    ) -> None:
+        """A step failed (D92): plan once more with what happened — the user's words are the same, every rule
+        and question applies again — and run what's still needed."""
+        tried = results_of(report)  # private results stay "(private result)"
+        try:
+            snapshot = await self.ctx.desktop.snapshot()
+            retry = await self.planner.plan(
+                report.request,
+                snapshot,
+                self.registry,
+                app_labels=labels,
+                history=history,
+                notes=self.ctx.memory.notes(),
+                tried=tried,
+            )
+        except (HyprlandError, PlanningError) as exc:
+            self._audit("task.retry", {"error": str(exc)})
+            return
+        self._audit(
+            "task.retry",
+            {
+                "kind": retry.kind,
+                "steps": [{"tool": s.tool, "args": s.args} for s in retry.steps],
+                "model": retry.model,
+            },
+        )
+        if retry.kind != "steps" or not retry.steps or len(report.steps) >= MAX_STEPS:
+            return  # no other way: the failure stands, and is said
+        report.recovered_from = len(report.steps)
+        await self._run_steps(retry, report, confirm=confirm, choose=choose, dry_run=False, observer=observer)
+        if report.recovered_from == len(report.steps):
+            report.recovered_from = None  # nothing new ran
 
     async def call_tool(
         self,

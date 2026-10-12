@@ -424,3 +424,15 @@ def test_the_name_comes_out_cleanly() -> None:
     assert without_name("Thanks, Martin!", "Martin") == "Thanks!"
     assert without_name("Good morning Martin, how was lunch?", "Martin") == "Good morning, how was lunch?"
     assert without_name("Hey Martin!", "Martin") == "Hey!"
+
+
+def test_a_second_try_may_say_what_didnt_work() -> None:
+    """D92: "Zen wasn't open, so I opened it on workspace 4." is honest when the second try worked."""
+    report = report_with(FAILED, DONE)
+    report.recovered_from = 1
+    assert report.status == "done"
+    assert results_of(report)[1] == "↻ Tried another way:"
+    said = "There was no recipes folder, so I opened kitty on workspace 2 instead."
+    assert acceptable(said, report, " ".join(results_of(report)))
+    unrecovered = report_with(FAILED, DONE)  # without a second try, a failure is still a failure
+    assert unrecovered.status == "partial"
