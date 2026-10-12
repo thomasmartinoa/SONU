@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timedelta
 from typing import get_args
@@ -32,6 +33,7 @@ def _journal(state: AppState) -> Journal:
 def journal_show(
     ctx: typer.Context,
     when: str = typer.Argument("today", help=f"one of: {', '.join(get_args(When))}"),
+    as_json: bool = typer.Option(False, "--json", help="Print JSON (for the Control Center)."),
 ) -> None:
     """Sum up the windows you used (today by default)."""
     state = get_state(ctx)
@@ -42,6 +44,13 @@ def journal_show(
     now = datetime.now()
     start, end, said = period(when, now)  # type: ignore[arg-type]  # checked above
     spans = journal.spans(start.timestamp(), end.timestamp(), now.timestamp())
+    if as_json:
+        said_text = summary(spans, AppNames(AppCatalog.load(os.environ).entries), said) if spans else ""
+        print(
+            json.dumps({"summary": said_text or f"Nothing in the journal {said}", "paused": journal.paused})
+        )
+        journal.close()
+        return
     if not spans:
         state.console.print(f"Nothing in the journal {said}")
     else:
