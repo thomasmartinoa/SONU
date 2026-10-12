@@ -613,7 +613,7 @@ async def test_from_the_desktop_the_hud_asks_and_shows(rig: Rig, short_tmp: Path
     rig.daemon.hud = hud
 
     async def click_yes() -> None:
-        for _ in range(100):
+        for _ in range(600):  # up to 30 s: a slow CI runner took longer than 5 (Python 3.14, #74)
             await asyncio.sleep(0.05)
             state = json.loads(hud.state_file.read_text()) if hud.state_file.exists() else {}
             if state.get("state") == "asking" and state.get("question", {}).get("options"):
