@@ -78,6 +78,11 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Heads-ups (#79)
+- [ ] in `~/.config/sonu/config.toml`: `[heads_up]` `enabled = true` (and `speak = true` to hear them), then `systemctl --user restart sonud`
+- [ ] unplug and let the battery fall to 15%: "Battery's at 15% — time to plug in." once
+- [ ] the same during a Discord call: shown only, not said
+
 ### Sounding like a person (#78)
 - [ ] "kitty 2" — a short answer; "ugh, open kitty already" — a plain one
 - [ ] "good morning" in the evening; "how's it going?" — short, no "anything else I can do?"

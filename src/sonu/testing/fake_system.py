@@ -129,6 +129,7 @@ class FakeSystem:
     song_details: dict[str, tuple[str, str]] = field(default_factory=dict)  # player → (artist, track id)
     # Apps' sound outputs (pw-dump): [serial, pid, running]. A page the browser autoplays adds one.
     streams: list[list[int | bool]] = field(default_factory=list)
+    mic_users: list[str] = field(default_factory=list)  # apps recording the microphone (a call)
     timers: dict[str, str] = field(default_factory=dict)  # systemd unit → notification text
     timer_times: dict[str, datetime] = field(default_factory=dict)  # systemd unit → when it fires
     power_requests: list[str] = field(default_factory=list)  # systemctl suspend / reboot / poweroff
@@ -703,6 +704,15 @@ class FakeSystem:
                 },
             }
             for serial, pid, running in self.streams
+        ]
+        echo = {"node.name": "echo-cancel-capture", "media.class": "Stream/Input/Audio"}  # SONU's own
+        recording = [{"state": "running", "props": echo}] + [
+            {"state": "running", "props": {"media.class": "Stream/Input/Audio", "application.name": app}}
+            for app in self.mic_users
+        ]
+        nodes += [
+            {"id": 90 + i, "type": "PipeWire:Interface:Node", "info": info}
+            for i, info in enumerate(recording)
         ]
         return 0, json.dumps([{"id": 0, "type": "PipeWire:Interface:Core", "info": {}}, *nodes]), ""
 
