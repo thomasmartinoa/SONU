@@ -15,6 +15,7 @@ from sonu.tools.base import Tool
 from sonu.tools.briefing_tools import BRIEFING_TOOLS
 from sonu.tools.browser_tools import BROWSER_TOOLS
 from sonu.tools.clipboard_tools import CLIPBOARD_TOOLS
+from sonu.tools.conversation_tools import CONVERSATION_TOOLS
 from sonu.tools.desktop_tools import DEFAULT_TOOLS
 from sonu.tools.dev_tools import DEV_TOOLS
 from sonu.tools.document_tools import DOCUMENT_TOOLS
@@ -80,6 +81,7 @@ class ToolRegistry:
             *DOCUMENT_TOOLS,
             *BRIEFING_TOOLS,
             *RESEARCH_TOOLS,
+            *CONVERSATION_TOOLS,
             *MEDIA_TOOLS,
             *SETTINGS_TOOLS,
             *EVERYDAY_TOOLS,

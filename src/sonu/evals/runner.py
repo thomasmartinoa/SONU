@@ -28,6 +28,7 @@ from sonu.core.notifications import NotificationLog
 from sonu.core.planner import LLMPlanner
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.report import TaskReport
+from sonu.core.talks import Talks
 from sonu.desktop.apps.catalog import AppCatalog
 from sonu.desktop.apps.resolver import AppResolver
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
@@ -85,6 +86,12 @@ PROJECT_FILES = {
     "dev_works/SONU/uv.lock": "",
     "dev_works/SONU/src/sonu/core/planner.py": "",
 }
+
+# What the user and SONU said before the case (hours ago, the user's words, SONU's reply).
+PAST_TALKS = (
+    (26.0, "find out how kestrels hunt and summarise it", "Kestrels hover and drop onto voles."),
+    (2.0, "open kitty on 2", "Done, kitty's on 2."),
+)
 
 
 # FakeSystem properties an eval may check besides its fields.
@@ -412,6 +419,10 @@ async def run_case(
             power_supply = workdir / "power_supply"
             journal = Journal(None)
             stack.callback(journal.close)
+            talks = Talks(None)  # a few past conversations (D86)
+            stack.callback(talks.close)
+            for hours_ago, said, reply in PAST_TALKS:
+                talks.add(said, reply, time.time() - hours_ago * 3600)
             if case.battery is not None:
                 (power_supply / "BAT1").mkdir(parents=True, exist_ok=True)
                 (power_supply / "BAT1" / "capacity").write_text(f"{case.battery}\n")
@@ -465,6 +476,7 @@ async def run_case(
                 reader=FakeScreenReader(),
                 pages=FakePageReader(),
                 journal=journal,
+                talks=talks,
                 layouts=Layouts(workdir / "data" / "layouts.json"),
                 notifications=notifications,
                 browsers=browsers,

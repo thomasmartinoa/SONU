@@ -1384,3 +1384,18 @@ request = "find out how kestrels hunt and summarise it"
 expect_status = ["done"]
 require_tools = ["web.research"]
 forbid_tools = ["web.search", "web.open", "browser.read"]
+
+# ---- conversations remembered (v43)
+[[case]]
+id = "what-did-we-talk-about"
+request = "what did we talk about yesterday?"
+expect_status = ["done"]
+require_tools = ["conversations.recall"]
+forbid_tools = ["journal.read", "memory.list"]
+
+[[case]]
+id = "what-did-you-tell-me"
+request = "what did you tell me about kestrels?"
+expect_status = ["done"]
+require_tools = ["conversations.recall"]
+forbid_tools = ["web.research", "web.search", "memory.list", "journal.read"]

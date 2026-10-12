@@ -8,6 +8,7 @@ unless the step's own checks passed on a snapshot taken after the action.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import Any
@@ -17,6 +18,7 @@ from sonu.core.conversation import Conversation, Turn, results_of
 from sonu.core.planning import Plan, Planner, PlanningError
 from sonu.core.report import StepRecord, TaskReport
 from sonu.core.responder import Responder
+from sonu.core.talks import kept, told
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.policy.engine import Policy, outside_caller_risk
 from sonu.tools.base import Choices, Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome, args_problem
@@ -254,6 +256,11 @@ class Engine:
                 str(address) for record in report.steps for address in record.outcome.data.get("windows", ())
             )
             self.conversation.add(report.request, said, results_of(report), windows)
+        if self.ctx.talks is not None and kept(report):  # remembered past the conversation (D86)
+            try:
+                self.ctx.talks.add(report.request, told(report), self.ctx.now().timestamp())
+            except sqlite3.Error as exc:  # a full disk mustn't fail the request
+                logger.warning("couldn't keep the conversation: %s", exc)
         return report
 
     async def _run_step(
