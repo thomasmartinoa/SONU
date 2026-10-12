@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,6 +48,7 @@ from sonu.llm.cloud import (
     is_cloud_model,
 )
 from sonu.llm.ollama import OllamaClient
+from sonu.llm.providers import BUILT_IN, Provider, RemoteModel, lookup_key
 from sonu.mcp.outside import OutsideServers, start_servers
 from sonu.policy.engine import Policy
 from sonu.tools.context import ToolContext
@@ -95,6 +97,8 @@ def assistant_parts(
     client: OllamaClient,
     ollama: OllamaSettings | None = None,
     memory: Memory | None = None,
+    model: TextModel
+    | None = None,  # the reply writer's model (ModelParts.replies); None: the local planner's
 ) -> tuple[Conversation, Responder | None]:
     """The conversation so far (shared by the CLI and the daemon) and the reply writer."""
     assistant = settings.assistant
@@ -103,7 +107,7 @@ def assistant_parts(
     )
     if not assistant.replies:
         return conversation, None
-    model = OllamaChatModel(client, settings.models.planner, ollama or settings.ollama)
+    model = model or OllamaChatModel(client, settings.models.planner, ollama or settings.ollama)
     user_name = (memory.name() if memory is not None else None) or assistant.user_name
     return conversation, Responder(model, name=assistant.name, user_name=user_name)
 
@@ -119,7 +123,8 @@ class ModelParts:
     planner_model: str  # what the CLI shows
     writer: PromptWriter
     reader: ScreenReader
-    pages: PageReader  # always the local model (D71)
+    pages: PageReader  # the local model, or the cloud when "reading" is allowed (D71, D94)
+    replies: TextModel  # the reply writer's model: local, or the cloud when "replies" is allowed (D94)
 
 
 def model_parts(
@@ -131,6 +136,8 @@ def model_parts(
     deep: bool = False,
     model: str | None = None,
     state_dir: Path | None = None,  # where a usage-limit pause is kept (None: in memory)
+    env: Mapping[str, str] | None = None,  # where an API key may be named (env:NAME)
+    http: httpx.AsyncBaseTransport | None = None,  # tests: a fake cloud provider
 ) -> ModelParts:
     """The planner, prompt writer and screen reader — local, or Ollama Cloud for the uses the user
     allowed (D62). Shared by the CLI and sonud."""
@@ -142,11 +149,21 @@ def model_parts(
     if model:
         role = role.model_copy(update={"model": model})
 
-    pause = CloudPause(state_dir / PAUSE_FILE if state_dir is not None else None)
+    pauses: dict[str, CloudPause] = {}
 
-    def cloud(use: CloudUse, name: str) -> CloudModel:
-        cloud_role = ModelRole(model=name, think=settings.cloud.think)
-        return CloudModel(OllamaChatModel(client, cloud_role, ollama), use, audit, pause)
+    def paused(provider: str) -> CloudPause:  # one pause per provider: a limit at Groq doesn't stop Anthropic
+        name = PAUSE_FILE if provider == "ollama" else f"cloud-pause-{provider}.json"
+        return pauses.setdefault(provider, CloudPause(state_dir / name if state_dir is not None else None))
+
+    def cloud(use: CloudUse, name: str, provider: str | None = None) -> CloudModel:
+        provider = provider or settings.cloud.provider
+        if provider == "ollama":
+            cloud_role = ModelRole(model=name, think=settings.cloud.think)
+            return CloudModel(OllamaChatModel(client, cloud_role, ollama), use, audit, paused("ollama"))
+        found = provider_for(settings, provider)  # D94: Anthropic, Gemini, Groq, OpenRouter, OmniRoute, …
+        key = lookup_key(found, os.environ if env is None else env)
+        inner = RemoteModel(found, name, key, transport=http, think=settings.cloud.think)
+        return CloudModel(inner, use, audit, paused(provider), label=found.label)
 
     local = LLMPlanner(OllamaChatModel(client, role, ollama))
     planner: Planner = local
@@ -178,12 +195,34 @@ def model_parts(
         else local_text
     )
     if cloud_allowed(settings, "vision"):
-        vision = LocalFallback(cloud("vision", settings.cloud.vision_model), local_text)
+        vision = LocalFallback(
+            cloud("vision", settings.cloud.vision_model, settings.cloud.vision_provider), local_text
+        )
         reader = ScreenReader(vision, settings.ollama.host, cloud=True)
     else:
         reader = ScreenReader(local_text, settings.ollama.host)
-    pages = PageReader(local_text, settings.ollama.host, page_chars(settings.ollama.num_ctx))
-    return ModelParts(planner, local, shown, PromptWriter(writer), reader, pages)
+    if cloud_allowed(settings, "reading"):  # D94: page and document text goes to the user's cloud model
+        reading = LocalFallback(cloud("reading", settings.cloud.model), local_text)
+        pages = PageReader(reading, settings.ollama.host, 20_000, remote=True)
+    else:
+        pages = PageReader(local_text, settings.ollama.host, page_chars(settings.ollama.num_ctx))
+    replies: TextModel = (
+        LocalFallback(cloud("replies", settings.cloud.model), local_text)
+        if cloud_allowed(settings, "replies")
+        else local_text
+    )
+    return ModelParts(planner, local, shown, PromptWriter(writer), reader, pages, replies)
+
+
+def provider_for(settings: Settings, name: str) -> Provider:
+    """A built-in provider, changed or added by [providers.<name>] (D94)."""
+    own = settings.providers.get(name)
+    if own is not None:
+        label = own.label or (BUILT_IN[name].label if name in BUILT_IN else name)
+        return Provider(name, own.kind, own.base_url, label, own.key)
+    if name in BUILT_IN:
+        return BUILT_IN[name]
+    raise SetupError(f"[cloud] names {name!r}, which isn't a provider — add [providers.{name}]")
 
 
 async def outside_tools(settings: Settings, registry: ToolRegistry) -> OutsideServers | None:
@@ -262,7 +301,7 @@ async def build_runtime(
         await client.aclose()
         raise
     ctx.writer, ctx.reader, ctx.pages = parts.writer, parts.reader, parts.pages
-    conversation, responder = assistant_parts(settings, paths, client, memory=memory)
+    conversation, responder = assistant_parts(settings, paths, client, memory=memory, model=parts.replies)
     registry = ToolRegistry()
     servers = await outside_tools(settings, registry) if outside else None
     engine = Engine(

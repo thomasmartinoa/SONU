@@ -10,7 +10,7 @@ Owner: [@thomasmartinoa](https://github.com/thomasmartinoa). It is never called 
 2. [`docs/DECISIONS.md`](docs/DECISIONS.md) — every decision and why. Don't re-open a decision without a new reason.
 3. [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) — the map of abilities (done / next / planned) and how each works.
 4. As needed: [`docs/PROPOSAL.md`](docs/PROPOSAL.md) (design, research, roadmap), [`docs/threat-model.md`](docs/threat-model.md),
-   [`docs/evals.md`](docs/evals.md), [`docs/integrations/hypr-dotfiles.md`](docs/integrations/hypr-dotfiles.md), [`docs/adr/`](docs/adr/).
+   [`docs/evals.md`](docs/evals.md), [`docs/MODELS.md`](docs/MODELS.md) (which model for which job), [`docs/integrations/hypr-dotfiles.md`](docs/integrations/hypr-dotfiles.md), [`docs/adr/`](docs/adr/).
 
 **Every PR updates `docs/STATUS.md`** (and `docs/DECISIONS.md` when something was decided), so a fresh session or a
 fresh clone always has the full context.
@@ -83,7 +83,8 @@ src/sonu/
   voice/          audio.py (pw-record/pw-play, end of speech), engines.py (Whisper, Kokoro, Silero), session.py,
                   wake.py ("Hey Sonu"),
                   speech.py (text said like a person: paths, links, times, long lists)
-  llm/            ollama.py, chat.py, cloud.py (Ollama Cloud, opt-in: what may go, audited first)
+  llm/            ollama.py, chat.py, cloud.py (opt-in: what may go, audited first), providers.py (Anthropic,
+                  Gemini, OpenAI-compatible: Groq, OpenRouter, OmniRoute; keys in the keyring)
   control/        shell.qml + __init__.py: SONU's Control Center window (`sonu control`, control_tools.py)
   hud/            shell.qml: SONU's HUD (its own Quickshell window; sonud starts it; ui/hud.py writes its state)
   config/         settings.py, catalog.py (what the Control Center may change), editing.py (comments kept, checked)

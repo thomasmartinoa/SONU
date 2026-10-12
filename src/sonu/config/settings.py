@@ -12,11 +12,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 AutonomyMode = Literal["suggest", "confirm-each", "confirm-risky", "trusted"]
 CloudPolicy = Literal["never", "ask", "allow"]
-CloudUse = Literal["prompts", "planning", "vision"]
+CloudUse = Literal["prompts", "planning", "vision", "reading", "replies"]
 
 
 class _Section(BaseModel):
@@ -181,15 +181,32 @@ class NotificationsSettings(_Section):
 _DEFAULT_CLOUD_USES: tuple[CloudUse, ...] = ("prompts", "planning")
 
 
+class ProviderSettings(_Section):
+    """A cloud provider for SONU's brains (D94). Anthropic, Gemini, Groq, OpenRouter and OmniRoute are built
+    in; this adds another (or changes one): any service with the OpenAI chat API is `kind = "openai"`."""
+
+    kind: Literal["anthropic", "gemini", "openai"] = "openai"
+    base_url: str = Field(min_length=8, max_length=300, pattern=r"^https?://")
+    label: str = Field(default="", max_length=40)
+    # Where its API key is: "keyring" (`sonu settings key <name>`), "env:NAME", or "none" (a local gateway).
+    key: str = Field(default="keyring", pattern=r"^(keyring|none|env:[A-Za-z_][A-Za-z0-9_]{0,63})$")
+
+
 class CloudSettings(_Section):
     # Ollama Cloud models (D62), reached through the local Ollama once it's signed in (`ollama signin`).
     # Nothing is sent unless [privacy] cloud = "allow", and then only for the uses listed here.
+    # Who serves the cloud model (D94): "ollama" (Ollama Cloud, through the local Ollama), or a provider —
+    # anthropic, gemini, groq, openrouter, omniroute, or one in [providers.<name>].
+    provider: str = Field(default="ollama", pattern=r"^[a-z][a-z0-9_-]{0,23}$")
     model: str = Field(default="gpt-oss:120b-cloud", min_length=1)  # prompts and planning
+    vision_provider: str = Field(default="ollama", pattern=r"^[a-z][a-z0-9_-]{0,23}$")
     vision_model: str = Field(default="gemma4:31b-cloud", min_length=1)
     # prompts : your idea for Claude Code (your words) → a better prompt
     # planning: harder requests, with window titles removed (only app names and workspaces go)
     # vision  : screenshots for "what's on my screen?" and clicking by looking — anything visible goes
-    use_for: list[CloudUse] = Field(default_factory=lambda: list(_DEFAULT_CLOUD_USES), max_length=3)
+    # reading : summaries of pages, documents and research (their text goes) (D94)
+    # replies : the sentence SONU says back (your words and the results go; never a private result) (D94)
+    use_for: list[CloudUse] = Field(default_factory=lambda: list(_DEFAULT_CLOUD_USES), max_length=5)
     # hard: requests with several parts, `sonu --deep`, and ones the local model couldn't plan; always: all
     plan: Literal["hard", "always"] = "hard"
     think: bool = False
@@ -261,7 +278,22 @@ class Settings(_Section):
     heads_up: HeadsUpSettings = HeadsUpSettings()
     conversations: ConversationsSettings = ConversationsSettings()
     cloud: CloudSettings = CloudSettings()
+    # More cloud providers, or changes to the built-in ones (D94): [providers.<name>]
+    providers: dict[str, ProviderSettings] = Field(default_factory=dict)
     mcp: McpSettings = McpSettings()
+
+    @model_validator(mode="after")
+    def _known_providers(self) -> Settings:
+        from sonu.llm.providers import BUILT_IN  # no cycle: providers.py doesn't import settings
+
+        known = {"ollama", *BUILT_IN, *self.providers}
+        for field, name in (
+            ("provider", self.cloud.provider),
+            ("vision_provider", self.cloud.vision_provider),
+        ):
+            if name not in known:
+                raise ValueError(f"[cloud] {field} = {name!r}: not a provider ({', '.join(sorted(known))})")
+        return self
 
 
 class ConfigError(Exception):
@@ -423,17 +455,28 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # at = "08:00"
 
 [cloud]
-# Ollama Cloud models, reached through your local Ollama after `ollama signin`. Nothing is sent unless
-# [privacy] cloud = "allow" — then only for the uses below; every send is in the audit log (cloud.send).
-# Cloud models never go in [models]: SONU refuses to start if one does.
-# model = "gpt-oss:120b-cloud"          # prompts and planning
+# Cloud models: Ollama Cloud (through your local Ollama after `ollama signin`) or another provider (D94):
+# anthropic, gemini, groq, openrouter, omniroute, or one in [providers.<name>]; its key: `sonu settings key
+# <provider>` (kept in your keyring). Nothing is sent unless [privacy] cloud = "allow" — then only for the
+# uses below; every send is in the audit log (cloud.send). Cloud models never go in [models].
+# provider = "ollama"
+# model = "gpt-oss:120b-cloud"          # e.g. claude-haiku-5-5 (anthropic), gemini-2.5-flash (gemini)
+# vision_provider = "ollama"
 # vision_model = "gemma4:31b-cloud"
 # prompts  : your idea for Claude Code (your own words) → a better prompt
 # planning : harder requests, window titles removed (app names and workspaces still go)
 # vision   : screenshots for "what's on my screen?" and clicking by looking — anything visible goes
+# reading  : pages, documents and research — their text goes
+# replies  : what SONU says back — your words and the results go (never a private result)
 # use_for = ["prompts", "planning"]
 # plan = "hard"                         # hard (several parts, --deep, local failed) | always
 # think = false
+
+# Another cloud provider, or a change to a built-in one (D94). Any service with the OpenAI chat API:
+#   [providers.together]
+#   kind = "openai"                     # openai | anthropic | gemini
+#   base_url = "https://api.together.xyz/v1"
+#   key = "keyring"                     # keyring | env:NAME | none
 
 # Outside MCP servers (D63): SONU starts each one and can use its tools. Their tools are high risk —
 # asked every time, with the arguments shown — except the ones you list as read_only. What they

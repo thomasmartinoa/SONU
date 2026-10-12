@@ -5,7 +5,10 @@ every change is written to the audit log, and sonud restarts to use it once it's
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import getpass
 import json
+import os
 import sys
 from typing import Any
 
@@ -17,6 +20,8 @@ from sonu.config.catalog import CATALOG
 from sonu.config.editing import SettingsError, change, entry_for, loosens, parse, value_of
 from sonu.daemon.client import ask_reload
 from sonu.llm.ollama import OllamaClient, OllamaError
+from sonu.llm.providers import BUILT_IN, lookup_key, store_key
+from sonu.runtime import SetupError, provider_for
 
 app = typer.Typer(help="See and change SONU's settings (what the Control Center does).", no_args_is_help=True)
 
@@ -144,3 +149,69 @@ def settings_models(
         where = "cloud" if model["cloud"] else f"{model['gb']} GB"
         usable = "" if model["tools"] else "  [dim](can't plan: no tool calling)[/]"
         state.console.print(f"  {model['name']}  [dim]{where}[/]{usable}", highlight=False)
+
+
+@app.command("key")
+def settings_key(
+    ctx: typer.Context,
+    provider: str = typer.Argument(
+        ..., help="anthropic, gemini, groq, openrouter, omniroute, or one of yours"
+    ),
+    from_stdin: bool = typer.Option(False, "--stdin", help="Read the key from standard input (the window)."),
+) -> None:
+    """Keep a cloud provider's API key in the system keyring (never in a file) (D94)."""
+    state = get_state(ctx)
+    state.require_valid_config()
+    try:
+        found = provider_for(state.settings, provider)
+    except SetupError as exc:
+        state.err.print(f"[red]✖[/] {exc}")
+        raise typer.Exit(1) from None
+    key = (
+        sys.stdin.readline().strip()
+        if from_stdin
+        else getpass.getpass(f"{found.label} API key (hidden): ").strip()
+    )
+    if not key:
+        state.err.print("Nothing stored (no key given).")
+        raise typer.Exit(1)
+    if not store_key(found.name, key):
+        state.err.print("[red]✖[/] the keyring refused it (is `secret-tool` / a keyring running?)")
+        raise typer.Exit(1)
+    if state.settings.audit.enabled:  # that a key was set — never the key
+        with contextlib.suppress(OSError, AuditError):
+            AuditLog(state.paths.audit_file).append("settings.key", {"provider": found.name})
+    state.console.print(f"[green]✔[/] {found.label}'s key is in your keyring.")
+
+
+@app.command("providers")
+def settings_providers(
+    ctx: typer.Context,
+    as_json: bool = typer.Option(False, "--json", help="Print JSON (for the Control Center)."),
+) -> None:
+    """The cloud providers SONU can use, and whether each has a key (D94)."""
+    state = get_state(ctx)
+    state.require_valid_config()
+    names = ["ollama", *dict.fromkeys([*BUILT_IN, *state.settings.providers])]
+    rows = []
+    for name in names:
+        if name == "ollama":
+            rows.append({"name": "ollama", "label": "Ollama Cloud", "kind": "ollama", "key": True})
+            continue
+        found = provider_for(state.settings, name)
+        rows.append(
+            {
+                "name": name,
+                "label": found.label,
+                "kind": found.kind,
+                "key": lookup_key(found, os.environ) is not None,
+            }
+        )
+    if as_json:
+        print(json.dumps(rows))
+        return
+    for row in rows:
+        mark = "[green]key ✔[/]" if row["key"] else f"[dim]no key — sonu settings key {row['name']}[/]"
+        if row["name"] == "ollama":
+            mark = "[dim]`ollama signin`[/]"
+        state.console.print(f"  {row['name']:<11} {row['label']:<28} {mark}", highlight=False)

@@ -32,6 +32,7 @@ from typing import Any
 from sonu.audit.log import AuditError, AuditLog
 from sonu.config.settings import CloudUse, Settings
 from sonu.llm.chat import ChatMessage, ChatModelError, ChatModelLimited, ChatResult, OllamaChatModel
+from sonu.llm.providers import RemoteModel
 
 logger = logging.getLogger(__name__)
 
@@ -128,12 +129,14 @@ class CloudModel:
 
     def __init__(
         self,
-        inner: OllamaChatModel,
+        inner: OllamaChatModel | RemoteModel,
         use: CloudUse,
         audit: AuditLog | None,
         pause: CloudPause | None = None,
+        *,
+        label: str = "Ollama Cloud",  # who it is, in what SONU says (D94: any provider)
     ) -> None:
-        self.inner, self.use, self.audit = inner, use, audit
+        self.inner, self.use, self.audit, self.label = inner, use, audit, label
         self.pause = pause or CloudPause()
         self.name = inner.name
 
@@ -147,7 +150,7 @@ class CloudModel:
     def _check_pause(self) -> None:
         until = self.pause.until()
         if until is not None:
-            raise ChatModelLimited(f"Ollama Cloud's usage limit was reached — {staying_local(until)}")
+            raise ChatModelLimited(f"{self.label}'s usage limit was reached — {staying_local(until)}")
 
     def _done(self, result: ChatResult) -> None:
         self._audit(
@@ -165,11 +168,18 @@ class CloudModel:
         until = self.pause.start(exc.retry_after_s or DEFAULT_PAUSE_S, str(exc))
         until_text = datetime.fromtimestamp(until).isoformat(timespec="minutes")
         self._audit("cloud.limited", {"use": self.use, "model": self.name, "until": until_text})
-        return ChatModelLimited(f"Ollama Cloud's usage limit was reached ({exc}) — {staying_local(until)}")
+        return ChatModelLimited(f"{self.label}'s usage limit was reached ({exc}) — {staying_local(until)}")
 
     def _record(self, messages: list[ChatMessage]) -> None:
         chars, images, digest = fingerprint(messages)
-        data = {"use": self.use, "model": self.name, "chars": chars, "images": images, "sha256": digest}
+        data = {
+            "use": self.use,
+            "provider": self.label,
+            "model": self.name,
+            "chars": chars,
+            "images": images,
+            "sha256": digest,
+        }
         if self.audit is None:
             logger.info("cloud.send %s", data)
             return
@@ -178,9 +188,10 @@ class CloudModel:
         except (OSError, AuditError) as exc:
             raise ChatModelError(f"couldn't write the audit log, so nothing was sent ({exc})") from exc
 
-    @staticmethod
-    def _explain(exc: ChatModelError) -> ChatModelError:
+    def _explain(self, exc: ChatModelError) -> ChatModelError:
         text = str(exc)
+        if self.label != "Ollama Cloud":
+            return exc  # a provider's own message already says what to do
         if "unauthorized" in text.lower():
             return ChatModelError(f"{text} — Ollama isn't signed in to Ollama Cloud: run `ollama signin`")
         if "retired" in text.lower():
@@ -189,6 +200,8 @@ class CloudModel:
 
     async def complete_json(self, messages: list[ChatMessage], schema: dict[str, Any]) -> ChatResult:
         self._check_pause()
+        if isinstance(self.inner, RemoteModel):
+            self.inner.check_key()
         self._record(messages)
         try:
             result = await self.inner.complete_json(messages, schema)
@@ -203,6 +216,8 @@ class CloudModel:
         self, messages: list[ChatMessage], *, temperature: float, max_tokens: int
     ) -> ChatResult:
         self._check_pause()
+        if isinstance(self.inner, RemoteModel):
+            self.inner.check_key()
         self._record(messages)
         try:
             result = await self.inner.complete_text(messages, temperature=temperature, max_tokens=max_tokens)
