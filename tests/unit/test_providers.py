@@ -131,7 +131,8 @@ def test_keys_come_from_the_keyring_or_a_named_variable() -> None:
         calls.append(argv)
         return subprocess.CompletedProcess(argv, 0, stdout="sk-from-keyring\n")
 
-    assert lookup_key(BUILT_IN["anthropic"], {}, run=keyring) == "sk-from-keyring"
+    found = lambda name, path=None: "/usr/bin/secret-tool"  # noqa: E731 — the program, without running it
+    assert lookup_key(BUILT_IN["anthropic"], {}, run=keyring, which=found) == "sk-from-keyring"
     assert calls[0][:2] == ["secret-tool", "lookup"] and calls[0][-1] == "anthropic"
     named = Provider("mine", "openai", "https://example.com/v1", "Mine", "env:MY_KEY")
     assert lookup_key(named, {"MY_KEY": "sk-env"}) == "sk-env"

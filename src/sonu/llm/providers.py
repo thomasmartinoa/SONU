@@ -56,13 +56,15 @@ class KeyMissing(ChatModelError):
     pass
 
 
-def lookup_key(provider: Provider, env: Mapping[str, str], run: Any = subprocess.run) -> str | None:
+def lookup_key(
+    provider: Provider, env: Mapping[str, str], run: Any = subprocess.run, which: Any = shutil.which
+) -> str | None:
     """The provider's API key: from the keyring (``secret-tool``) or the environment variable it names."""
     if provider.key == "none":
         return ""
     if provider.key.startswith("env:"):
         return env.get(provider.key.removeprefix("env:")) or None
-    if shutil.which("secret-tool") is None:
+    if which("secret-tool", path=env.get("PATH")) is None:  # the environment's PATH: tests give none
         return None
     try:
         found = run(
