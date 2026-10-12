@@ -15,6 +15,7 @@ import pytest
 
 from sonu.config.paths import SonuPaths
 from sonu.config.settings import AppsSettings, McpSettings, Settings, VerifySettings, VoiceSettings
+from sonu.daemon import server
 from sonu.daemon.client import Notice, parse, try_run
 from sonu.daemon.protocol import decode, encode
 from sonu.daemon.server import KEEP_LOADED, Daemon
@@ -300,7 +301,8 @@ async def test_a_medium_risk_step_takes_a_spoken_yes(rig: Rig) -> None:
     voice = voice_rig(rig, "close zen", "yes, go ahead")
     _, out = await rig.run("--confirm", "never", "listen")
     assert "✔ Closed zen" in out
-    assert voice.said[1] == "Should I close zen (workspace 1)? Say yes or no."
+    # Said sentence by sentence (D85): the question plays while "Say yes or no." is made.
+    assert voice.said[1:3] == ["Should I close zen (workspace 1)?", "Say yes or no."]
     assert not rig.fake.windows_of_class("zen")
 
 
@@ -419,7 +421,12 @@ async def test_after_a_reply_sonu_keeps_listening_for_the_next_request(rig: Rig)
     lines = out.splitlines()
     assert lines.count("🎙 Still listening… (“thanks” to finish)") == 2  # after each reply; then silence
     assert "You: hello" in lines
-    assert voice.said == ["How can I help?", "Done, kitty's on 2.", "Hey! Not much — what can I do for you?"]
+    assert voice.said == [
+        "How can I help?",
+        "Done, kitty's on 2.",
+        "Hey!",
+        "Not much — what can I do for you?",
+    ]
 
 
 @pytest.mark.anyio
@@ -528,7 +535,8 @@ async def test_by_voice_a_written_prompt_is_shown_then_asked_briefly(rig: Rig) -
     assert await confirm(request) is True
     assert shown == [("Read this first", "Build a small todo app.\nRequirements:\n- a dark mode")]
     assert voice.said == [
-        "Should I send the prompt I wrote to Claude Code in todo-app — it's on your screen? Say yes or no."
+        "Should I send the prompt I wrote to Claude Code in todo-app — it's on your screen?",
+        "Say yes or no.",
     ]
 
 
@@ -648,3 +656,21 @@ async def test_the_daily_briefing_shows_once_a_day(rig: Rig, monkeypatch: pytest
     assert rig.notices == [("SONU — your briefing", "Good morning — Battery: 76%.")]
     assert not await rig.daemon.brief_if_due(datetime(2026, 10, 12, 15, 0))  # shown today
     assert await rig.daemon.brief_if_due(datetime(2026, 10, 13, 8, 1))  # the next day
+
+
+@pytest.mark.anyio
+async def test_a_step_that_takes_a_while_gets_a_one_moment(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    """D85: a person says "one moment" instead of going quiet — once, before the reply."""
+    monkeypatch.setattr(server, "STILL_WORKING_S", 0.2)
+    rig.fake.apps["kitty"].delay_s = 0.8  # kitty takes a while to open
+    voice = voice_rig(rig, "open kitty on 2")
+    code, out = await rig.run("listen")
+    assert code == 0 and "✔ Opened kitty on workspace 2" in out
+    assert voice.said == ["How can I help?", "One moment.", "Done, kitty's on 2."]
+
+
+@pytest.mark.anyio
+async def test_a_quick_step_gets_no_one_moment(rig: Rig) -> None:
+    voice = voice_rig(rig, "open kitty on 2")
+    await rig.run("listen")
+    assert "One moment." not in voice.said

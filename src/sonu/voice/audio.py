@@ -19,7 +19,7 @@ import asyncio
 import contextlib
 import math
 import os
-from collections.abc import AsyncGenerator, Callable, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Sequence
 from dataclasses import dataclass
 
 RATE = 16_000
@@ -172,7 +172,9 @@ class Speaker:
         self._process: asyncio.subprocess.Process | None = None
         self._stopped = False
 
-    async def play(self, samples: bytes) -> None:
+    async def play(self, samples: bytes | AsyncIterator[bytes]) -> None:
+        """Play ``samples`` — or each piece as it comes (a reply said sentence by sentence, into one
+        player: no gap but the voice's own)."""
         self._process = await asyncio.create_subprocess_exec(
             *self.argv,
             stdin=asyncio.subprocess.PIPE,
@@ -183,8 +185,16 @@ class Speaker:
             raise AudioError("the player takes no input")
         try:
             with contextlib.suppress(BrokenPipeError, ConnectionResetError):
-                self._process.stdin.write(samples)
-                await self._process.stdin.drain()
+                if isinstance(samples, bytes):
+                    self._process.stdin.write(samples)
+                    await self._process.stdin.drain()
+                else:
+                    async with contextlib.aclosing(samples):  # type: ignore[type-var]
+                        async for piece in samples:
+                            if self._stopped:
+                                break
+                            self._process.stdin.write(piece)
+                            await self._process.stdin.drain()
         finally:
             self._process.stdin.close()  # also when SONU was talked over: no pipe left behind
         code = await self._process.wait()

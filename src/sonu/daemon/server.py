@@ -133,12 +133,19 @@ class _DesktopSession:
             await asyncio.to_thread(self.progress.update, message)
 
 
+def _said(task: asyncio.Task[bool]) -> None:
+    """A "one moment" that couldn't be said is only logged: the request goes on."""
+    if not task.cancelled() and task.exception() is not None:
+        logger.warning("couldn't say 'one moment': %s", task.exception())
+
+
 class _Relay(Observer):
     """Sends progress to the client as it happens."""
 
     def __init__(self, session: _Session | _DesktopSession, model: str) -> None:
         self.session, self.model = session, model
         self.pending: list[dict[str, Any]] = []
+        self.step_started: float | None = None  # when the running step began (None: none running)
 
     def _queue(self, message: dict[str, Any]) -> None:
         self.pending.append(message)
@@ -155,9 +162,11 @@ class _Relay(Observer):
         )
 
     def on_step_start(self, index: int, description: str) -> None:
+        self.step_started = time.monotonic()
         self._queue({"type": "step_start", "description": description})
 
     def on_step(self, record: StepRecord) -> None:
+        self.step_started = None
         summary = record.outcome.summary
         if record.outcome.status is StepStatus.SKIPPED:
             summary = f"would: {record.description}"
@@ -172,6 +181,12 @@ class _Relay(Observer):
     async def flush(self) -> None:
         while self.pending:
             await self.session.send(self.pending.pop(0))
+
+
+# Said once when a spoken request's step is still running after STILL_WORKING_S (D85): a person says
+# "one moment" instead of going quiet. Taking turns, like the greetings.
+STILL_WORKING = ("One moment.", "Working on it.", "Give me a second.", "On it.")
+STILL_WORKING_S = 1.5
 
 
 def final_message(report: TaskReport) -> dict[str, Any]:
@@ -276,6 +291,7 @@ class Daemon:
         self._server: asyncio.Server | None = None
         self._warming: asyncio.Task[None] | None = None
         self._voice: VoiceSession | None = None
+        self._waited = 0  # which "one moment" line is next
         self.wake = _WakeWord(self)
         self.echo = EchoCanceller()
         self.notice: Callable[[], Notice] = Notice  # tests record instead of showing
@@ -519,7 +535,10 @@ class Daemon:
             await session.send(final_message(TaskReport(request="", error="I didn't hear anything")))
             return
         while True:
-            report = await self._run(engine, session, relay, text, confirm, choose, request)
+            speaks = self.settings.voice.speak_replies and not request.get("dry_run")
+            report = await self._run(
+                engine, session, relay, text, confirm, choose, request, voice=voice if speaks else None
+            )
             if report is None:
                 return
             follow_up = self.settings.voice.follow_up_s > 0 and not request.get("dry_run")
@@ -563,8 +582,11 @@ class Daemon:
         confirm: Any,
         choose: Any,
         request: dict[str, Any],
+        *,
+        voice: VoiceSession | None = None,
     ) -> TaskReport | None:
-        """One request through the engine, streaming progress; None if the client went away."""
+        """One request through the engine, streaming progress; None if the client went away. ``voice``: a
+        spoken request — a step that takes a while gets a "one moment" (said once)."""
         if session.hud is not None:
             session.hud.begin(text)
 
@@ -577,10 +599,17 @@ class Daemon:
         watcher = (
             asyncio.create_task(self._read_answers(session, task)) if isinstance(session, _Session) else None
         )
+        waiting: asyncio.Task[bool] | None = None
         try:
             while not task.done():
                 await relay.flush()
                 await asyncio.wait({task}, timeout=0.05)
+                started = relay.step_started
+                if voice and waiting is None and started and time.monotonic() - started > STILL_WORKING_S:
+                    line = STILL_WORKING[self._waited % len(STILL_WORKING)]
+                    self._waited += 1
+                    waiting = asyncio.create_task(voice.say(line, keep=True))  # the reply waits its turn
+                    waiting.add_done_callback(_said)
             report = task.result()
         except asyncio.CancelledError:
             return None  # the client left (Ctrl+C): stop, like the CLI does
