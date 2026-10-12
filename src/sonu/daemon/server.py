@@ -34,11 +34,12 @@ from typing import Any
 
 import httpx
 
-from sonu.audit.log import AuditLog
+from sonu.audit.log import AuditError, AuditLog
 from sonu.browser.host import socket_folder
 from sonu.config.paths import SonuPaths
 from sonu.config.settings import Settings
 from sonu.core.engine import ConfirmRequest, Engine, Observer
+from sonu.core.heads_up import HeadsUp, Watch, busy, in_quiet_hours
 from sonu.core.journal import FocusTracker
 from sonu.core.notifications import NotificationLog
 from sonu.core.notifications import watch as watch_notifications
@@ -70,6 +71,7 @@ from sonu.runtime import (
     open_talks,
     outside_tools,
 )
+from sonu.system import SystemControl
 from sonu.tools.base import Choices, Risk, StepStatus
 from sonu.tools.briefing_tools import brief
 from sonu.tools.context import ToolContext
@@ -312,6 +314,10 @@ class Daemon:
         # SONU's HUD (D80), started in start(); None: turned off or no Quickshell
         self.hud: Hud | None = None
         self._briefing: asyncio.Task[None] | None = None  # the daily briefing (D83), when it's on
+        # Heads-ups (D88), when they're on: the battery, the disk, the heat — and who records the mic.
+        self.system = SystemControl()
+        self.watch = Watch(settings.heads_up)
+        self._heads_up: asyncio.Task[None] | None = None
 
     # -------------------------------------------------------------- lifetime
     async def start(self, path: Path | None = None) -> Path:
@@ -330,6 +336,8 @@ class Daemon:
             self._watching = asyncio.create_task(watch_notifications(self.notifications, self.env))
         if self.settings.briefing.daily:
             self._briefing = asyncio.create_task(self._brief_every_day())
+        if self.settings.heads_up.enabled:
+            self._heads_up = asyncio.create_task(self._heads_up_every_minute())
         if self.settings.hud.enabled and self.env.get("WAYLAND_DISPLAY"):  # a desktop to show it on
             hud = Hud(hud_folder(self.env), self.settings.hud.hide_after_s)
             try:
@@ -346,6 +354,71 @@ class Daemon:
             with contextlib.suppress(Exception):  # a failed briefing never stops the daemon
                 await self.brief_if_due(datetime.now())
             await asyncio.sleep(60)
+
+    async def _heads_up_every_minute(self) -> None:
+        while True:
+            try:
+                await self.heads_up_now(datetime.now())
+            except Exception:  # a failed check never stops the daemon
+                logger.exception("heads-up check failed")
+            await asyncio.sleep(60)
+
+    async def heads_up_now(self, now: datetime) -> list[tuple[HeadsUp, str]]:
+        """Check once (D88): show each new heads-up, and say it when the user isn't busy. Returns each one
+        with what became of it ("said", or why it was only shown)."""
+        if self.lock.locked():
+            return []  # in the middle of a request: next minute
+        done: list[tuple[HeadsUp, str]] = []
+        for heads_up in await asyncio.to_thread(self.watch.check, self.system, now):
+            if self.hud is not None:
+                self.hud.begin("heads-up", "done")
+                self.hud.show(result=heads_up.text)
+            else:
+                with contextlib.suppress(Exception):
+                    self.notice().show("SONU", heads_up.text, seconds=20)
+            what = await self._say_heads_up(heads_up, now)
+            if self.audit is not None:
+                with contextlib.suppress(OSError, AuditError):
+                    self.audit.append(
+                        "heads_up", {"key": heads_up.key, "text": heads_up.text, "spoken": what}
+                    )
+            done.append((heads_up, what))
+        return done
+
+    async def _say_heads_up(self, heads_up: HeadsUp, now: datetime) -> str:
+        """ "said", or why it wasn't."""
+        settings = self.settings.heads_up
+        if not settings.speak:
+            return "shown only (speak = false)"
+        try:
+            mic = await self.system.mic_users()
+        except Exception:  # can't tell whether a call is on: don't talk over one
+            return "shown only (couldn't check the microphone)"
+        reason = busy(mic, await self._fullscreen(), in_quiet_hours(settings.quiet, now), heads_up)
+        if reason is not None:
+            return f"shown only ({reason})"
+        try:
+            voice = self.voice_session()
+        except VoiceUnavailable as exc:
+            return f"shown only (voice: {exc})"
+        if self.lock.locked():
+            return "shown only (a request started)"
+        async with self.lock:  # never over a request; "Hey Sonu" doesn't hear SONU itself
+            await voice.say(heads_up.text)
+            self._quiet_until = time.monotonic() + 0.8
+        return "said"
+
+    async def _fullscreen(self) -> bool:
+        """A fullscreen window has the focus (a film, a game)."""
+        try:
+            desktop = await HyprlandDesktop.connect(
+                discover_instance({**self.env, **self._client_env}),
+                timeout_s=self.settings.hyprland.request_timeout_s,
+            )
+            window = (await desktop.snapshot()).active_window
+        except Exception:
+            return False
+        return window is not None and window.fullscreen >= 2
 
     async def brief_if_due(self, now: datetime) -> bool:
         """Show today's briefing if it's past ``[briefing] at`` and it wasn't shown today. True: shown."""
@@ -441,7 +514,7 @@ class Daemon:
             self._warming.cancel()
         if self.hud is not None:
             await self.hud.stop()
-        for task in (self._journaling, self._watching, self._briefing):
+        for task in (self._journaling, self._watching, self._briefing, self._heads_up):
             if task is not None:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

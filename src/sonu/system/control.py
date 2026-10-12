@@ -179,6 +179,30 @@ def parse_audio_streams(text: str) -> list[AudioStream]:
     return streams
 
 
+def parse_mic_users(text: str) -> list[str]:
+    """``pw-dump`` (JSON) → the apps recording the microphone right now (a call, OBS) — never SONU itself:
+    its ``pw-record`` and its echo canceller's capture (found on the laptop: "echo-cancel-capture",
+    no app name, always there when talking over SONU is on)."""
+    try:
+        objects = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise CommandError(f"Unexpected pw-dump output: {exc}") from None
+    users = []
+    for obj in objects if isinstance(objects, list) else []:
+        info = obj.get("info") if isinstance(obj, dict) else None
+        props = info.get("props") if isinstance(info, dict) else None
+        if not isinstance(info, dict) or not isinstance(props, dict):
+            continue
+        if props.get("media.class") != "Stream/Input/Audio":
+            continue
+        if info.get("state") != "running" or str(props.get("node.name", "")).startswith("echo-cancel"):
+            continue
+        name = str(props.get("application.name") or props.get("application.process.binary") or "")
+        if name and name != "pw-record" and props.get("application.process.binary") != "pw-record":
+            users.append(name)
+    return users
+
+
 def parse_bluetooth_powered(text: str) -> bool | None:
     """``bluetoothctl show`` → True/False from "Powered: yes/no"; None when there is no adapter."""
     match = _POWERED.search(text)
@@ -507,6 +531,10 @@ class SystemControl:
     async def audio_streams(self) -> list[AudioStream]:
         """Apps' sound outputs (``pw-dump``, read-only): lets SONU hear that a browser plays."""
         return parse_audio_streams((await self._run("pw-dump")).stdout)
+
+    async def mic_users(self) -> list[str]:
+        """The apps recording the microphone now (``pw-dump``, read-only): a call or a recording."""
+        return parse_mic_users((await self._run("pw-dump")).stdout)
 
     # ------------------------------------------------------------------ YouTube (yt-dlp, read-only lookup)
     async def find_video(self, query: str) -> Video | None:

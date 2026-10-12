@@ -63,7 +63,7 @@ src/sonu/
   core/           engine.py (the loop), planner.py (prompt, examples, repair), planning.py, report.py,
                   responder.py (replies), conversation.py, memory.py, layouts.py, notifications.py,
                   prompt_writer.py, screen_reader.py, page_reader.py (a page's text → the local model),
-                  talks.py (what the user and SONU said, kept 30 days)
+                  talks.py (what the user and SONU said, kept 30 days), heads_up.py (speaking up, opt-in)
   tools/          base.py (tool contract), desktop_tools.py, window_tools.py, web_tools.py, media_tools.py,
                   settings_tools.py, everyday_tools.py, file_tools.py (folders, files by name, recent),
                   file_change_tools.py (move, rename, the trash, restore), clipboard_tools.py, music_tools.py,

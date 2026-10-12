@@ -139,6 +139,19 @@ class ConversationsSettings(_Section):
     keep_days: int = Field(default=30, ge=1, le=365)
 
 
+class HeadsUpSettings(_Section):
+    # SONU speaks up by itself (D88): the battery low, the disk nearly full, the CPU staying very hot — each
+    # once. Off unless turned on. Shown on the HUD; said out loud only with speak = true, and never during a
+    # call (another app recording the mic), over a fullscreen window or in the quiet hours.
+    enabled: bool = False
+    speak: bool = False
+    battery_low: int = Field(default=15, ge=1, le=99)
+    battery_critical: int = Field(default=7, ge=1, le=99)
+    disk_full: int = Field(default=95, ge=50, le=100)  # % used
+    hot: int = Field(default=90, ge=50, le=110)  # °C
+    quiet: str = Field(default="23:00-07:00", pattern=r"^$|^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$")
+
+
 class BriefingSettings(_Section):
     # A briefing once a day, by itself (D83): sonud shows it on the HUD (or as a notification) the first time
     # it's running after `at` each day. Off unless turned on; "good morning" / "brief me" work either way.
@@ -242,6 +255,7 @@ class Settings(_Section):
     notifications: NotificationsSettings = NotificationsSettings()
     hud: HudSettings = HudSettings()
     briefing: BriefingSettings = BriefingSettings()
+    heads_up: HeadsUpSettings = HeadsUpSettings()
     conversations: ConversationsSettings = ConversationsSettings()
     cloud: CloudSettings = CloudSettings()
     mcp: McpSettings = McpSettings()
@@ -384,6 +398,17 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # Only on this computer; "forget our conversations" deletes them.
 # keep = true
 # keep_days = 30
+
+[heads_up]
+# SONU speaks up by itself: the battery low, the disk nearly full, the CPU staying very hot (each once).
+# Shown on the HUD; with speak = true also said — never during a call, over a fullscreen window or at night.
+# enabled = false
+# speak = false
+# battery_low = 15
+# battery_critical = 7
+# disk_full = 95
+# hot = 90
+# quiet = "23:00-07:00"
 
 [briefing]
 # A briefing once a day by itself (battery, reminders, messages, yesterday's work, problems), shown on the HUD

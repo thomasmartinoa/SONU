@@ -674,3 +674,38 @@ async def test_a_quick_step_gets_no_one_moment(rig: Rig) -> None:
     voice = voice_rig(rig, "open kitty on 2")
     await rig.run("listen")
     assert "One moment." not in voice.said
+
+
+@pytest.mark.anyio
+async def test_a_heads_up_is_shown_and_said_only_when_the_user_is_free(rig: Rig, tmp_path: Path) -> None:
+    """D88: never over a call; said once the microphone is free."""
+    from datetime import datetime
+
+    from sonu.config.settings import HeadsUpSettings
+    from sonu.core.heads_up import Watch
+    from sonu.system import SystemControl
+    from sonu.testing.fake_system import FakeSystem
+
+    battery = tmp_path / "power_supply" / "BAT1"
+    battery.mkdir(parents=True)
+    (battery / "status").write_text("Discharging\n")
+    (battery / "capacity").write_text("14\n")
+    fake = FakeSystem(mic_users=["Discord"])
+    rig.daemon.system = SystemControl(
+        fake, power_supply=tmp_path / "power_supply", sys=tmp_path, home=tmp_path
+    )
+    settings = HeadsUpSettings(enabled=True, speak=True, quiet="", disk_full=100)
+    rig.daemon.settings = rig.daemon.settings.model_copy(update={"heads_up": settings})
+    rig.daemon.watch = Watch(settings)
+    voice = voice_rig(rig)
+
+    [(_, what)] = await rig.daemon.heads_up_now(datetime(2026, 10, 12, 15, 0))
+    assert what == "shown only (Discord is using the microphone)" and voice.said == []
+    assert rig.notices[-1] == ("SONU", "Battery's at 14% — time to plug in.")
+    assert await rig.daemon.heads_up_now(datetime(2026, 10, 12, 15, 1)) == []  # once
+
+    fake.mic_users = []
+    (battery / "capacity").write_text("6\n")
+    [(_, what)] = await rig.daemon.heads_up_now(datetime(2026, 10, 12, 15, 30))
+    assert what == "said"
+    assert voice.said == ["Battery's at 6% — plug in now, or the laptop will shut down soon."]
