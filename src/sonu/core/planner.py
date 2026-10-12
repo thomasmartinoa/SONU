@@ -334,6 +334,10 @@ wallpaper is desktop.wallpaper ("change my wallpaper" is next); "which theme / w
 system.status with what ["theme"] or ["wallpaper"]. "What's on my clipboard?" is clipboard.read. "Copy …" \
 is clipboard.copy: what "path" for the path of a file (name = their words), "file" for a picture or text \
 file, "screenshot" for the last screenshot, "link" for this page's link, "text" for their own words.
+- "What's using my CPU / memory / GPU?", "why is my fan loud / my laptop hot or slow?" is system.processes \
+(by cpu, memory or gpu); "did anything crash? / any errors?" is system.problems; "kill / force quit / stop \
+<program>" is system.stop_program (closing an app's window is windows.close; stopping music or a recording \
+is media.control or obs.record).
 - Suspend (sleep), restart, shut down and log out are system.power, always the last step.
 - Recording the screen is obs.record (OBS Studio); OBS scenes are obs.scene; streaming, the \
 virtual camera and the replay buffer are obs.control; muting a source in OBS is obs.mute; "is OBS \
@@ -493,6 +497,12 @@ _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 _LOCAL_MUSIC = re.compile(
     r"\bshuffle\b|\b(?:from|in)\s+my\s+(?:music|songs)\b|\bplay\s+my\s+(?:music|songs)\b"
 )
+_WHY_HOT = re.compile(
+    r"\bfans?\b.*\b(?:loud|noisy|spinning|fast|high)\b|\bwhy\b.*\b(?:hot|slow|laggy|loud)\b"
+)
+_REMOVE_WORDS = re.compile(r"\b(?:uninstall|remove|get rid of|delete)\b")
+_STOP_WORDS = re.compile(r"\b(?:kill|force quit|quit|stop|end|terminate)\b")
+_MEDIA_STOP = re.compile(r"\bstop\b.*\b(?:music|song|songs|video|playing|playback|recording|stream)\b")
 _SONGS_IN = re.compile(r"\b(?:songs|music|tracks)\s+(?:in|from)\s+(?:my|the)\b")
 _ABOUT_A_PAGE = re.compile(r"\b(?:summari[sz]e|selected|selection|highlighted)\b")
 _FILE_VERBS = {
@@ -730,6 +740,36 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 problems.append(
                     f"step {index + 1} ({step.tool}): the user asked for music from their own folders — use "
                     "media.play_local (words = their words for an artist, album or song; place for a folder)"
+                )
+    # Found on the laptop (dry run, D81): "why is my fan so loud?" was planned as a temperature reading
+    # only — what makes it loud is the busy programs (system.processes shows them, the fans, the heat).
+    tools = {step.tool for step in plan.steps}
+    if _WHY_HOT.search(said) and "system.processes" not in tools and ("system.status" in tools or not tools):
+        wanted = json.dumps({"tool": "system.processes", "args": {}})
+        problems.append(f"the user asked what's making the laptop loud, hot or slow — plan {wanted}")
+    # Found in the evals (v39): "get rid of <app>" (uninstall) became system.stop_program. A program is
+    # stopped only when the user says kill, quit, stop, end or terminate.
+    if not _STOP_WORDS.search(said):
+        for index, step in enumerate(plan.steps):
+            if step.tool == "system.stop_program":
+                name = str(step.args.get("program") or "")
+                if _REMOVE_WORDS.search(said):
+                    wanted = json.dumps({"tool": "packages.remove", "args": {"name": name}})
+                    problems.append(
+                        f"the user wants the software removed, not stopped — plan exactly: {wanted}"
+                    )
+                else:
+                    problems.append(
+                        f"step {index + 1} (system.stop_program) is only for 'kill / quit / stop "
+                        "<program>' — closing a window is windows.close"
+                    )
+    # "Stop the music / the recording" isn't stopping a program (D81).
+    if _MEDIA_STOP.search(said):
+        for index, step in enumerate(plan.steps):
+            if step.tool == "system.stop_program":
+                problems.append(
+                    f"step {index + 1} (system.stop_program): the user wants playback or a recording "
+                    "stopped — use media.control (action stop) or obs.record, not stopping a program"
                 )
     # The user's bookmarks and history are on the laptop (D73): never a web search or a site by name.
     if _SAVED.search(said):

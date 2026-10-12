@@ -1333,3 +1333,23 @@ request = "shuffle kestrel band from my music"
 expect_status = ["done"]
 require_tools = ["media.play_local"]
 forbid_tools = ["media.play", "media.control"]
+
+# ---- inside the laptop (v39)
+[[case]]
+id = "why-is-my-fan-loud"
+request = "why is my fan so loud?"
+expect_status = ["done"]
+require_tools = ["system.processes"]
+forbid_tools = ["system.stop_program", "windows.close"]
+
+[[case]]
+id = "did-anything-crash"
+request = "did anything crash today?"
+expect_status = ["done"]
+require_tools = ["system.problems"]
+
+[[case]]
+id = "kill-a-program"
+request = "kill chromium"
+expect_status = ["done"]
+expect_confirmed = ["system.stop_program"]

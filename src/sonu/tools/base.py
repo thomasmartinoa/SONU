@@ -68,6 +68,7 @@ class Effect(StrEnum):
     RUN_COMMAND = "run.command"  # runs one of a project's own commands (its tests, build) in a SONU window
     PAGE_INPUT = "page.input"  # clicks or types on a web page (SONU's browser extension, D72)
     PAGE_SCROLL = "page.scroll"  # scrolls a web page
+    PROCESS_STOP = "process.stop"  # asks a program of the user's to quit (D81)
 
 
 class StepStatus(StrEnum):
