@@ -23,6 +23,7 @@ from sonu.cli import (
     eval_cmd,
     journal_cmd,
     mcp_cmd,
+    settings_cmd,
     voice_cmd,
 )
 from sonu.cli.state import AppState, env_snapshot, get_state
@@ -42,6 +43,7 @@ app.command("ask")(ask_cmd.ask)
 app.command("prompt")(ask_cmd.prompt)
 app.command("eval")(eval_cmd.eval_cmd)
 app.add_typer(config_cmd.app, name="config")
+app.add_typer(settings_cmd.app, name="settings")
 app.add_typer(audit_cmd.app, name="audit")
 app.add_typer(desktop_cmd.app, name="desktop")
 app.add_typer(daemon_cmd.app, name="daemon")
@@ -111,6 +113,7 @@ COMMANDS = {
     "eval",
     "doctor",
     "config",
+    "settings",
     "audit",
     "desktop",
     "daemon",

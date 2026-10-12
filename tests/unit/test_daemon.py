@@ -709,3 +709,22 @@ async def test_a_heads_up_is_shown_and_said_only_when_the_user_is_free(rig: Rig,
     [(_, what)] = await rig.daemon.heads_up_now(datetime(2026, 10, 12, 15, 30))
     assert what == "said"
     assert voice.said == ["Battery's at 6% — plug in now, or the laptop will shut down soon."]
+
+
+@pytest.mark.anyio
+async def test_new_settings_restart_sonud_once_its_idle(rig: Rig) -> None:
+    """D90: the Control Center changed a setting — never in the middle of a request."""
+    restarted: list[bool] = []
+    rig.daemon.restart = lambda: restarted.append(rig.daemon.lock.locked())
+    await rig.daemon.lock.acquire()  # a request is running
+    reader, writer = await asyncio.open_unix_connection(str(rig.daemon.path))
+    writer.write(encode({"type": "reload"}))
+    await writer.drain()
+    assert decode(await reader.readline()) == {"type": "reloading", "busy": True}
+    writer.close()
+    await asyncio.sleep(0.1)
+    assert restarted == []  # waits for the request
+    rig.daemon.lock.release()
+    assert rig.daemon._reloading is not None
+    await asyncio.wait_for(rig.daemon._reloading, 5)
+    assert restarted == [True]  # stopped and started again while holding the lock

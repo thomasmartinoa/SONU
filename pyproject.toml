@@ -25,6 +25,7 @@ dependencies = [
     "httpx>=0.28,<1",
     "pydantic>=2.11,<3",
     "rich>=15.0.0,<16",
+    "tomlkit>=0.13,<1",
     "typer>=0.16,<1",
 ]
 
