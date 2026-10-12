@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
-from collections.abc import Awaitable, Callable, Coroutine
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -26,6 +26,9 @@ _YES = re.compile(
 )
 _NO = re.compile(r"\b(no|nope|don't|do not|stop|cancel|wait|never)\b", re.I)
 
+# A sentence ends: ". " / "! " / "? " before a capital, a digit or a quote (not "e.g. so" or "3.5").
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z0-9\"“(])")
+
 Recorder = Callable[[Endpointing | None, SpeechDetector | None], Awaitable[Utterance]]
 
 # Said when the SONU key is pressed, before listening — taking turns, so it doesn't sound canned.
@@ -35,6 +38,11 @@ GREETINGS = ("How can I help?", "Yes, {name}?", "What can I do for you?", "I'm l
 
 async def _microphone(endpointing: Endpointing | None, detector: SpeechDetector | None) -> Utterance:
     return await record(endpointing, detector=detector)
+
+
+def sentences(text: str) -> list[str]:
+    """A reply in the pieces it's said in: the first can play while the next is still being made."""
+    return [part.strip() for part in _SENTENCE_END.split(text) if part.strip()] or [text]
 
 
 def said_yes(text: str) -> bool:
@@ -55,6 +63,8 @@ class VoiceSession:
     _speaker: Speaker | None = field(default=None, init=False)
     _spoken: dict[str, bytes] = field(default_factory=dict, init=False)  # greetings, ready to play
     _greeted: int = field(default=0, init=False)
+    # One thing said at a time: "one moment" while a step runs, then a question or the reply, in turn.
+    _talking: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
 
     async def hear(self, endpointing: Endpointing | None = None, *, hint: str | None = None) -> str:
         """Record until the user stops talking; their words ("" if nothing was said). ``hint``: instead
@@ -93,14 +103,22 @@ class VoiceSession:
         ``interruptible``: stop if the user talks over it — returns True then."""
         if not text.strip():
             return False
+        async with self._talking:
+            return await self._say(text, keep=keep, interruptible=interruptible)
+
+    async def _say(self, text: str, *, keep: bool, interruptible: bool) -> bool:
         text = for_speech(text)  # paths, links and times the way a person says them
         samples = self._spoken.get(text)
+        # Said sentence by sentence (D85): the first starts as soon as it's made — not after the whole
+        # reply (measured on the laptop: 0.6 s instead of 1.25 s for two sentences, more for longer ones).
+        parts = [text] if samples is not None or keep else sentences(text)
         if samples is None:
-            samples = await asyncio.to_thread(self.voice.speak, text)
+            samples = await asyncio.to_thread(self.voice.speak, parts[0])
             if keep:
                 self._spoken[text] = samples
         speaker = self._speaker = Speaker(self.voice.rate, self.speaker_argv)
-        playing = asyncio.create_task(speaker.play(samples))
+        speech = samples if len(parts) == 1 else self._pieces(samples, parts[1:])
+        playing = asyncio.create_task(speaker.play(speech))
         watching = (
             asyncio.create_task(self.interruptions(text)) if interruptible and self.interruptions else None
         )
@@ -120,6 +138,19 @@ class VoiceSession:
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await watching
             self._speaker = None
+
+    async def _pieces(self, first: bytes, rest: list[str]) -> AsyncIterator[bytes]:
+        """The first sentence's sound, then each next one — made while the one before plays."""
+        making = asyncio.ensure_future(asyncio.to_thread(self.voice.speak, rest[0]))
+        try:
+            yield first
+            for index in range(len(rest)):
+                samples = await making
+                if index + 1 < len(rest):
+                    making = asyncio.ensure_future(asyncio.to_thread(self.voice.speak, rest[index + 1]))
+                yield samples
+        finally:
+            making.cancel()  # talked over: the rest isn't said (a sentence being made just finishes)
 
     def stop_talking(self) -> None:
         """The user pressed the key again or started talking: stop mid-sentence."""

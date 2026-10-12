@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Talking sooner (#76)
+- [ ] press the SONU key, "find out how kestrels hunt and summarise it": "One moment." while it reads, and the answer starts after about a second
+- [ ] a long reply: it should sound like one answer, with no odd gaps between sentences
+
 ### Research (#75)
 - [ ] "find out <something> and summarise it" — the answer names the sites it read
 - [ ] "look up <something> on github" still opens GitHub's results in the browser
