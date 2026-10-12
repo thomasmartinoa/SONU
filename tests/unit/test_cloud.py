@@ -339,3 +339,30 @@ def test_use_is_counted_from_the_audit_log(tmp_path: Path) -> None:
     later = datetime.now(UTC) + timedelta(days=2)
     assert cloud_usage(audit, timedelta(days=1), now=later) == CloudUsage()
     assert cloud_usage(audit, timedelta(days=7), now=later).sends == 1
+
+
+# ---------------------------------------------------------------- a bigger local model (D91)
+async def test_harder_requests_go_to_the_deep_local_model_when_chosen() -> None:
+    """Everything on the laptop: the deep planner's model for hard requests; easy ones stay on the planner."""
+    from sonu.config.settings import ModelsSettings
+
+    fake = fake_ollama()
+    fake.add_model("qwen3.5:9b", size_gib=6.6, capabilities=["completion", "tools", "thinking"])
+    settings = Settings(models=ModelsSettings(harder="deep"))
+    parts = model_parts(settings, OllamaClient(transport=fake.transport), OllamaSettings(), None)
+    assert parts.planner_model == "qwen3.5:4b (+ qwen3.5:9b for harder requests)"
+    assert (await parts.planner.plan(HARD, SNAPSHOT, REGISTRY)).model == "qwen3.5:9b"
+    assert (await parts.planner.plan("open kitty on workspace 3", SNAPSHOT, REGISTRY)).model == LOCAL
+    assert system_prompts(fake, CLOUD) == []  # nothing left the laptop
+    # "same" (the default): one model for everything
+    same = model_parts(Settings(), OllamaClient(transport=fake.transport), OllamaSettings(), None)
+    assert isinstance(same.planner, LLMPlanner)
+
+
+async def test_the_cloud_comes_first_when_it_is_allowed() -> None:
+    from sonu.config.settings import ModelsSettings
+
+    fake = fake_ollama()
+    settings = allowed("planning").model_copy(update={"models": ModelsSettings(harder="deep")})
+    parts = model_parts(settings, OllamaClient(transport=fake.transport), OllamaSettings(), None)
+    assert (await parts.planner.plan(HARD, SNAPSHOT, REGISTRY)).model == CLOUD

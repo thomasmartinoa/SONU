@@ -61,6 +61,9 @@ class ModelsSettings(_Section):
     planner: PlannerRole = PlannerRole()
     planner_deep: DeepPlannerRole = DeepPlannerRole()
     embed: EmbedRole = EmbedRole()
+    # Harder requests (several parts, long, or ones the planner couldn't plan), on this laptop (D91): "same" —
+    # the planner; "deep" — the deep planner's model. When cloud planning is allowed, the cloud comes first.
+    harder: Literal["same", "deep"] = "same"
 
 
 class PolicySettings(_Section):
@@ -312,6 +315,9 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # Understands requests and proposes plans. Must support tool calling.
 # model = "qwen3.5:4b"
 # think = false
+
+[models]
+# harder = "same"   # "deep": harder requests (and any the planner couldn't plan) go to the deep planner below
 
 [models.planner_deep]
 # Used for harder requests. Bigger and slower.

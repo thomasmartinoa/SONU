@@ -52,6 +52,17 @@ CATALOG: tuple[Entry, ...] = (
         "model",
     ),
     Entry(
+        "models.harder",
+        "Brain",
+        "For harder requests",
+        "same: the planner model plans everything. deep: requests with several parts — and any the planner "
+        "couldn't plan — go to the deep planner model, still on this laptop. Worth it only with a model that "
+        "fits your GPU (qwen3.5:9b on 8 GB: 8× slower, no better). When cloud planning is allowed, the cloud "
+        "comes first.",
+        "choice",
+        choices=("same", "deep"),
+    ),
+    Entry(
         "privacy.cloud",
         "Brain",
         "Cloud models",
