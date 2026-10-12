@@ -24,10 +24,14 @@ class FakePageReader(PageReader):
     def __init__(self, answer: str = "The page is about SONU, a local voice assistant for Linux.") -> None:
         self.answer, self.max_text, self.host = answer, MAX_TEXT, "http://127.0.0.1:11434"
         self.calls: list[tuple[str, str, bool, bool]] = []
+        self.whats: list[str] = []  # what each text was ("the document 'notes.txt'"; "" for a page)
 
     def check_where(self) -> None:
         return None
 
-    async def read(self, text: str, question: str, *, partial: bool = False, selection: bool = False) -> str:
+    async def read(
+        self, text: str, question: str, *, partial: bool = False, selection: bool = False, what: str = ""
+    ) -> str:
         self.calls.append((text, question, partial, selection))
+        self.whats.append(what)
         return self.answer

@@ -647,3 +647,13 @@ async def test_typing_into_a_named_field_of_a_page_uses_the_extension(rig: Rig) 
     # No field named: keystrokes, as before (the test's context has no wtype).
     report = await rig.run("type martin", "screen.type", {"text": "martin", "window": {"app": "zen"}})
     assert summaries(report) == ["wtype isn't installed (it types the keys)"]
+
+
+@pytest.mark.anyio
+async def test_a_browser_the_user_didnt_name_is_dropped_not_refused(rig: Rig) -> None:
+    """Found in the evals (v40): "summarise this page" was planned with browser "Zen Browser" (the window
+    list's name) and refused."""
+    report = await rig.run(
+        "summarise this page", "browser.read", {"question": "summarise", "browser": "Zen Browser"}
+    )
+    assert report.status == "done", summaries(report)

@@ -574,3 +574,17 @@ def test_getting_rid_of_an_app_isnt_stopping_it() -> None:
     [problem] = _problems(stop, REGISTRY, "get rid of spotify")
     assert "packages.remove" in problem
     assert _problems(stop, REGISTRY, "force quit spotify") == []
+
+
+def test_a_document_of_the_users_is_files_read() -> None:
+    """D82: "summarise my invoice pdf" is the user's own document, not a web page or a look at the screen."""
+    page = _plan(("browser.read", {"question": "summarise it"}))
+    [problem] = _problems(page, REGISTRY, "summarise my invoice pdf")
+    assert "files.read" in problem
+    look = _plan(("screen.read", {"question": "what does it say"}))
+    [problem] = _problems(look, REGISTRY, "what does notes.txt say about parking?")
+    assert "files.read" in problem
+    assert (
+        _problems(_plan(("files.read", {"name": "invoice pdf"})), REGISTRY, "summarise my invoice pdf") == []
+    )
+    assert _problems(page, REGISTRY, "summarise this page") == []
