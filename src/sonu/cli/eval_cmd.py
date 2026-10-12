@@ -24,6 +24,11 @@ _MODELS = typer.Option(
 _CASES = typer.Option(None, "--case", "-c", help="Only run these case ids (repeatable).")
 _JSON = typer.Option(False, "--json", help="Print results as JSON.")
 _DEEP = typer.Option(False, "--deep", help="Use the deep-planner role settings (thinking on).")
+_HARDER = typer.Option(
+    None,
+    "--harder",
+    help='A bigger local model for hard requests and failures (as [models] harder = "deep").',
+)
 _CLOUD = typer.Option(
     False,
     "--cloud",
@@ -38,6 +43,7 @@ def eval_cmd(
     as_json: bool = _JSON,
     deep: bool = _DEEP,
     cloud: bool = _CLOUD,
+    harder: str | None = _HARDER,
 ) -> None:
     """Measure how well planner models drive SONU (runs on a fake desktop; your real desktop is untouched)."""
     state = get_state(ctx)
@@ -72,9 +78,20 @@ def eval_cmd(
                 if not as_json:
                     where = " (Ollama Cloud, no window titles)" if remote else ""
                     state.err.print(f"[dim]evaluating {escape(name)}{where} on {len(selected)} cases…[/]")
+                bigger = (
+                    OllamaChatModel(
+                        client,
+                        settings.models.planner_deep.model_copy(update={"model": harder}),
+                        settings.ollama,
+                    )
+                    if harder
+                    else None
+                )
                 with tempfile.TemporaryDirectory(prefix="sonu-eval-") as workdir:
                     summaries.append(
-                        await run_eval(selected, model, Path(workdir), include_titles=not remote)
+                        await run_eval(
+                            selected, model, Path(workdir), include_titles=not remote, harder=bigger
+                        )
                     )
         return summaries
 

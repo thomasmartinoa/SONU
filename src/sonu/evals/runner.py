@@ -25,7 +25,8 @@ from sonu.core.engine import ConfirmRequest, Engine
 from sonu.core.journal import Journal
 from sonu.core.layouts import Layout, Layouts, Slot
 from sonu.core.notifications import NotificationLog
-from sonu.core.planner import LLMPlanner
+from sonu.core.planner import LLMPlanner, RoutedPlanner
+from sonu.core.planning import Planner
 from sonu.core.prompt_writer import PromptWriter
 from sonu.core.report import TaskReport
 from sonu.core.talks import Talks
@@ -344,7 +345,12 @@ def check_expectations(
 
 
 async def run_case(
-    case: EvalCase, model: ChatModel, workdir: Path, *, include_titles: bool = True
+    case: EvalCase,
+    model: ChatModel,
+    workdir: Path,
+    *,
+    include_titles: bool = True,
+    harder: ChatModel | None = None,
 ) -> CaseResult:
     runtime_dir = Path(tempfile.mkdtemp(prefix="sonu-eval-", dir="/tmp"))  # short: socket path limit
     started = time.monotonic()
@@ -494,8 +500,11 @@ async def run_case(
                 firefox_profile(workdir, list(case.history), list(case.bookmarks))
             for name, slots in case.layouts.items():
                 ctx.layouts.put(Layout(name, tuple(Slot(*slot) for slot in slots)))
+            planner: Planner = LLMPlanner(model, include_titles=include_titles)
+            if harder is not None:  # as `[models] harder = "deep"` plans (D91)
+                planner = RoutedPlanner(LLMPlanner(model), LLMPlanner(harder))
             engine = Engine(
-                planner=LLMPlanner(model, include_titles=include_titles),
+                planner=planner,
                 registry=ToolRegistry(),
                 ctx=ctx,
                 policy=Policy("confirm-risky"),
@@ -556,12 +565,19 @@ class EvalSummary:
 
 
 async def run_eval(
-    cases: list[EvalCase], model: ChatModel, workdir: Path, *, include_titles: bool = True
+    cases: list[EvalCase],
+    model: ChatModel,
+    workdir: Path,
+    *,
+    include_titles: bool = True,
+    harder: ChatModel | None = None,
 ) -> EvalSummary:
-    """``include_titles=False``: plan the way a cloud planner does (D62), without window titles."""
+    """``include_titles=False``: plan the way a cloud planner does (D62), without window titles. ``harder``: a
+    bigger local model for hard requests and failures (D91)."""
     results = []
     for case in cases:
         case_dir = workdir / case.id
         case_dir.mkdir(parents=True, exist_ok=True)
-        results.append(await run_case(case, model, case_dir, include_titles=include_titles))
-    return EvalSummary(model=model.name, results=results)
+        results.append(await run_case(case, model, case_dir, include_titles=include_titles, harder=harder))
+    name = f"{model.name} + {harder.name} for harder requests" if harder is not None else model.name
+    return EvalSummary(model=name, results=results)

@@ -134,6 +134,7 @@ this environment are meaningless for your laptop** (GPU inference is much faster
 | 2026-10-11 | `qwen3.5:4b` | v34: + `find-a-page-in-history`, `open-a-bookmark` (D73, a fake Zen profile in the fake home) | **147 / 147**, twice (~1.1 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v35: + `open-a-file-by-name`, `find-a-file` (D74, two older files in the fake home) | **149 / 149**, twice (~1.1 s mean) | — |
 | 2026-10-11 | `qwen3.5:4b` | v36: + `move-a-file`, `rename-a-file`, `delete-the-last-download` (D75, a fake `gio trash`) | **152 / 152**, twice (~1.0 s mean) | — |
+| 2026-10-12 | `qwen3.5:4b` + `qwen3.5:9b` for harder requests (`--harder`, D91) | v45, the 12 hard cases | 11 / 12, 15.5 s a plan (4b alone: 12 / 12, 1.8 s) | complex-three-questions |
 | 2026-10-12 | `qwen3.5:4b` | v45: + `open-sonu-settings` (D90) | **167 / 167**, twice | — |
 | 2026-10-12 | `qwen3.5:4b` | v44: + `corrected-mid-sentence` (D89); `close-a-tab` had started failing on main ("which browser?") — a planner check | **166 / 166**, twice | — |
 | 2026-10-12 | `qwen3.5:4b` | v43: + `what-did-we-talk-about`, `what-did-you-tell-me` (D86, a few past conversations in the fake log) | **165 / 165**, twice | — |

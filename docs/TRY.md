@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### The brain switch (#84)
+- [ ] Control Center → Brain → "For harder requests": same (recommended on this laptop) or deep
+- [ ] a new model you pull: `sonu eval --harder <model> -c complex-three-questions` before switching
+
 ### Your data in the Control Center (#83)
 - [ ] `sonu control` → Memory, Conversations, Activity, Audit log: what SONU keeps, and a delete that asks first
 - [ ] in a terminal: `sonu memory list`, `sonu conversations list yesterday`

@@ -166,6 +166,11 @@ def model_parts(
         else:
             planner = RoutedPlanner(local, remote, always=settings.cloud.plan == "always")
             shown = f"{role.model} (+ {settings.cloud.model} for harder requests)"
+    elif not deep and settings.models.harder == "deep" and settings.models.planner_deep.model != role.model:
+        # Everything stays on this laptop (D91): the deep planner's model for hard requests and failures
+        bigger = LLMPlanner(OllamaChatModel(client, settings.models.planner_deep, ollama))
+        planner = RoutedPlanner(local, bigger)
+        shown = f"{role.model} (+ {settings.models.planner_deep.model} for harder requests)"
     local_text = OllamaChatModel(client, settings.models.planner, ollama)
     writer: TextModel = (
         LocalFallback(cloud("prompts", settings.cloud.model), local_text)

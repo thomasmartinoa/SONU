@@ -1001,14 +1001,15 @@ def is_hard(request: str) -> bool:
 
 
 class RoutedPlanner:
-    """The local planner, and a cloud one (D62) for hard requests or when the local one fails.
+    """The local planner, and a bigger one — Ollama Cloud (D62) or a bigger local model (D91) — for hard
+    requests or when the local one fails.
 
-    If the cloud one fails (not signed in, offline, a retired model), the local one plans instead —
-    the request never fails just because the cloud is away.
+    If the bigger one fails (not signed in, offline, a retired model, out of memory), the local one plans
+    instead — the request never fails just because the bigger planner is away.
     """
 
     def __init__(self, local: LLMPlanner, cloud: LLMPlanner, *, always: bool = False) -> None:
-        self.local, self.cloud, self.always = local, cloud, always
+        self.local, self.cloud, self.always = local, cloud, always  # `cloud`: the bigger planner
 
     async def plan(
         self,
