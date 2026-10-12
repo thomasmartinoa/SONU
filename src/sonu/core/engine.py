@@ -15,6 +15,7 @@ from typing import Any
 
 from sonu.audit.log import AuditError, AuditLog
 from sonu.core.conversation import Conversation, Turn, results_of
+from sonu.core.corrections import corrected
 from sonu.core.planning import Plan, Planner, PlanningError
 from sonu.core.report import StepRecord, TaskReport
 from sonu.core.responder import Responder
@@ -110,7 +111,9 @@ class Engine:
         dry_run: bool = False,
         observer: Observer | None = None,
     ) -> TaskReport:
-        request = request.strip()
+        said = request.strip()
+        # "open kitty on 3, no, 4": the correction applied once, before anything reads the words (D89)
+        request = corrected(said)
         report = TaskReport(request=request, dry_run=dry_run)
         if not request:
             report.error = "empty request"
@@ -123,7 +126,10 @@ class Engine:
                     "SONU won't act until it's fixed — see `sonu audit verify`"
                 )
                 return report
-        self._audit("task.start", {"request": request, "dry_run": dry_run})
+        start: dict[str, Any] = {"request": request, "dry_run": dry_run}
+        if request != said:
+            start["said"] = said  # the user's words as they came, before the correction
+        self._audit("task.start", start)
         history = self.conversation.recent() if self.conversation is not None else []
         self.ctx.request_text = request
         self.ctx.user_words = " ".join([*(turn.request for turn in history), request])

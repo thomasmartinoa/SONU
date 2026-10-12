@@ -45,10 +45,10 @@ _Last update: 2026-10-11_
 
 ### Eval suite
 
-`qwen3.5:4b`: **165 / 165** on the v43 suite, twice (2026-10-12, the laptop's GPU, ~1.1 s mean planning), including
+`qwen3.5:4b`: **166 / 166** on the v44 suite, twice (2026-10-12, the laptop's GPU, ~1.1 s mean planning), including
 nine complex multi-step requests, five for Claude Code, seven for projects and terminals, three for layouts, four
 for messages and notifications, three for browser tabs, two for reading a page, three for acting on one, two for
-history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents, one for a briefing, one for research and two for past conversations; the M1 example (VSCodium + Chromium
+history and bookmarks, two for files by name, three for moving, renaming and the trash, two for copying, two for local music, three for what's inside the laptop, two for reading documents, one for a briefing, one for research, two for past conversations and one for a correction mid-sentence; the M1 example (VSCodium + Chromium
 placed) 10/10 on v25. `gpt-oss:120b-cloud` (Ollama Cloud, no window titles):
 **115 / 120** (2026-10-11, ~1.4 s mean) — three misses were SONU's (fixed in #48), two the model's (see the open
 questions). Pass/fail only. History, including the runs that failed while the prompt wording
@@ -399,12 +399,15 @@ wrote, switch it to Sonnet, merge the PR on GitHub, install software, and screen
 | #76 | 2026-10-12 | Talking sooner ([D85](DECISIONS.md)): a reply is said sentence by sentence into one player — the first plays while the next is made (measured on the laptop with the real voice: a research answer's first sound after 1.3 s instead of 4.8 s, two sentences 0.6 s instead of 1.3 s); a spoken request whose step is still running after 1.5 s gets "One moment." (once, taking turns with three other lines); one thing is said at a time |
 | #77 | 2026-10-12 | Conversations remembered ([D86](DECISIONS.md)): each finished request — the user's words and what SONU told them — kept on the laptop (SQLite, 0600, 30 days; `[conversations] keep`), past the 10-minute conversation; `conversations.recall` ("what did we talk about yesterday?", "what did you tell me about kestrels?") and `conversations.forget` (asks); dry runs and looking back aren't kept; a planner check keeps it apart from the journal, memory and the web; eval suite v43 (165) |
 | #78 | 2026-10-12 | Sounding like a person ([D87](DECISIONS.md)): SONU decides the tone from the user's words (brief, annoyed, thanking), when the name is said (small talk, once a conversation — removed otherwise), and drops "anything else?" offers after replies; small talk knows the day and time and is cut at a sentence end (40 words) |
-| #79 | open | Heads-ups ([D88](DECISIONS.md)), opt-in: sonud checks each minute and speaks up once — the battery low (and critical), the disk nearly full (once a day), the CPU staying hot (once an hour); shown on the HUD, said only with `speak = true` and never while another app records the mic (a call), over a fullscreen window or in the quiet hours (a critical battery still is, never during a call); each one in the audit log |
+| #79 | 2026-10-12 | Heads-ups ([D88](DECISIONS.md)), opt-in: sonud checks each minute and speaks up once — the battery low (and critical), the disk nearly full (once a day), the CPU staying hot (once an hour); shown on the HUD, said only with `speak = true` and never while another app records the mic (a call), over a fullscreen window or in the quiet hours (a critical battery still is, never during a call); each one in the audit log |
+| #80 | open | Corrections mid-sentence ([D89](DECISIONS.md)): "open kitty on 3, no, 4", "play lofi on spotify, actually on youtube" — corrected once, before anything reads the words (the model mostly understood; SONU's own word rules didn't); careful: "sorry to bother you", "what's actually using…", "when I say X I mean Y" stay as said; the words as said are in the audit log; also a planner check against "which browser?" for a named tab (an eval failing on main); eval suite v44 (166) |
 
 ### Found on real hardware → fixed
 
 | Date | What happened on the laptop | Fix (PR) |
 |---|---|---|
+| 10-12 | (evals, on main too — same code passed earlier today) "close the youtube tab" → "Which browser should I close the YouTube tab in?", every run | a planner check: no need to ask which browser for a tab the user named — the tab tools look in every browser (#80) |
+| 10-12 | (D89, dry runs) "play lofi on spotify, actually on youtube" would play on Spotify: "spotify" in the words decides the service; the planner itself got "3, no, 4", "30, sorry, 40", "firefox, I mean zen" right | the correction applied before anything reads the words (#80) |
 | 10-12 | (D87, the real model, 3 tries each) "Martin, …" in front of 26 of 27 replies; "good morning" at 17:23 → "Good morning Martin!"; small talk ending in an offer nearly every time ("Ready to tackle your day?", "Need another quick win today?"); "kitty 2" and "ugh just open kitty on 2 already" got the same chirpy sentence | SONU decides the name, the tone and the length; offers dropped; the time given (#78) |
 | 10-12 | (CI on Python 3.14, then locally 1 run in 3) the HUD's daemon test waited 120 s: a "step started" sonud had queued arrived while the HUD's question was open and switched it to "working" — the Yes / No buttons went, nobody could answer | an open question stays until it's answered; later progress updates the steps, and the HUD goes to the newest state after (#74) |
 | 10-12 | (D83) "brief me" said "Yesterday: Yesterday (10 hours …)"; while building, a new daemon test showed a real "SONU — your briefing" notification on the owner's screen (the daemon tests' notifier was the real one) | the journal's own wording kept; every daemon test records notifications instead (#74) |
