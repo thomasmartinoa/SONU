@@ -33,6 +33,7 @@ from sonu.desktop.hyprland.instance import discover_instance
 from sonu.integrations.browser import Browsers
 from sonu.integrations.hypr_theme import detect_hypr_theme
 from sonu.integrations.mpv import SonuPlayer, music_folder
+from sonu.integrations.research import WebAccess
 from sonu.llm.chat import OllamaChatModel, TextModel
 from sonu.llm.cloud import (
     PAUSE_FILE,
@@ -229,6 +230,7 @@ async def build_runtime(
         layouts=load_layouts(paths),
         browsers=Browsers(socket_folder(dict(env))),
         music=SonuPlayer(music_folder(dict(env))),
+        web=WebAccess(),
         journal=open_journal(settings, paths),
     )
 

@@ -340,6 +340,9 @@ file, "screenshot" for the last screenshot, "link" for this page's link, "text" 
 (by cpu, memory or gpu); "did anything crash? / any errors?" is system.problems; "kill / force quit / stop \
 <program>" is system.stop_program (closing an app's window is windows.close; stopping music or a recording \
 is media.control or obs.record).
+- "Look up / find out / research <topic> (and tell me / summarise it)" is web.research (query = their \
+words): SONU reads the top pages and answers. web.search opens results in the browser: a site they named \
+("on github", "on youtube") or "google X".
 - "Brief me", "catch me up", "what's my day like?", "what did I miss?", "morning briefing" is \
 system.briefing (a plain "good morning" is just a greeting).
 - Suspend (sleep), restart, shut down and log out are system.power, always the last step.
@@ -501,6 +504,7 @@ _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 _LOCAL_MUSIC = re.compile(
     r"\bshuffle\b|\b(?:from|in)\s+my\s+(?:music|songs)\b|\bplay\s+my\s+(?:music|songs)\b"
 )
+_ANSWER_ME = re.compile(r"\b(?:find out|research|summari[sz]e|and tell me|what do (?:people|they) say)\b")
 _WHY_HOT = re.compile(
     r"\bfans?\b.*\b(?:loud|noisy|spinning|fast|high)\b|\bwhy\b.*\b(?:hot|slow|laggy|loud)\b"
 )
@@ -782,6 +786,17 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                         f"step {index + 1} (system.stop_program) is only for 'kill / quit / stop "
                         "<program>' — closing a window is windows.close"
                     )
+    # Research (D84): a site the user named is searched in the browser; "find out / summarise" is answered.
+    named_site = sites_named_in(request)
+    for step in plan.steps:
+        if step.tool == "web.research" and named_site:
+            query = str(step.args.get("query") or "")
+            wanted = json.dumps({"tool": "web.search", "args": {"site": named_site[0], "query": query}})
+            problems.append(f"the user named a site — search it in the browser: {wanted}")
+        elif step.tool == "web.search" and not named_site and _ANSWER_ME.search(said):
+            query = str(step.args.get("query") or "")
+            wanted = json.dumps({"tool": "web.research", "args": {"query": query}})
+            problems.append(f"the user wants the answer, not a results page — plan {wanted}")
     # "Stop the music / the recording" isn't stopping a program (D81).
     if _MEDIA_STOP.search(said):
         for index, step in enumerate(plan.steps):

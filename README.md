@@ -69,7 +69,7 @@ Done — every step verified
 More commands:
 
 ```sh
-sonu eval                           # score your planner model on 162 realistic requests (fake desktop)
+sonu eval                           # score your planner model on 163 realistic requests (fake desktop)
 sonu desktop windows                # windows as SONU sees them (--no-titles for sharing)
 sonu desktop events                 # live Hyprland events
 sonu audit tail                     # everything SONU did; `sonu audit verify` checks the hash chain

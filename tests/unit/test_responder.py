@@ -345,6 +345,7 @@ _SAID = {
     "voice.wake": "Hey Sonu",
     "web.open": "open sites",
     "web.search": "search",
+    "web.research": "look things up on the web",
     "windows.close": "close them",
     "windows.focus": "switch",
     "windows.move": "move",

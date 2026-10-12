@@ -22,6 +22,7 @@ from sonu.integrations.browser import Browsers
 from sonu.integrations.kitty import SonuTerminals, runtime_folder
 from sonu.integrations.mpv import SonuPlayer
 from sonu.integrations.obs import ObsLink
+from sonu.integrations.research import WebAccess
 from sonu.system.control import SystemControl
 from sonu.world.origin import ancestor_pids
 
@@ -109,6 +110,8 @@ class ToolContext:
     browsers: Browsers | None = None
     # SONU's own music player (mpv over its IPC socket, D77). None: no player (tests and evals pass a fake).
     music: SonuPlayer | None = None
+    # SONU's own web access for research (D84). None: none (tests and evals pass a fake one).
+    web: WebAccess | None = None
 
     def sonu_terminals(self) -> SonuTerminals:
         if self.terminals is None:
