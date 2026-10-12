@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### The new HUD (#86)
+- [ ] press the SONU key: the rings breathe while it listens, spin while it thinks, the arc fills with the steps
+- [ ] a long answer: the HUD stays until SONU stops talking, then hides a few seconds later
+
 ### A second try (#85)
 - [ ] with Zen closed: "move zen to workspace 4" — "↻ Tried another way", Zen opens on 4
 - [ ] "close the thunar window" with Thunar closed — nothing gets opened

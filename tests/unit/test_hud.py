@@ -143,3 +143,13 @@ async def test_progress_that_arrives_late_doesnt_hide_the_question(tmp_path: Pat
     assert await hud.ask("Close zen?", [("Yes", True), ("No", False)], timeout_s=3) is True
     await task
     assert state(hud)["state"] == "acting" and state(hud)["question"] is None
+
+
+def test_speaking_is_written_for_the_hud(tmp_path: Path) -> None:
+    hud = Hud(tmp_path / "hud")
+    hud.begin("what's my battery?")
+    hud.feed({"type": "final", "headline": "You're at 80 percent."})
+    hud.show(speaking=True)
+    assert state(hud)["state"] == "done" and state(hud)["speaking"] is True
+    hud.show(speaking=False)
+    assert state(hud)["speaking"] is False

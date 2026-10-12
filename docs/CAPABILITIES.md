@@ -113,7 +113,7 @@ works:
 
 | Ability | State | How |
 |---|---|---|
-| **The HUD**: a window at the top centre while SONU works — listening, thinking, each step as it happens, the result and reply; questions with Yes / No or the choices as buttons | 🧪 #71 | SONU's own Quickshell window (your shell untouched), your rice's colours; sonud starts it; `[hud]` in the config ([D80](DECISIONS.md)) |
+| **The HUD**: at the top centre while SONU works — a ring core that shows listening / thinking / working / speaking / done, each step as it happens, the result and reply; questions with Yes / No or the choices as buttons; stays until SONU stops talking | 🧪 #71, #86 | SONU's own Quickshell window (your shell untouched), your rice's colours; sonud starts it; `[hud]` in the config ([D80](DECISIONS.md)) |
 
 | Ability | State | How |
 |---|---|---|

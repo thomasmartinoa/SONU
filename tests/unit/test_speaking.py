@@ -111,3 +111,14 @@ async def test_the_player_takes_pieces_and_stops_between_them(tmp_path: Path) ->
     gate.set()
     await asyncio.wait_for(playing, 3)
     assert b"two." not in out.read_bytes()
+
+
+@pytest.mark.anyio
+async def test_the_hud_hears_when_sonu_talks(events: list[tuple[str, str]]) -> None:
+    """Found on the laptop: the HUD hid while SONU was still talking — it's told when speech starts, ends."""
+    told: list[bool] = []
+    voice = VoiceSession(None, Voice(events))  # type: ignore[arg-type]
+    voice.speaking = told.append
+    await voice.say(REPLY)
+    assert told == [True, False]
+    assert events[-1] == ("end", "")  # "done talking" only after the last sentence played

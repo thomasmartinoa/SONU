@@ -737,10 +737,16 @@ class Daemon:
             self._voice = VoiceSession(
                 ears, KokoroVoice(folder, settings.voice, settings.speed), detector=detector
             )
+            self._voice.speaking = self._hud_speaking
             if settings.barge_in and self.echo.ensure():  # D50: SONU's voice through its echo canceller
                 self._voice.speaker_argv = ("pw-play", "--target", ECHO_SINK)
                 self._voice.interruptions = lambda spoken: user_talked(spoken, detector, ears.transcribe)
         return self._voice
+
+    def _hud_speaking(self, on: bool) -> None:
+        """The HUD stays up while SONU talks, and hides after (found on the laptop: it went mid-sentence)."""
+        if self.hud is not None:
+            self.hud.show(speaking=on)
 
     # -------------------------------------------------------------- "Hey Sonu"
     def _busy(self) -> bool:

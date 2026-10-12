@@ -65,6 +65,8 @@ class VoiceSession:
     _greeted: int = field(default=0, init=False)
     # One thing said at a time: "one moment" while a step runs, then a question or the reply, in turn.
     _talking: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    # Told when SONU starts and stops talking (the HUD stays up until it's done — found on the laptop).
+    speaking: Callable[[bool], None] | None = None
 
     async def hear(self, endpointing: Endpointing | None = None, *, hint: str | None = None) -> str:
         """Record until the user stops talking; their words ("" if nothing was said). ``hint``: instead
@@ -104,7 +106,13 @@ class VoiceSession:
         if not text.strip():
             return False
         async with self._talking:
-            return await self._say(text, keep=keep, interruptible=interruptible)
+            if self.speaking is not None:
+                self.speaking(True)
+            try:
+                return await self._say(text, keep=keep, interruptible=interruptible)
+            finally:
+                if self.speaking is not None:
+                    self.speaking(False)
 
     async def _say(self, text: str, *, keep: bool, interruptible: bool) -> bool:
         text = for_speech(text)  # paths, links and times the way a person says them
