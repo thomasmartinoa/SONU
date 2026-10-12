@@ -18,6 +18,7 @@ from sonu.cli import (
     audit_cmd,
     browser_cmd,
     config_cmd,
+    control_cmd,
     daemon_cmd,
     desktop_cmd,
     eval_cmd,
@@ -42,6 +43,7 @@ app = typer.Typer(
 app.command("ask")(ask_cmd.ask)
 app.command("prompt")(ask_cmd.prompt)
 app.command("eval")(eval_cmd.eval_cmd)
+app.command("control")(control_cmd.control)
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(settings_cmd.app, name="settings")
 app.add_typer(audit_cmd.app, name="audit")
@@ -114,6 +116,7 @@ COMMANDS = {
     "doctor",
     "config",
     "settings",
+    "control",
     "audit",
     "desktop",
     "daemon",

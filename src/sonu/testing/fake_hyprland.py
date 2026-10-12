@@ -417,6 +417,10 @@ class FakeHyprland:
         self.launched.append(argv)
         if self.on_exec is not None:
             self.on_exec(argv)
+        program = argv
+        if Path(argv[0]).name == "env":  # "env VAR=value program …": the program after the assignments
+            program = argv[1 + next((i for i, arg in enumerate(argv[1:]) if "=" not in arg), 0) :]
+        argv = program or argv  # what follows reads the program's own arguments
         app = self.apps.get(Path(argv[0]).name)
         if app is None or not app.opens_window:
             return "ok"  # real Hyprland reports ok even if the program fails to start

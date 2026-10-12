@@ -13,6 +13,7 @@ from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from sonu.control import TITLE as CONTROL_TITLE
 from sonu.core.screen_reader import ScreenReaderError
 from sonu.desktop.apps.resolver import normalize
 from sonu.desktop.hyprland.errors import HyprlandError
@@ -109,6 +110,16 @@ class ReadArgs(BaseModel):
     window: WindowTarget | None = Field(default=None, description="a window; none: the whole screen")
 
 
+def sonus_own(window: Window) -> ToolOutcome | None:
+    """SONU's own Control Center (D90): only the user changes SONU's settings — never its screen tools (the
+    model, or a page through it, could otherwise press "Yes, change it")."""
+    if window.title == CONTROL_TITLE:
+        return ToolOutcome(
+            StepStatus.DENIED, "That's SONU's own Control Center — only you can change SONU's settings there"
+        )
+    return None
+
+
 class ReadScreen(Tool):
     name = "screen.read"
     description = (
@@ -202,6 +213,8 @@ class PressControl(Tool):
         if match.problem or not match.windows:
             return ToolOutcome(StepStatus.FAILED, f"Can't press it: {match.problem or 'no such window'}")
         window = match.windows[0]
+        if refused := sonus_own(window):
+            return refused
         if not window.pid:
             return ToolOutcome(StepStatus.FAILED, f"Can't reach {window.window_class}'s buttons")
         try:
@@ -375,6 +388,8 @@ class TypeText(Tool):
                     StepStatus.FAILED, f"Can't type there: {match.problem or 'no such window'}"
                 )
             window = match.windows[0]
+        if refused := sonus_own(window):
+            return refused
         page = await fill_in_window(ctx, window, a.text, a.enter, choice)
         if isinstance(page, Prepared):
             return replace(page, payload=("page", page.payload))

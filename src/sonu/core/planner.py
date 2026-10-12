@@ -357,6 +357,8 @@ reminders.list.
 do this morning?") is journal.read with when; "when did I last use / open / look at <thing>?" is \
 journal.read with about = the user's words for the thing (no when). "Pause / resume the journal" is \
 journal.recording; "delete / forget today's journal" is journal.forget — never memory.forget.
+- "Open SONU / your settings", "show your control center", "I want to change your settings" is control.open \
+(SONU's own settings window; the user changes things there — never settings.* for it).
 - What the user and SONU said earlier ("what did we talk about yesterday?", "what did I ask you this \
 morning?", "what did you tell me about <thing>?") is conversations.recall: when, or about = the user's \
 words for the thing. "Forget our conversations / what I asked you" is conversations.forget.
