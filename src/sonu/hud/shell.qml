@@ -1,10 +1,11 @@
-// SONU's HUD (D80, redrawn in D93): a separate Quickshell instance that sonud starts (`qs -n -p <this folder>`) — the
+// SONU's HUD (D80; redrawn in D93, D97): a separate Quickshell instance that sonud starts (`qs -n -p <this folder>`) — the
 // owner's own shell and dotfiles are never touched. It shows what SONU is doing: listening, thinking,
 // the steps as they happen (done / unverified / failed), the result, and — when SONU asks — the question
 // with buttons. It reads sonud's state file and writes the answer file, both in SONU's 0700 runtime
-// folder ($SONU_HUD_DIR); colours, corners and font come from the rice's colors.json, live. The look: a ring
-// core that shows the state (breathing: listening, spinning: thinking, filling: the steps, ripples: speaking,
-// ✓: done, a slow pulse: a question) beside a bracketed panel — thin lines, one accent, monospace.
+// folder ($SONU_HUD_DIR); colours, corners and font come from the rice's colors.json, live. The look (D97,
+// the owner: "simple but cooler"): an island — a slim capsule with one line, a glow that sweeps round its edge
+// while SONU listens, thinks or works, voice bars that bounce and wave (a ✓ when done); it grows only for an
+// answer to read or a question to answer.
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Shapes
@@ -95,271 +96,184 @@ ShellRoot {
         onTriggered: root.dismissed = root.hud.seq
     }
 
-    // ring speed and size by state: the core shows what SONU is doing at a glance
+    readonly property color accent: root.c.accentBright
+
+    // ------------------------------------------------------------------ the island (D97)
     readonly property string mode: root.speaking ? "speaking" : (root.hud.state || "idle")
     readonly property int stepsDone: (root.hud.steps || []).filter(s => s.status !== "running").length
     readonly property int stepsAll: (root.hud.steps || []).length
-    readonly property color accent: root.c.accentBright
-    readonly property color line: root.rgba(root.c.accentMid, 0.55)
+    readonly property bool busy: root.mode === "thinking" || root.mode === "acting"
+    readonly property bool open: root.asking || ((root.hud.result || "") !== "" && root.hud.state === "done")
+                                 || (root.hud.details || "") !== ""
+    readonly property var current: {
+        const steps = root.hud.steps || []
+        const running = steps.filter(s => s.status === "running")
+        return running.length ? running[running.length - 1] : (steps.length ? steps[steps.length - 1] : null)
+    }
+    readonly property string headline: {
+        if (root.mode === "listening") return "Listening…"
+        if (root.asking) return root.hud.question.text
+        if (root.current && root.busy) return root.current.text
+        if (root.mode === "thinking") return (root.hud.request || "") !== "" ? "“" + root.hud.request + "”" : "Thinking…"
+        return (root.hud.request || "") !== "" ? "“" + root.hud.request + "”" : "SONU"
+    }
 
     PanelWindow {
         id: win
         visible: root.shown
         anchors.top: true            // top centre, under the bar (its exclusive zone is respected)
-        margins.top: 10
+        margins.top: 8
         exclusionMode: ExclusionMode.Normal
         exclusiveZone: 0             // never pushes windows away
-        implicitWidth: 620
-        implicitHeight: Math.max(132, body.implicitHeight + 34)
+        implicitWidth: 560
+        implicitHeight: pill.height + 16
         color: "transparent"
         WlrLayershell.layer: WlrLayer.Overlay
         WlrLayershell.namespace: "sonu-hud"
         WlrLayershell.keyboardFocus: root.asking ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
-        // ---------------------------------------------------------------- the core: rings that show the state
         Item {
-            id: core
-            width: 112; height: 112
-            anchors { left: parent.left; top: parent.top; leftMargin: 6; topMargin: 10 }
+            id: pill
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 2
+            width: root.open ? 540 : 380
+            height: root.open ? Math.max(48, body.implicitHeight + 26) : 48
+            Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutBack; easing.overshoot: 0.6 } }
+            Behavior on height { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+            readonly property real r: Math.min(24, height / 2)
 
-            // a soft disc behind the rings
-            Rectangle {
-                anchors.centerIn: parent
-                width: 104; height: 104; radius: 52
-                color: root.rgba(root.c.bg0, 0.96)
-                border.width: 1
-                border.color: root.rgba(root.c.accentMid, 0.25)
-            }
-            // outer ring: tick marks, turning slowly (fast while thinking)
+            // the living border: a glow that sweeps round while SONU thinks or works
             Shape {
-                id: ticks
+                id: edge
                 anchors.fill: parent
+                anchors.margins: -1.5
                 preferredRendererType: Shape.CurveRenderer
-                ShapePath {
-                    strokeColor: root.line; strokeWidth: 1; fillColor: "transparent"
-                    strokeStyle: ShapePath.DashLine; dashPattern: [1, 5]
-                    PathAngleArc { centerX: 56; centerY: 56; radiusX: 51; radiusY: 51; startAngle: 0; sweepAngle: 360 }
-                }
-                RotationAnimation on rotation {
-                    running: win.visible; loops: Animation.Infinite; from: 0; to: 360
-                    duration: root.mode === "thinking" ? 2400 : 18000
-                }
-            }
-            // two arcs turning against each other
-            Shape {
-                anchors.fill: parent
-                preferredRendererType: Shape.CurveRenderer
-                ShapePath {
-                    strokeColor: root.accent; strokeWidth: 2; fillColor: "transparent"; capStyle: ShapePath.RoundCap
-                    PathAngleArc { centerX: 56; centerY: 56; radiusX: 43; radiusY: 43; startAngle: -90; sweepAngle: 70 }
+                property real turn: 0
+                NumberAnimation on turn {
+                    running: win.visible && (root.busy || root.mode === "listening" || root.asking)
+                    loops: Animation.Infinite; from: 0; to: 360
+                    duration: root.mode === "listening" ? 5200 : root.asking ? 3600 : 1700
                 }
                 ShapePath {
-                    strokeColor: root.accent; strokeWidth: 2; fillColor: "transparent"; capStyle: ShapePath.RoundCap
-                    PathAngleArc { centerX: 56; centerY: 56; radiusX: 43; radiusY: 43; startAngle: 90; sweepAngle: 70 }
-                }
-                RotationAnimation on rotation {
-                    running: win.visible && root.mode !== "done"; loops: Animation.Infinite; from: 0; to: 360
-                    duration: root.mode === "thinking" ? 1200 : root.mode === "acting" ? 2000 : 5200
-                }
-            }
-            Shape {
-                anchors.fill: parent
-                preferredRendererType: Shape.CurveRenderer
-                opacity: 0.7
-                ShapePath {
-                    strokeColor: root.c.accentMid; strokeWidth: 1; fillColor: "transparent"
-                    PathAngleArc { centerX: 56; centerY: 56; radiusX: 36; radiusY: 36; startAngle: 0; sweepAngle: 250 }
-                }
-                RotationAnimation on rotation {
-                    running: win.visible && root.mode !== "done"; loops: Animation.Infinite; from: 360; to: 0
-                    duration: root.mode === "thinking" ? 1800 : 7000
-                }
-            }
-            // the steps: an arc that fills as they finish
-            Shape {
-                anchors.fill: parent
-                visible: root.stepsAll > 0
-                preferredRendererType: Shape.CurveRenderer
-                ShapePath {
-                    strokeColor: root.rgba(root.c.accentMid, 0.25); strokeWidth: 3; fillColor: "transparent"
-                    PathAngleArc { centerX: 56; centerY: 56; radiusX: 29; radiusY: 29; startAngle: -90; sweepAngle: 360 }
-                }
-                ShapePath {
-                    strokeColor: root.accent; strokeWidth: 3; fillColor: "transparent"; capStyle: ShapePath.RoundCap
-                    PathAngleArc {
-                        centerX: 56; centerY: 56; radiusX: 29; radiusY: 29; startAngle: -90
-                        sweepAngle: root.stepsAll ? 360 * root.stepsDone / root.stepsAll : 0
-                        Behavior on sweepAngle { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
+                    strokeWidth: 0; strokeColor: "transparent"
+                    fillGradient: ConicalGradient {
+                        centerX: edge.width / 2; centerY: edge.height / 2; angle: edge.turn
+                        GradientStop { position: 0.0; color: root.accent }
+                        GradientStop { position: 0.18; color: root.rgba(root.c.accentMid, 0.15) }
+                        GradientStop { position: 0.5; color: root.rgba(root.c.accentMid, 0.08) }
+                        GradientStop { position: 0.82; color: root.rgba(root.c.accentMid, 0.15) }
+                        GradientStop { position: 1.0; color: root.accent }
                     }
+                    PathRectangle { x: 0; y: 0; width: edge.width; height: edge.height; radius: pill.r + 1.5 }
                 }
+                opacity: root.mode === "done" && !root.speaking ? 0.35 : 1
+                Behavior on opacity { NumberAnimation { duration: 400 } }
             }
-            // the centre: breathes while listening, ripples while speaking, a mark when done or asking
+            // the glass
             Rectangle {
-                id: heart
-                anchors.centerIn: parent
-                width: 22; height: 22; radius: 11
-                color: root.mode === "listening" || root.mode === "speaking" || root.mode === "asking" ? root.accent : root.c.accentMid
-                SequentialAnimation on scale {
-                    running: win.visible && (root.mode === "listening" || root.mode === "asking")
-                    loops: Animation.Infinite
-                    NumberAnimation { to: root.mode === "asking" ? 1.25 : 1.45; duration: root.mode === "asking" ? 900 : 650; easing.type: Easing.InOutSine }
-                    NumberAnimation { to: 1.0; duration: root.mode === "asking" ? 900 : 650; easing.type: Easing.InOutSine }
+                anchors.fill: parent
+                radius: pill.r
+                color: Qt.rgba(Qt.color(root.c.bg0).r, Qt.color(root.c.bg0).g, Qt.color(root.c.bg0).b, 1)  // solid
+            }
+
+            // left: the voice — bars that bounce while listening, wave while speaking, a check when done
+            Item {
+                id: voiceMark
+                width: 26; height: 22
+                anchors { left: parent.left; leftMargin: 18; top: parent.top; topMargin: 13 }
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 3
+                    visible: root.mode !== "done" || root.speaking
+                    Repeater {
+                        model: 4
+                        delegate: Rectangle {
+                            id: bar
+                            required property int index
+                            width: 3; radius: 1.5
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: root.accent
+                            height: 5
+                            SequentialAnimation on height {
+                                running: win.visible && (root.mode === "listening" || root.mode === "speaking" || root.busy)
+                                loops: Animation.Infinite
+                                PauseAnimation { duration: bar.index * (root.mode === "speaking" ? 110 : 70) }
+                                NumberAnimation {
+                                    to: root.mode === "listening" ? 8 + (bar.index % 2) * 10 : root.mode === "speaking" ? 18 : 9
+                                    duration: root.mode === "speaking" ? 260 : root.busy ? 420 : 300; easing.type: Easing.InOutSine
+                                }
+                                NumberAnimation { to: 4; duration: root.mode === "speaking" ? 260 : root.busy ? 420 : 300; easing.type: Easing.InOutSine }
+                            }
+                            opacity: root.busy ? 0.6 : 1
+                        }
+                    }
                 }
                 Text {
                     anchors.centerIn: parent
-                    visible: root.mode === "done" || root.mode === "asking"
-                    text: root.mode === "asking" ? "?" : "✓"
-                    color: root.c.bg0; font.family: root.font; font.pixelSize: 13; font.bold: true
+                    visible: root.mode === "done" && !root.speaking
+                    text: "✓"
+                    color: root.accent; font.family: root.font; font.pixelSize: 17; font.bold: true
+                    scale: visible ? 1 : 0.4
+                    Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutBack } }
                 }
             }
-            // speaking: rings spreading from the centre
-            Repeater {
-                model: 2
-                delegate: Rectangle {
-                    id: ripple
-                    required property int index
-                    anchors.centerIn: parent
-                    width: 22; height: 22; radius: width / 2
-                    color: "transparent"; border.width: 1.5; border.color: root.accent
-                    visible: root.mode === "speaking"
-                    opacity: 0
-                    ParallelAnimation {
-                        running: root.mode === "speaking" && win.visible
-                        loops: Animation.Infinite
-                        PauseAnimation { duration: index * 600 }
-                        NumberAnimation { target: ripple; property: "width"; from: 22; to: 84; duration: 1200; easing.type: Easing.OutCubic }
-                        NumberAnimation { target: ripple; property: "height"; from: 22; to: 84; duration: 1200; easing.type: Easing.OutCubic }
-                        NumberAnimation { target: ripple; property: "opacity"; from: 0.9; to: 0; duration: 1200 }
+
+            // right: the steps as dots, and close
+            Row {
+                id: right
+                anchors { right: parent.right; rightMargin: 16; top: parent.top; topMargin: 19 }
+                spacing: 5
+                Repeater {
+                    model: Math.min(root.stepsAll, 6)
+                    delegate: Rectangle {
+                        required property int index
+                        width: 6; height: 6; radius: 3
+                        readonly property var step: (root.hud.steps || [])[index]
+                        color: step && step.status === "running" ? "transparent"
+                             : step && step.status === "failed" ? root.c.critical : root.accent
+                        border.width: 1; border.color: root.accent
+                        opacity: step && step.status === "running" ? 0.9 : 0.8
                     }
                 }
-            }
-        }
-
-        // ---------------------------------------------------------------- the panel: brackets, not a box
-        Item {
-            id: panel
-            anchors { left: core.right; right: parent.right; top: parent.top; leftMargin: 10; topMargin: 6 }
-            height: body.implicitHeight + 22
-
-            Rectangle {  // the glass behind the text
-                anchors.fill: parent
-                color: root.rgba(root.c.bg0, 0.96)
-                radius: root.radius
-            }
-            // corner brackets
-            Repeater {
-                model: 4
-                delegate: Item {
-                    required property int index
-                    width: 14; height: 14
-                    x: index % 2 === 0 ? 0 : panel.width - width
-                    y: index < 2 ? 0 : panel.height - height
-                    Rectangle { width: parent.width; height: 1.5; color: root.accent; y: index < 2 ? 0 : parent.height - 1.5 }
-                    Rectangle { width: 1.5; height: parent.height; color: root.accent; x: index % 2 === 0 ? 0 : parent.width - 1.5 }
+                Text {
+                    text: "✕"; color: root.c.accentDim; font.family: root.font; font.pixelSize: 11
+                    visible: !root.asking && root.mode === "done"
+                    MouseArea { anchors.fill: parent; anchors.margins: -8; onClicked: root.dismissed = root.hud.seq }
                 }
             }
-            // a hairline along the top and bottom between the brackets
-            Rectangle { x: 18; width: panel.width - 36; height: 1; color: root.line }
-            Rectangle { x: 18; y: panel.height - 1; width: panel.width - 36; height: 1; color: root.line }
 
             ColumnLayout {
                 id: body
-                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14; topMargin: 11 }
-                spacing: 7
+                anchors { left: voiceMark.right; right: right.left; top: parent.top; leftMargin: 12; rightMargin: 12; topMargin: 14 }
+                spacing: 8
 
-                // SONU · STATE ········· ✕
-                RowLayout {
-                    spacing: 8
-                    Text {
-                        text: "SONU"
-                        color: root.accent; font.family: root.font; font.pixelSize: 11; font.bold: true
-                        font.letterSpacing: 2.5
-                    }
-                    Text {
-                        text: (root.mode === "speaking" ? "speaking" : root.stateWord(root.hud.state)).toUpperCase()
-                        color: root.c.accentMid; font.family: root.font; font.pixelSize: 11; font.letterSpacing: 2
-                    }
-                    Rectangle { Layout.fillWidth: true; height: 1; color: root.line; Layout.alignment: Qt.AlignVCenter }
-                    Text {
-                        visible: root.stepsAll > 0
-                        text: root.stepsDone + "/" + root.stepsAll
-                        color: root.c.accentMid; font.family: root.font; font.pixelSize: 11
-                    }
-                    Text {
-                        text: "✕"; color: root.c.accentDim; font.family: root.font; font.pixelSize: 12
-                        visible: !root.asking
-                        MouseArea { anchors.fill: parent; anchors.margins: -6; onClicked: root.dismissed = root.hud.seq }
-                    }
-                }
-
-                // what the user asked
+                // one line: what SONU is doing (or what you said)
                 Text {
                     Layout.fillWidth: true
-                    visible: (root.hud.request || "") !== ""
-                    text: "“" + (root.hud.request || "") + "”"
-                    color: root.c.fg; font.family: root.font; font.pixelSize: 14
-                    wrapMode: Text.Wrap; maximumLineCount: 3; elide: Text.ElideRight
+                    text: root.headline
+                    color: root.asking ? root.accent : root.c.fg
+                    font.family: root.font; font.pixelSize: 14; font.bold: root.asking
+                    elide: Text.ElideRight
+                    wrapMode: root.asking ? Text.Wrap : Text.NoWrap
+                    maximumLineCount: root.asking ? 3 : 1
                 }
-
-                // the steps, as a timeline
-                Repeater {
-                    model: root.hud.steps || []
-                    delegate: RowLayout {
-                        required property var modelData
-                        required property int index
-                        Layout.fillWidth: true
-                        spacing: 9
-                        visible: !(root.asking && modelData.status === "running")  // the question says it
-                        Item {
-                            Layout.preferredWidth: 12; Layout.preferredHeight: 18
-                            Layout.alignment: Qt.AlignTop
-                            Rectangle {  // the node
-                                anchors.centerIn: parent
-                                width: 7; height: 7; radius: 3.5
-                                color: modelData.status === "running" ? "transparent" : root.statusColour(modelData.status)
-                                border.width: 1.5
-                                border.color: modelData.status === "running" ? root.accent : root.statusColour(modelData.status)
-                                SequentialAnimation on opacity {
-                                    running: modelData.status === "running"; loops: Animation.Infinite
-                                    NumberAnimation { to: 0.2; duration: 500 }
-                                    NumberAnimation { to: 1; duration: 500 }
-                                }
-                            }
-                        }
-                        Text {
-                            Layout.fillWidth: true
-                            text: (modelData.status === "failed" ? "✖ " : modelData.status === "unverified" ? "! " : "") + modelData.text
-                            color: modelData.status === "running" ? root.c.accentMid : root.c.fg
-                            font.family: root.font; font.pixelSize: 13
-                            wrapMode: Text.Wrap; maximumLineCount: 4; elide: Text.ElideRight
-                        }
-                    }
+                // the answer
+                Text {
+                    Layout.fillWidth: true
+                    visible: (root.hud.result || "") !== "" && root.hud.state === "done"  // also while it's said
+                    text: root.hud.result || ""
+                    color: root.accent; font.family: root.font; font.pixelSize: 13
+                    wrapMode: Text.Wrap; maximumLineCount: 5; elide: Text.ElideRight
+                    opacity: visible ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: 300 } }
                 }
-
                 // something to read before answering (a prompt SONU wrote)
-                Rectangle {
+                Text {
                     Layout.fillWidth: true
                     visible: (root.hud.details || "") !== ""
-                    implicitHeight: detailsText.implicitHeight + 16
-                    radius: root.radius; color: root.rgba(root.c.bg2, 0.9)
-                    border.width: 1; border.color: root.line
-                    Text {
-                        id: detailsText
-                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
-                        text: root.hud.details || ""
-                        color: root.c.fg; font.family: root.font; font.pixelSize: 12
-                        wrapMode: Text.Wrap; maximumLineCount: 14; elide: Text.ElideRight
-                    }
-                }
-
-                // the question, and its answers
-                Text {
-                    Layout.fillWidth: true
-                    visible: root.asking
-                    text: root.asking ? root.hud.question.text : ""
-                    color: root.accent
-                    font.family: root.font; font.pixelSize: 14; font.bold: true
-                    wrapMode: Text.Wrap
+                    text: root.hud.details || ""
+                    color: root.c.fg; font.family: root.font; font.pixelSize: 12
+                    wrapMode: Text.Wrap; maximumLineCount: 12; elide: Text.ElideRight
                 }
                 Text {
                     Layout.fillWidth: true
@@ -367,8 +281,10 @@ ShellRoot {
                     text: root.asking ? (root.hud.question.note || "") : ""
                     color: root.c.accentMid; font.family: root.font; font.pixelSize: 12; wrapMode: Text.Wrap
                 }
+                // the answers
                 Flow {
                     Layout.fillWidth: true
+                    Layout.bottomMargin: 2
                     visible: root.asking && (root.hud.question.options || []).length > 0
                     spacing: 8
                     Repeater {
@@ -377,17 +293,18 @@ ShellRoot {
                             required property var modelData
                             required property int index
                             implicitWidth: label.implicitWidth + 30
-                            implicitHeight: label.implicitHeight + 14
-                            radius: 2
-                            color: hover.containsMouse ? root.rgba(root.c.accentMid, 0.18) : "transparent"
+                            implicitHeight: label.implicitHeight + 12
+                            radius: height / 2
+                            color: index === 0 ? (hover.containsMouse ? root.accent : root.rgba(root.c.accentBright, 0.85))
+                                               : (hover.containsMouse ? root.rgba(root.c.accentMid, 0.25) : "transparent")
                             border.width: 1
-                            border.color: index === 0 ? root.accent : root.line
+                            border.color: index === 0 ? root.accent : root.rgba(root.c.accentMid, 0.6)
                             Text {
                                 id: label
                                 anchors.centerIn: parent
-                                text: "[ " + modelData.label + " ]"
-                                color: index === 0 ? root.accent : root.c.fg
-                                font.family: root.font; font.pixelSize: 13
+                                text: modelData.label
+                                color: index === 0 ? root.c.bg0 : root.c.fg
+                                font.family: root.font; font.pixelSize: 13; font.bold: index === 0
                             }
                             MouseArea {
                                 id: hover
@@ -398,15 +315,6 @@ ShellRoot {
                             }
                         }
                     }
-                }
-
-                // the result (or SONU's reply)
-                Text {
-                    Layout.fillWidth: true
-                    visible: root.hud.state === "done" && (root.hud.result || "") !== ""
-                    text: root.hud.result || ""
-                    color: root.accent; font.family: root.font; font.pixelSize: 13
-                    wrapMode: Text.Wrap; maximumLineCount: 5; elide: Text.ElideRight
                 }
             }
         }
