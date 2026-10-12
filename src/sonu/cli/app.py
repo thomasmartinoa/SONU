@@ -20,6 +20,7 @@ from sonu.cli import (
     config_cmd,
     control_cmd,
     daemon_cmd,
+    data_cmd,
     desktop_cmd,
     eval_cmd,
     journal_cmd,
@@ -46,6 +47,8 @@ app.command("eval")(eval_cmd.eval_cmd)
 app.command("control")(control_cmd.control)
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(settings_cmd.app, name="settings")
+app.add_typer(data_cmd.memory_app, name="memory")
+app.add_typer(data_cmd.talks_app, name="conversations")
 app.add_typer(audit_cmd.app, name="audit")
 app.add_typer(desktop_cmd.app, name="desktop")
 app.add_typer(daemon_cmd.app, name="daemon")
@@ -117,6 +120,8 @@ COMMANDS = {
     "config",
     "settings",
     "control",
+    "memory",
+    "conversations",
     "audit",
     "desktop",
     "daemon",

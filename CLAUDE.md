@@ -55,6 +55,7 @@ sonu eval                               # real planner model on the eval suite (
 ```
 src/sonu/
   cli/            entry.py (thin client first), typer commands: ask (default), prompt, eval, doctor, config, settings,
+                  control, memory, conversations (data_cmd.py),
                   audit, desktop, daemon, voice (+ `sonu listen` through the daemon), journal, mcp, browser
   daemon/         sonud: server.py (model kept loaded, one request at a time), client.py (stdlib only), protocol
   browser/        extension/ (SONU's own, Chromium + Zen: tabs, a page's text, clicks, fields, scrolling), host.py (native messaging → a local socket), install.py

@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### Your data in the Control Center (#83)
+- [ ] `sonu control` → Memory, Conversations, Activity, Audit log: what SONU keeps, and a delete that asks first
+- [ ] in a terminal: `sonu memory list`, `sonu conversations list yesterday`
+
 ### The Control Center (#82)
 - [ ] `sonu control` (or say "open your settings"): Brain, Voice, Proactive, Privacy, Look
 - [ ] switch heads-ups on; Cloud models → allow asks "are you sure?" first — then set it back to never

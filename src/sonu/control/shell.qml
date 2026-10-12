@@ -1,7 +1,9 @@
-// SONU's Control Center (D90, part 2): its own Quickshell window (`sonu control` starts `qs -n -p <this>`),
+// SONU's Control Center (D90, parts 2 and 3): its own Quickshell window (`sonu control` starts `qs -n -p <this>`),
 // so the owner's shell and dotfiles are never touched. Every change goes through `sonu settings set` — the
 // same checks as the terminal: only the catalogued settings, the whole file validated before it's written,
 // a change that loosens privacy or safety asked here first, every change audited, sonud restarted once idle.
+// "Your data" shows what SONU keeps about the user (memory, conversations, the journal, the audit log) through
+// `sonu memory / conversations / journal / audit`; deleting is always asked here first.
 // Colours, corners and font come from the rice's colors.json, live.
 import QtQuick
 import QtQuick.Layouts
@@ -13,12 +15,18 @@ ShellRoot {
 
     readonly property string sonu: Quickshell.env("SONU_BIN") || "sonu"
     readonly property var groups: ["Brain", "Voice", "Proactive", "Privacy", "Look"]
-    property string group: "Brain"
+    readonly property var dataPages: ["Memory", "Conversations", "Activity", "Audit log"]
+    // the page shown: a settings group or one of "your data" (SONU_CONTROL_PAGE: open on that page)
+    property string group: Quickshell.env("SONU_CONTROL_PAGE") || "Brain"
+    Component.onCompleted: loadData()
+    readonly property bool onData: root.dataPages.indexOf(root.group) >= 0
+    property string when: "today"    // conversations and activity
+    property var found: null         // what the data page shows (parsed from `sonu … --json`)
     property var rows: []
     property var models: []          // installed local models that can plan: { name, gb }
     property string status: ""
     property bool busy: false
-    property var asking: null        // { row, value, arg } waiting for "are you sure?"
+    property var asking: null        // { title, text, yes, act } waiting for "are you sure?"
 
     // the rice's palette (Orrery): the same file its own shell watches
     property var c: ({
@@ -49,18 +57,42 @@ ShellRoot {
     }
     function change(row, v) {
         if (root.busy || JSON.stringify(v) === JSON.stringify(row.value)) return
-        if (loosens(row, v)) { root.asking = { row: row, value: v }; return }
+        if (loosens(row, v)) {
+            root.asking = {
+                title: row.label + " → " + shown(v) + "?",
+                text: row.help + " This gives SONU more reach or keeps more of your data.",
+                yes: "Yes, change it",
+                act: () => root.set(row, v, true)
+            }
+            return
+        }
         set(row, v, false)
     }
     function set(row, v, confirmed) {
         const command = [root.sonu, "settings", "set", row.key, arg(row, v)]
         if (confirmed) command.push("--yes")  // only after the user said yes here
+        run(command, "Changing " + row.label + "…")
+    }
+    function run(command, doing) {
         root.busy = true
-        root.status = "Changing " + row.label + "…"
+        root.status = doing
         setter.command = command
         setter.running = true
     }
+    function sure(title, text, yes, command) {  // deleting: always asked here first
+        root.asking = { title: title, text: text, yes: yes, act: () => root.run(command, "Working…") }
+    }
     function reload() { lister.running = true }
+    function loadData() {
+        if (!root.onData) return
+        root.found = null
+        const s = root.sonu
+        dataReader.command = root.group === "Memory" ? [s, "memory", "list", "--json"]
+            : root.group === "Conversations" ? [s, "conversations", "list", root.when === "this week" ? "this_week" : root.when, "--json"]
+            : root.group === "Activity" ? [s, "journal", "show", root.when === "this week" ? "this_week" : root.when, "--json"]
+            : [s, "audit", "tail", "-n", "60", "--json"]
+        dataReader.running = true
+    }
 
     Process {
         id: lister
@@ -88,6 +120,19 @@ ShellRoot {
         }
     }
     Process {
+        id: dataReader
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.found = root.group === "Audit log"
+                        ? text.trim().split("\n").filter(l => l).map(l => JSON.parse(l)).reverse()
+                        : JSON.parse(text)
+                } catch (e) { root.found = null }
+            }
+        }
+        stderr: StdioCollector { onStreamFinished: if (text.trim()) root.status = text.trim().replace(/\[[^\]]*\]/g, "") }
+    }
+    Process {
         id: setter
         stdout: StdioCollector { id: setOut }
         stderr: StdioCollector { id: setErr }
@@ -96,6 +141,7 @@ ShellRoot {
             root.status = said[said.length - 1].replace(/\[[^\]]*\]/g, "")
             root.busy = false
             root.reload()
+            root.loadData()
         }
     }
 
@@ -195,6 +241,34 @@ ShellRoot {
                             }
                         }
                     }
+                    Text {
+                        text: "YOUR DATA"
+                        color: root.c.accentDim; font.family: root.font; font.pixelSize: 10
+                        Layout.topMargin: 14; Layout.leftMargin: 10
+                    }
+                    Repeater {
+                        model: root.dataPages
+                        delegate: Rectangle {
+                            required property string modelData
+                            Layout.fillWidth: true
+                            implicitHeight: 32
+                            radius: root.radius
+                            color: root.group === modelData ? root.c.bg3 : (dataHover.containsMouse ? root.c.bg2 : "transparent")
+                            Text {
+                                anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                                text: modelData
+                                color: root.group === modelData ? root.c.accentBright : root.c.fg
+                                font.family: root.font; font.pixelSize: 13
+                            }
+                            MouseArea {
+                                id: dataHover
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { root.group = modelData; root.when = "today"; root.loadData() }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -207,6 +281,150 @@ ShellRoot {
                 Flickable {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    visible: root.onData
+                    clip: true
+                    contentHeight: dataBody.implicitHeight + 28
+                    ColumnLayout {
+                        id: dataBody
+                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: 18 }
+                        spacing: 12
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: root.group === "Memory" ? "What you asked SONU to remember (“remember …”). Only on this laptop."
+                                : root.group === "Conversations" ? "What you and SONU said to each other. Only on this laptop; kept " + "for the days set under Privacy."
+                                : root.group === "Activity" ? "Which windows you used (the activity journal). Only on this laptop."
+                                : "What SONU did and why — the latest 60 records. Private results are never in it."
+                            color: root.c.accentDim; font.family: root.font; font.pixelSize: 11; wrapMode: Text.Wrap
+                        }
+                        // when (conversations, activity)
+                        Flow {
+                            Layout.fillWidth: true
+                            visible: root.group === "Conversations" || root.group === "Activity"
+                            spacing: 6
+                            Repeater {
+                                model: root.group === "Conversations" ? ["today", "yesterday", "this week", "all"] : ["today", "yesterday", "this week"]
+                                delegate: Chip {
+                                    required property string modelData
+                                    text: modelData
+                                    on: root.when === modelData
+                                    onClicked: { root.when = modelData; root.loadData() }
+                                }
+                            }
+                        }
+                        // what can be done here
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            visible: root.group !== "Audit log"
+                            Chip {
+                                visible: root.group === "Memory"
+                                text: "Forget everything"
+                                onClicked: root.sure("Forget everything SONU remembers?", "Your aliases, your name and your notes go. It can't be undone.", "Forget it all", [root.sonu, "memory", "forget", "--all", "--yes"])
+                            }
+                            Chip {
+                                visible: root.group === "Conversations"
+                                text: "Delete the last hour"
+                                onClicked: root.sure("Delete the last hour of conversations?", "It can't be undone.", "Delete", [root.sonu, "conversations", "forget", "--since", "last_hour", "--yes"])
+                            }
+                            Chip {
+                                visible: root.group === "Conversations"
+                                text: "Delete today"
+                                onClicked: root.sure("Delete today's conversations?", "It can't be undone.", "Delete", [root.sonu, "conversations", "forget", "--since", "today", "--yes"])
+                            }
+                            Chip {
+                                visible: root.group === "Conversations"
+                                text: "Delete everything"
+                                onClicked: root.sure("Delete all your conversations with SONU?", "It can't be undone.", "Delete all", [root.sonu, "conversations", "forget", "--since", "everything", "--yes"])
+                            }
+                            Chip {
+                                visible: root.group === "Activity"
+                                text: root.found && root.found.paused ? "Resume recording" : "Pause recording"
+                                on: root.found !== null && root.found.paused === true
+                                onClicked: root.run([root.sonu, "journal", root.found && root.found.paused ? "resume" : "pause"], "…")
+                            }
+                            Chip {
+                                visible: root.group === "Activity"
+                                text: "Delete the last hour"
+                                onClicked: root.sure("Delete the last hour of the journal?", "It can't be undone.", "Delete", [root.sonu, "journal", "forget", "--hours", "1"])
+                            }
+                            Chip {
+                                visible: root.group === "Activity"
+                                text: "Delete everything"
+                                onClicked: root.sure("Delete the whole activity journal?", "It can't be undone.", "Delete all", [root.sonu, "journal", "forget", "--all"])
+                            }
+                        }
+                        Text {
+                            visible: root.found === null
+                            text: "Reading…"
+                            color: root.c.accentMid; font.family: root.font; font.pixelSize: 12
+                        }
+                        Text {
+                            visible: root.found !== null && root.found.length === 0
+                            text: root.group === "Memory" ? "SONU doesn't remember anything about you yet." : "Nothing here."
+                            color: root.c.accentMid; font.family: root.font; font.pixelSize: 12
+                        }
+                        // the activity journal's summary
+                        Label {
+                            Layout.fillWidth: true
+                            visible: root.group === "Activity" && root.found !== null
+                            text: root.found && root.found.summary ? root.found.summary : ""
+                            wrapMode: Text.Wrap
+                        }
+                        // memory, conversations, the audit log: one item each
+                        Repeater {
+                            model: root.group !== "Activity" && root.found && root.found.length ? root.found : []
+                            delegate: Rectangle {
+                                id: item
+                                required property var modelData
+                                Layout.fillWidth: true
+                                implicitHeight: itemBody.implicitHeight + 16
+                                radius: root.radius
+                                color: root.c.bg1
+                                ColumnLayout {
+                                    id: itemBody
+                                    anchors { left: parent.left; right: parent.right; top: parent.top; margins: 8 }
+                                    spacing: 3
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Text {
+                                            text: root.group === "Memory" ? item.modelData.kind
+                                                : root.group === "Conversations" ? item.modelData.time
+                                                : Qt.formatDateTime(new Date(item.modelData.ts), "ddd HH:mm") + " · " + item.modelData.kind
+                                            color: root.c.accentDim; font.family: root.font; font.pixelSize: 11
+                                        }
+                                        Item { Layout.fillWidth: true }
+                                        Chip {
+                                            visible: root.group === "Memory"
+                                            text: "Forget"
+                                            onClicked: root.sure("Forget this?", item.modelData.text, "Forget it", [root.sonu, "memory", "forget", String(item.modelData.n), "--yes"])
+                                        }
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: root.group === "Memory" ? item.modelData.text
+                                            : root.group === "Conversations" ? "“" + item.modelData.request + "”"
+                                            : JSON.stringify(item.modelData.data)
+                                        font.pixelSize: root.group === "Audit log" ? 11 : 13
+                                        wrapMode: Text.Wrap; maximumLineCount: 3; elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        visible: root.group === "Conversations"
+                                        text: root.group === "Conversations" ? item.modelData.reply : ""
+                                        color: root.c.accentMid; font.family: root.font; font.pixelSize: 12
+                                        wrapMode: Text.Wrap; maximumLineCount: 4; elide: Text.ElideRight
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Flickable {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    visible: !root.onData
                     clip: true
                     contentHeight: list.implicitHeight + 28
                     ColumnLayout {
@@ -258,7 +476,8 @@ ShellRoot {
                     color: root.c.bg1
                     Text {
                         anchors { left: parent.left; right: parent.right; leftMargin: 14; rightMargin: 14; verticalCenter: parent.verticalCenter }
-                        text: root.status || "Changes are checked, written to your config (comments kept) and logged; SONU restarts by itself to use them."
+                        text: root.status || (root.onData ? "Deleting always asks first, and is logged (how many — never what)."
+                            : "Changes are checked, written to your config (comments kept) and logged; SONU restarts by itself to use them.")
                         color: root.c.accentMid; font.family: root.font; font.pixelSize: 11
                         elide: Text.ElideRight
                     }
@@ -286,17 +505,17 @@ ShellRoot {
                     spacing: 10
                     Label {
                         Layout.fillWidth: true
-                        text: root.asking ? root.asking.row.label + " → " + root.shown(root.asking.value) + "?" : ""
+                        text: root.asking ? root.asking.title : ""
                         font.bold: true; font.pixelSize: 15; wrapMode: Text.Wrap
                     }
                     Text {
                         Layout.fillWidth: true
-                        text: root.asking ? root.asking.row.help + " This gives SONU more reach or keeps more of your data." : ""
+                        text: root.asking ? root.asking.text : ""
                         color: root.c.accentMid; font.family: root.font; font.pixelSize: 12; wrapMode: Text.Wrap
                     }
                     RowLayout {
                         spacing: 8
-                        Chip { text: "Yes, change it"; on: true; onClicked: { const a = root.asking; root.asking = null; root.set(a.row, a.value, true) } }
+                        Chip { text: root.asking ? root.asking.yes : ""; on: true; onClicked: { const a = root.asking; root.asking = null; a.act() } }
                         Chip { text: "No"; onClicked: root.asking = null }
                     }
                 }

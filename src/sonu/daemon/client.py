@@ -26,6 +26,8 @@ _COMMANDS = {
     "config",
     "settings",
     "control",
+    "memory",
+    "conversations",
     "audit",
     "desktop",
     "daemon",
