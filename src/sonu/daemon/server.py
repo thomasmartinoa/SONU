@@ -81,6 +81,7 @@ from sonu.ui.desktop_ui import Picker
 from sonu.ui.hud import Hud, hud_chooser, hud_confirmer, hud_folder
 from sonu.voice.audio import RECORD_ARGV, Endpointing
 from sonu.voice.cloud_ears import request_ears
+from sonu.voice.cloud_voice import cloud_voice
 from sonu.voice.echo import SINK as ECHO_SINK
 from sonu.voice.echo import EchoCanceller
 from sonu.voice.engines import (
@@ -249,6 +250,11 @@ def briefing_due(now: datetime, at: str, last: str | None) -> bool:
 
 def ends_conversation(text: str) -> bool:
     return bool(_ENDS.match(text))
+
+
+def holds_private(report: TaskReport) -> bool:
+    """The reply carries a private result (a research answer, your messages): never to a cloud voice (D98)."""
+    return any(record.outcome.private for record in report.steps)
 
 
 def spoken_reply(report: TaskReport) -> str:
@@ -649,8 +655,8 @@ class Daemon:
             follow_up = self.settings.voice.follow_up_s > 0 and not request.get("dry_run")
             await session.send({**final_message(report), "more": follow_up})
             if self.settings.voice.speak_replies:
-                await voice.say(
-                    spoken_reply(report), interruptible=follow_up
+                await voice.say(  # something private in it: Kokoro on this laptop says it (D98)
+                    spoken_reply(report), interruptible=follow_up, local=holds_private(report)
                 )  # talked over: it stops and listens
             if not follow_up:
                 return
@@ -740,6 +746,7 @@ class Daemon:
             )
             self._voice.speaking = self._hud_speaking
             self._voice.request_ears = request_ears(self.settings, ears, self.audit)
+            self._voice.cloud_voice = cloud_voice(self.settings, self._voice.voice, self.audit)
             if settings.barge_in and self.echo.ensure():  # D50: SONU's voice through its echo canceller
                 self._voice.speaker_argv = ("pw-play", "--target", ECHO_SINK)
                 self._voice.interruptions = lambda spoken: user_talked(spoken, detector, ears.transcribe)

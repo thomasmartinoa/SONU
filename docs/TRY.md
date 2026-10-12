@@ -78,6 +78,10 @@ missing.
 - [ ] "run the tests in SONU" and let it run past 30 s: a notification says when it passed or failed
 - [ ] "brief me" / "catch me up"; optionally `[briefing] daily = true` in the config for one every morning
 
+### SONU's voice from the cloud (#91)
+- [ ] with a Sarvam key: Control Center → Voice → Who speaks = sarvam, Cloud voice = ritu (or shubh, kabir…), Brain → Use the cloud for → speaking (asks); then "what's my battery?"
+- [ ] "any new messages?" is still said in Kokoro's voice (private)
+
 ### Hearing in the cloud (#90)
 - [ ] a Sarvam key: `sonu settings key sarvam`; then `sonu voice check -m large-v3-turbo -m sarvam` — read ten lines, see which hears you better
 - [ ] if Sarvam wins: Control Center → Voice → Who hears you = sarvam, and Brain → Use the cloud for → hearing (asks)

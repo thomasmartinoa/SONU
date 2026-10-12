@@ -107,10 +107,11 @@ CATALOG: tuple[Entry, ...] = (
         "prompts: your idea for Claude Code → a better prompt. planning: harder requests (your words, no "
         "window titles). vision: screenshots (anything visible goes). reading: pages, documents and "
         "research (their text goes). replies: what SONU says back (your words and the results go). hearing: "
-        "what you say after the SONU key or “Hey Sonu” (the audio goes; see Voice → Who hears you).",
+        "what you say after the SONU key or “Hey Sonu” (the audio goes; see Voice → Who hears you). "
+        "speaking: what SONU says, unless it's private (see Voice → Who speaks).",
         "list",
-        choices=("prompts", "planning", "vision", "reading", "replies", "hearing"),
-        loosens=("vision", "reading", "replies", "hearing"),
+        choices=("prompts", "planning", "vision", "reading", "replies", "hearing", "speaking"),
+        loosens=("vision", "reading", "replies", "hearing", "speaking"),
     ),
     Entry(
         "cloud.plan",
@@ -210,6 +211,25 @@ CATALOG: tuple[Entry, ...] = (
         "Voice",
         "Cloud hearing model",
         "Empty: the provider's best (saaras:v4, whisper-large-v3-turbo, gemini-2.5-flash).",
+        "text",
+    ),
+    Entry(
+        "voice.speaking",
+        "Voice",
+        "Who speaks",
+        "local: Kokoro on this laptop (the voice above). sarvam: Bulbul, Indian English voices. gemini: "
+        "Google. Anything private (your messages, a document, research) is always spoken by Kokoro. Only "
+        "with “speaking” on under Brain → Use the cloud for.",
+        "choice",
+        choices=("local", "sarvam", "gemini"),
+        loosens=("sarvam", "gemini"),
+    ),
+    Entry(
+        "voice.speaking_voice",
+        "Voice",
+        "Cloud voice",
+        "Sarvam: shubh, ritu, priya, kabir, neha, rahul, … Gemini: Kore, Puck, Charon, Aoede, … "
+        "Empty: shubh / Kore.",
         "text",
     ),
     Entry(
