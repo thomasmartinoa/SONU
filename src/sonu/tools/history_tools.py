@@ -25,7 +25,7 @@ from sonu.desktop.apps.resolver import normalize
 from sonu.integrations.browser_data import Saved, bookmarks, history, profiles
 from sonu.tools.base import Choice, Choices, Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
-from sonu.tools.grounding import ungrounded_words
+from sonu.tools.grounding import not_own_words, ungrounded_words
 from sonu.tools.journal_tools import When, period
 from sonu.tools.naming import name_score
 from sonu.tools.web_tools import Target, WebPlan, compact, open_in_browser, prepare_browser
@@ -95,13 +95,6 @@ def _day(when: float, now: datetime) -> str:
     return f"{day} {at:%H:%M}"
 
 
-def _own_words(ctx: ToolContext, *values: str | None) -> ToolOutcome | None:
-    for value in values:
-        if value and (missing := ungrounded_words(value, ctx.user_words or ctx.request_text)):
-            return ToolOutcome(StepStatus.FAILED, f"That must be your own words ({', '.join(missing)} isn't)")
-    return None
-
-
 def _find(
     ctx: ToolContext,
     kind: Literal["history", "bookmark"],
@@ -165,7 +158,7 @@ class FindSaved(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(HistoryArgs, args)
-        if problem := _own_words(ctx, a.words, a.browser):
+        if problem := not_own_words(ctx, a.words, a.browser):
             return problem
         if a.words and ungrounded_words(a.words, ctx.request_text):
             # Found on the laptop: "what pages did I visit today?" right after "find the page about lentil
@@ -240,7 +233,7 @@ class OpenSaved(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(OpenSavedArgs, args)
-        if problem := _own_words(ctx, a.words, a.browser):
+        if problem := not_own_words(ctx, a.words, a.browser):
             return problem
         words = search_words(a.words)
         if not words:

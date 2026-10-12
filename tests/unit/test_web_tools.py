@@ -126,3 +126,14 @@ def test_a_person_on_github_by_the_users_words() -> None:
     assert github_user("thomasmartinoa", "find the github profile of thomasmartinoa") == "thomasmartinoa"
     assert github_user("thomasmartinoa", "search github for thomasmartinoa") is None  # a repo search
     assert github_user("dotfiles", "search github for user thomasmartinoa dotfiles") is None
+
+
+def test_not_own_words_refuses_words_the_user_didnt_say() -> None:
+    from unittest.mock import MagicMock
+
+    from sonu.tools.grounding import not_own_words
+
+    ctx = MagicMock(user_words="open my kestrel lake photo", request_text="open my kestrel lake photo")
+    assert not_own_words(ctx, "kestrel lake", None, "") is None
+    refused = not_own_words(ctx, "kestrel lake", "my bank password")
+    assert refused is not None and refused.summary == "That must be your own words (bank, password isn't)"

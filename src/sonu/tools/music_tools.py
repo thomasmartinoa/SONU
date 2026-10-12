@@ -22,7 +22,7 @@ from sonu.integrations.mpv import MpvError, Playing, SonuPlayer
 from sonu.tools.base import Choice, Choices, Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
 from sonu.tools.file_tools import _KINDS, file_words, files_named, find_folders, home_relative, user_dirs
-from sonu.tools.grounding import ungrounded_words
+from sonu.tools.grounding import not_own_words
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -97,11 +97,8 @@ class PlayLocal(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(PlayLocalArgs, args)
-        for value in (a.words, a.place):
-            if value and (missing := ungrounded_words(value, ctx.user_words or ctx.request_text)):
-                return ToolOutcome(
-                    StepStatus.FAILED, f"That must be your own words ({', '.join(missing)} isn't)"
-                )
+        if problem := not_own_words(ctx, a.words, a.place):
+            return problem
         if ctx.music is None:
             return ToolOutcome(StepStatus.FAILED, "SONU's music player isn't available here")
         if not ctx.system.available("mpv"):

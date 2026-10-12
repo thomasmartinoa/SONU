@@ -22,7 +22,7 @@ from sonu.tools.browser_tools import _closed, _in_front, _tabs
 from sonu.tools.context import ToolContext
 from sonu.tools.file_change_tools import _ask, find_sources, protected
 from sonu.tools.file_tools import home_relative, newest_file
-from sonu.tools.grounding import ungrounded_words
+from sonu.tools.grounding import not_own_words
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -60,13 +60,6 @@ class CopyArgs(BaseModel):
     text: str | None = Field(default=None, max_length=2000, description="for text: exactly the user's words")
 
 
-def _own_words(ctx: ToolContext, *values: str | None) -> ToolOutcome | None:
-    for value in values:
-        if value and (missing := ungrounded_words(value, ctx.user_words or ctx.request_text)):
-            return ToolOutcome(StepStatus.FAILED, f"That must be your own words ({', '.join(missing)} isn't)")
-    return None
-
-
 class CopyToClipboard(Tool):
     name = "clipboard.copy"
     description = (
@@ -82,7 +75,7 @@ class CopyToClipboard(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(CopyArgs, args)
-        if problem := _own_words(ctx, a.name, a.text):
+        if problem := not_own_words(ctx, a.name, a.text):
             return problem
         if not ctx.system.available("wl-copy"):
             return ToolOutcome(StepStatus.FAILED, "wl-copy isn't installed (sudo pacman -S wl-clipboard)")

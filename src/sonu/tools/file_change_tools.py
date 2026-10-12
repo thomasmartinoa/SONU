@@ -35,7 +35,7 @@ from sonu.tools.file_tools import (
     newest_file,
     user_dirs,
 )
-from sonu.tools.grounding import ungrounded_words
+from sonu.tools.grounding import not_own_words
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
@@ -92,13 +92,6 @@ def _ask(what: str, paths: list[Path], home: Path, prefix: str) -> ToolOutcome:
     )
 
 
-def _own_words(ctx: ToolContext, *values: str | None) -> ToolOutcome | None:
-    for value in values:
-        if value and (missing := ungrounded_words(value, ctx.user_words or ctx.request_text)):
-            return ToolOutcome(StepStatus.FAILED, f"That must be your own words ({', '.join(missing)} isn't)")
-    return None
-
-
 async def _source(ctx: ToolContext, words: str, choice: str | None) -> Path | ToolOutcome:
     home = ctx.system.home
     if choice and choice.startswith(SOURCE):
@@ -146,7 +139,7 @@ class MoveFile(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(MoveArgs, args)
-        if problem := _own_words(ctx, a.name, a.to):
+        if problem := not_own_words(ctx, a.name, a.to):
             return problem
         home = ctx.system.home
         source = await _source(ctx, a.name, choice)
@@ -245,7 +238,7 @@ class RenameFile(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(RenameArgs, args)
-        if problem := _own_words(ctx, a.name, a.new_name):
+        if problem := not_own_words(ctx, a.name, a.new_name):
             return problem
         home = ctx.system.home
         source = await _source(ctx, a.name, choice)
@@ -303,7 +296,7 @@ class TrashFile(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(TrashArgs, args)
-        if problem := _own_words(ctx, a.name):
+        if problem := not_own_words(ctx, a.name):
             return problem
         if not ctx.system.available("gio"):
             return ToolOutcome(
@@ -363,7 +356,7 @@ class RestoreFile(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(RestoreArgs, args)
-        if problem := _own_words(ctx, a.name):
+        if problem := not_own_words(ctx, a.name):
             return problem
         if not ctx.system.available("gio"):
             return ToolOutcome(StepStatus.FAILED, "gio isn't installed (sudo pacman -S glib2)")
