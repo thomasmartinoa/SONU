@@ -89,6 +89,7 @@ works:
 |---|---|---|
 | Open a folder: "open my downloads", "open dev_works", "open the SONU folder" (`files.open`) | ✅ | XDG user folders, your screenshots folder, a path you typed, or a folder of that name in your home (3 levels) — found by SONU; opened in the rice's file manager (`fileManager` in `binds.lua`, Thunar) and confirmed by its window title |
 | Open the newest file in a folder with its app | ✅ | see Downloads |
+| Read your documents: "summarise my invoice pdf", "what does notes.txt say about parking?" | 🧪 #73 | text files as they are, PDFs with `pdftotext`, Word / OpenDocument with LibreOffice (SONU's own profile); the local model only, private ([D82](DECISIONS.md)) |
 | Open a file by name; find files; recent files: "open my resume", "where is my invoice pdf?", "what files did I open yesterday?" | 🧪 #62 | the home tree by your words (hidden folders and dependencies skipped), `recently-used.xbel`; private lists; programs never opened ([D74](DECISIONS.md)) |
 | Move, rename: "move my invoice to documents", "rename notes.txt to ideas" | 🧪 #63 | asks first; never overwrites; never hidden files or your main folders ([D75](DECISIONS.md)) |
 | Delete — to the trash only: "delete my last download"; "restore notes.txt" | 🧪 #63 | `gio trash` (undoable; "restore …" or the file manager), asks first (a folder: high); never permanent deletion ([D75](DECISIONS.md)) |

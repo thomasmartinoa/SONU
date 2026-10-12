@@ -294,6 +294,7 @@ _SAID = {
     "files.move": "move",
     "files.open": "open folders and files",
     "files.recent": "recent files",
+    "files.read": "summarise or answer questions about the user's documents",
     "files.rename": "rename",
     "files.restore": "restore",
     "files.trash": "delete to the trash",

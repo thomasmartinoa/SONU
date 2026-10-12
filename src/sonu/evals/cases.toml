@@ -1353,3 +1353,18 @@ id = "kill-a-program"
 request = "kill chromium"
 expect_status = ["done"]
 expect_confirmed = ["system.stop_program"]
+
+# ---- the user's documents (v40)
+[[case]]
+id = "summarise-a-document"
+request = "summarise my invoice pdf"
+expect_status = ["done"]
+require_tools = ["files.read"]
+forbid_tools = ["files.open", "browser.read", "screen.read", "web.search"]
+
+[[case]]
+id = "ask-a-document"
+request = "what do my trip notes say about parking?"
+expect_status = ["done"]
+require_tools = ["files.read"]
+forbid_tools = ["files.open", "browser.read", "memory.list", "journal.read"]

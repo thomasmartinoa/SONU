@@ -76,6 +76,7 @@ HOME_FILES = (
     "Music/Kestrel Band/First Album/01 Morning.ogg",
     "Music/Kestrel Band/First Album/02 Ridge.ogg",
     "Music/Other Artist/Single.flac",
+    "Documents/trip notes.txt",
 )
 # The SONU project's files (D65): what "run the tests" and "open planner.py" find.
 PROJECT_FILES = {

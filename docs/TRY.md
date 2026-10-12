@@ -71,6 +71,9 @@ missing.
 - [ ] "what's using my CPU?" · "why is my fan so loud?" · "what's eating my memory?" · "did anything crash today?"
 - [ ] start something you don't need, then "kill <it>" (asks first; never the desktop's own programs)
 
+### Your documents (#73)
+- [ ] "summarise my <file> pdf" · "what does <notes file> say about <something>?" · a Word document too
+
 ### Music (#65)
 - [ ] "play my music" · "shuffle my music" · "play <artist> from my music" · "pause" · "next song" · "what's
   playing?" · "stop the music"

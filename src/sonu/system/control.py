@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import signal
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -243,6 +244,42 @@ _PROGRAM_NAMES = {
     "Web Content": "zen",
     "llama-server": "ollama",  # found on the laptop: Ollama's model runner, SONU's own planner among them
 }
+
+
+# Files read as they are (D82), and the ones LibreOffice turns into text.
+TEXT_SUFFIXES = frozenset(
+    {
+        ".txt",
+        ".md",
+        ".markdown",
+        ".rst",
+        ".csv",
+        ".tsv",
+        ".log",
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".conf",
+        ".cfg",
+        ".py",
+        ".sh",
+        ".js",
+        ".ts",
+        ".html",
+        ".htm",
+        ".xml",
+        ".tex",
+        ".srt",
+        ".org",
+    }
+)
+OFFICE_SUFFIXES = frozenset({".docx", ".doc", ".odt", ".rtf", ".pptx", ".odp", ".xlsx", ".ods"})
+
+
+def _read_converted(path: Path) -> str | None:
+    return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None
 
 
 def _program_name(program: str, comm: str) -> str:
@@ -915,6 +952,39 @@ class SystemControl:
             if state != "Z":
                 alive.append(pid)
         return alive
+
+    # ------------------------------------------------------------------ a document's text (D82)
+    async def document_text(self, path: Path, scratch: Path, max_chars: int = 200_000) -> str | None:
+        """The text of a text file, a PDF (``pdftotext``, the first 40 pages) or a Word / OpenDocument file
+        (LibreOffice with SONU's own profile, converted in ``scratch`` and deleted); None: a kind SONU can't
+        read. Measured on the laptop: pdftotext ~10 ms; LibreOffice ~0.5 s."""
+        suffix = path.suffix.lower()
+        if suffix in TEXT_SUFFIXES:
+            data = await asyncio.to_thread(path.read_bytes)
+            return data[: max_chars * 4].decode("utf-8", errors="replace")[:max_chars]
+        if suffix == ".pdf":
+            result = await self._run("pdftotext", "-layout", "-l", "40", str(path), "-", timeout_s=30.0)
+            return result.stdout[:max_chars]
+        if suffix in OFFICE_SUFFIXES:
+            await asyncio.to_thread(scratch.mkdir, mode=0o700, parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(dir=scratch) as folder:
+                out = Path(folder)
+                await self._run(
+                    "soffice",
+                    "--headless",
+                    f"-env:UserInstallation=file://{scratch / 'office-profile'}",  # never the user's own
+                    "--convert-to",
+                    "txt:Text (encoded):UTF8",
+                    "--outdir",
+                    str(out),
+                    str(path),
+                    timeout_s=60.0,
+                )
+                text = await asyncio.to_thread(_read_converted, out / (path.stem + ".txt"))
+                if text is None:
+                    raise CommandError(f"LibreOffice didn't convert {path.name}")
+            return text.lstrip("\ufeff")[:max_chars]  # LibreOffice starts its text with a byte-order mark
+        return None
 
     # ------------------------------------------------------------------ power mode (powerprofilesctl)
     async def power_mode(self) -> str:

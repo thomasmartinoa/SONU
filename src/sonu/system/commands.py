@@ -42,6 +42,8 @@ PACKAGES: dict[str, str] = {
     "nvidia-smi": "nvidia-utils",
     "mpv": "mpv",
     "gio": "glib2",
+    "pdftotext": "poppler",
+    "soffice": "libreoffice-fresh",
 }
 
 

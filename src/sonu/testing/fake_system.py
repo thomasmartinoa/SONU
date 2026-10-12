@@ -58,6 +58,8 @@ ALL_PROGRAMS = frozenset(
         "mpv",
         "coredumpctl",
         "journalctl",
+        "pdftotext",
+        "soffice",
     }
 )
 # A repository for `git` in the fake home's projects: on a branch with one commit not pushed, two files
@@ -82,6 +84,7 @@ class FakeSystem:
     user_errors: list[tuple[str, str]] = field(default_factory=list)
     gpu_apps: list[tuple[str, int]] = field(default_factory=lambda: [("/usr/bin/ollama", 3600)])
     signals: list[tuple[int, int]] = field(default_factory=list)  # (pid, signal) asked to quit
+    office_profiles: list[str] = field(default_factory=list)  # LibreOffice profiles SONU used (D82)
     proc: Path | None = None  # the fake /proc a quit process disappears from
     stubborn: set[int] = field(default_factory=set)
     speaker: float = 0.5
@@ -859,6 +862,19 @@ class FakeSystem:
         if any(a.startswith("--query-compute-apps") for a in args):
             return 0, "".join(f"{name}, {mib}\n" for name, mib in self.gpu_apps), ""
         return 0, self.gpu_line + "\n", ""
+
+    def _pdftotext(self, args: list[str]) -> tuple[int, str, str]:
+        """A fake PDF is its text (D82): "converted" as it is."""
+        return 0, Path(args[-2]).read_text(), ""
+
+    def _soffice(self, args: list[str]) -> tuple[int, str, str]:
+        """LibreOffice's conversion to text (D82): a fake document is its text, written like LibreOffice does
+        (with a byte-order mark first); the profile it's given is recorded."""
+        source = Path(args[-1])
+        out = Path(args[args.index("--outdir") + 1])
+        self.office_profiles.append(next(a for a in args if a.startswith("-env:UserInstallation=")))
+        (out / f"{source.stem}.txt").write_text("\ufeff" + source.read_text(), encoding="utf-8")
+        return 0, "", ""
 
     def _coredumpctl(self, args: list[str]) -> tuple[int, str, str]:
         rows = [

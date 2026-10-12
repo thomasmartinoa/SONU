@@ -16,6 +16,7 @@ from sonu.tools.browser_tools import BROWSER_TOOLS
 from sonu.tools.clipboard_tools import CLIPBOARD_TOOLS
 from sonu.tools.desktop_tools import DEFAULT_TOOLS
 from sonu.tools.dev_tools import DEV_TOOLS
+from sonu.tools.document_tools import DOCUMENT_TOOLS
 from sonu.tools.everyday_tools import EVERYDAY_TOOLS
 from sonu.tools.file_change_tools import FILE_CHANGE_TOOLS
 from sonu.tools.file_tools import FILE_TOOLS
@@ -74,6 +75,7 @@ class ToolRegistry:
             *CLIPBOARD_TOOLS,
             *MUSIC_TOOLS,
             *HEALTH_TOOLS,
+            *DOCUMENT_TOOLS,
             *MEDIA_TOOLS,
             *SETTINGS_TOOLS,
             *EVERYDAY_TOOLS,

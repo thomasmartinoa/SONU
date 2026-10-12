@@ -26,7 +26,7 @@ from sonu.desktop.hyprland.models import Window
 from sonu.integrations.browser import BrowserError, BrowserLink, Browsers, PageControl, Tab
 from sonu.tools.base import Choice, Choices, Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
-from sonu.tools.grounding import not_own_words
+from sonu.tools.grounding import not_own_words, ungrounded_words
 from sonu.tools.naming import RISKY_NAMES, name_score
 from sonu.tools.web_tools import compact
 from sonu.verify.checks import Check
@@ -105,6 +105,12 @@ async def _tabs(ctx: ToolContext, browser: str | None) -> _Found | ToolOutcome:
         return ToolOutcome(StepStatus.FAILED, f"Couldn't ask the browser: {exc}")
 
 
+def _users_browser(ctx: ToolContext, browser: str | None) -> str | None:
+    """The browser only if the user named it: found in the evals (v40), "summarise this page" was planned with
+    browser "Zen Browser" from the window list — a filter the user didn't ask for is dropped, not refused."""
+    return browser if browser and not ungrounded_words(browser, ctx.user_words or ctx.request_text) else None
+
+
 def _choices(tabs: list[Tab], words: str) -> ToolOutcome:
     options = tuple(Choice(_label(t), f"{t.link}|{t.id}") for t in tabs[:MAX_CHOICES])
     return ToolOutcome(
@@ -133,9 +139,7 @@ class ListTabs(Tool):
     async def prepare(
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
-        browser = cast(TabsArgs, args).browser
-        if problem := not_own_words(ctx, browser):
-            return problem
+        browser = _users_browser(ctx, cast(TabsArgs, args).browser)
         return Prepared(f"List the tabs{f' in {browser}' if browser else ''}", browser)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
@@ -179,7 +183,8 @@ class SwitchTab(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(SwitchArgs, args)
-        if problem := not_own_words(ctx, a.words, a.browser):
+        a = a.model_copy(update={"browser": _users_browser(ctx, a.browser)})
+        if problem := not_own_words(ctx, a.words):
             return problem
         found = await _tabs(ctx, a.browser)
         if isinstance(found, ToolOutcome):
@@ -255,7 +260,8 @@ class CloseTabs(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(CloseArgs, args)
-        if problem := not_own_words(ctx, a.words, a.browser):
+        a = a.model_copy(update={"browser": _users_browser(ctx, a.browser)})
+        if problem := not_own_words(ctx, a.words):
             return problem
         found = await _tabs(ctx, a.browser)
         if isinstance(found, ToolOutcome):
@@ -388,7 +394,8 @@ class ReadPage(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(ReadArgs, args)
-        if problem := not_own_words(ctx, a.words, a.browser):
+        a = a.model_copy(update={"browser": _users_browser(ctx, a.browser)})
+        if problem := not_own_words(ctx, a.words):
             return problem
         if ctx.pages is None:
             return ToolOutcome(StepStatus.FAILED, "There's no local model to read the page with")
@@ -588,7 +595,8 @@ class ClickOnPage(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(ClickArgs, args)
-        if problem := not_own_words(ctx, a.control, a.browser):
+        a = a.model_copy(update={"browser": _users_browser(ctx, a.browser)})
+        if problem := not_own_words(ctx, a.control):
             return problem
         page = await _page(ctx, snapshot, a.browser, choice)
         if isinstance(page, ToolOutcome):
@@ -686,7 +694,8 @@ class FillOnPage(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(FillArgs, args)
-        if problem := not_own_words(ctx, a.text, a.field, a.browser):
+        a = a.model_copy(update={"browser": _users_browser(ctx, a.browser)})
+        if problem := not_own_words(ctx, a.text, a.field):
             return problem
         page = await _page(ctx, snapshot, a.browser, choice)
         if isinstance(page, ToolOutcome):
@@ -828,8 +837,7 @@ class ScrollPage(Tool):
         self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
     ) -> Prepared | ToolOutcome:
         a = cast(ScrollArgs, args)
-        if problem := not_own_words(ctx, a.browser):
-            return problem
+        a = a.model_copy(update={"browser": _users_browser(ctx, a.browser)})
         page = await _page(ctx, snapshot, a.browser, choice)
         if isinstance(page, ToolOutcome):
             return page

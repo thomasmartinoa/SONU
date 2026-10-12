@@ -324,7 +324,9 @@ Spotify); its query is the user's words only, and a browser they named goes in b
 media.control only plays, pauses or skips what is already playing.
 - Opening a folder ("open my downloads", "open dev_works"), the newest file in one ("open my \
 last download") or a file by its name ("open my resume", "open notes.txt") is files.open with the user's \
-words as place (SONU finds the folder or file). "Where is / find my <file>" is files.find (name = their \
+words as place (SONU finds the folder or file). "Summarise <file> / what does <file> say (about …)?" is \
+files.read (name = their words for the file, question = their question). "Where is / find my <file>" is \
+files.find (name = their \
 words for it); "what files did I open recently / yesterday?" is files.recent. "Move <file> to <folder>" is \
 files.move, "rename <file> to <name>" files.rename (new_name = their exact words), "delete / trash / get rid \
 of <file>" files.trash (it goes to the trash), "restore / undelete <file>" files.restore — name = their \
@@ -504,6 +506,8 @@ _REMOVE_WORDS = re.compile(r"\b(?:uninstall|remove|get rid of|delete)\b")
 _STOP_WORDS = re.compile(r"\b(?:kill|force quit|quit|stop|end|terminate)\b")
 _MEDIA_STOP = re.compile(r"\bstop\b.*\b(?:music|song|songs|video|playing|playback|recording|stream)\b")
 _SONGS_IN = re.compile(r"\b(?:songs|music|tracks)\s+(?:in|from)\s+(?:my|the)\b")
+_A_FILE = re.compile(r"\b(?:pdf|docx?|odt|txt|md|file|document|notes|resume|cv|invoice)\b|\.\w{2,4}\b")
+_SUMMARISE = re.compile(r"\b(?:summari[sz]e|say|says|said|read|what'?s in|tell me about)\b")
 _ABOUT_A_PAGE = re.compile(r"\b(?:summari[sz]e|selected|selection|highlighted)\b")
 _FILE_VERBS = {
     "move": "files.move",
@@ -725,12 +729,25 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                 )
     # Found in the evals (v38): "what is open in zen?" became browser.read (the page's text) — that's a look
     # at the window (screen.read) unless they asked about a page.
-    if not _WEB_PAGE.search(said) and not _ABOUT_A_PAGE.search(said):
+    if (not _WEB_PAGE.search(said) and not _ABOUT_A_PAGE.search(said)) or _A_FILE.search(said):
         for index, step in enumerate(plan.steps):
             if step.tool == "browser.read":
+                instead = (
+                    "files.read (name = their words for the file, question = their question)"
+                    if _A_FILE.search(said)
+                    else "screen.read (question = their question)"
+                )
                 problems.append(
                     f"step {index + 1} (browser.read) is for a web page's text — the user didn't ask about a "
-                    "page: use screen.read (question = their question)"
+                    f"page: use {instead}"
+                )
+    # A document of the user's (D82) is read by files.read, not looked at or opened.
+    if _A_FILE.search(said) and _SUMMARISE.search(said) and "files.read" not in {s.tool for s in plan.steps}:
+        for index, step in enumerate(plan.steps):
+            if step.tool in ("screen.read", "files.open", "files.find"):
+                problems.append(
+                    f"step {index + 1} ({step.tool}): the user asked what a document of theirs says — use "
+                    "files.read (name = their words for the file, question = their question)"
                 )
     # Found on the laptop (D77): "shuffle kestrel band from my music" while music played was planned as
     # media.control play. Music from the user's own folders is media.play_local.
