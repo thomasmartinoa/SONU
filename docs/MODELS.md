@@ -30,16 +30,26 @@ Laptop, 8 GB); everything else is cited and marked when it comes from a vendor. 
 
 ## Measured on the laptop (planning, SONU's eval suite)
 
+All on the same 171 cases, 2026-10-13, one model at a time (`sonu-bench`; Ollama placed each model itself —
+the bigger ones split between the 8 GB GPU and RAM).
+
 | Planner | Passed | Time a plan | Note |
 |---|---|---|---|
-| `qwen3.5:4b` | 169 / 169 | 1.4 s | fits the GPU; SONU's rules tuned on it |
-| `qwen3.5:9b` | 157 / 166 | 3.7 s | 25 % on the CPU next to the 4B |
-| 4B + 9B for hard requests | 11 / 12 hard | 15.5 s | swapping models costs time |
-| `qwen3:8b` (thinking) | 113 / 123 | 10.9 s | thinking is slow |
-| `gpt-oss:120b-cloud` | 115 / 120 | 1.4 s | no window titles; 3 of 5 misses were SONU's (fixed) |
+| `qwen3.5:4b` | **171 / 171** | 1.2 s | today's planner; fits the GPU — and SONU's rules were tuned on it, so it has a head start |
+| 4B + `qwen3.5:9b` for hard requests | 170 / 171 | 2.8 s | the one miss: a reply to three questions at once |
+| `gpt-oss:120b-cloud` | 165 / 171 | 1.8 s | Ollama Cloud (free); no window titles go |
+| `qwen3:8b` | 164 / 171 | 4.9 s | |
+| `glm-4.7-flash` (Q4_K_M) | 163 / 171 | 2.9 s | 19 GB, split GPU/RAM — still fast (MoE) |
+| `gemma4:e4b` | 162 / 171 | **0.8 s** | the fastest; its misses: reading the screen, pages and documents |
+| `qwen3.5:9b` | 162 / 171 | 2.9 s | |
+| `llama3.1:8b` | 156 / 171 | 3.3 s | |
+| `gpt-oss:20b` | 155 / 171 | 12.2 s | slow here |
+| `qwen3.6:35b-a3b` | 146 / 171 | 3.5 s | answers questions itself instead of using SONU's tools |
 
-Not yet measured: the owner's other installed models (gemma4:e4b, gpt-oss:20b, glm-4.7-flash,
-qwen3.6:35b-a3b, …) and the direct cloud APIs — to do when the GPU is free.
+The 4B stays the default: the most right and among the fastest. Worth a look: `gemma4:e4b` (faster; its misses
+are on reading the screen and pages, which SONU's rules could steer) and `glm-4.7-flash`. Two crashes in the
+eval's stand-ins (not SONU) cost gemma4:e4b and llama3.1:8b a case each; fixed in #97. Not yet measurable:
+the direct cloud APIs (Anthropic, Gemini, Groq, OpenRouter) — `sonu eval` only runs Ollama models.
 
 ## Recommendations
 

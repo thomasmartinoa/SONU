@@ -355,7 +355,12 @@ class FakeHyprland:
             self.cursor = (parsed.x or 0, parsed.y or 0)
             return "ok"
         if parsed.kind == "focus_workspace":
-            self._background(self._focus_workspace(int(parsed.workspace or "1")))
+            target = parsed.workspace or "1"
+            if (
+                not target.isdigit()
+            ):  # found by `sonu eval` (gemma4:e4b planned workspace "youtube"): no crash
+                return f"error: fake Hyprland has no workspace named {target!r}"
+            self._background(self._focus_workspace(int(target)))
             return "ok"
         window = self._find(parsed.window)
         if window is None:
