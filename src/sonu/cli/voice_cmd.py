@@ -146,14 +146,7 @@ def voice_train_wake(ctx: typer.Context) -> None:
     the words learned (D100)."""
     from sonu.voice.audio import Endpointing, record
     from sonu.voice.engines import WhisperEars, silero_detector
-    from sonu.voice.wake import (
-        LEARNED_FILE,
-        WAKE_HINT,
-        after_wake_word,
-        learn_wake,
-        use,
-        wake_head,
-    )
+    from sonu.voice.wake import LEARNED_FILE, WAKE_HINT, train, use, wake_head, wakes
 
     state = get_state(ctx)
     if not voice_installed():
@@ -171,8 +164,8 @@ def voice_train_wake(ctx: typer.Context) -> None:
     detector = silero_detector()
     typer.echo("Say each line the way you'd call SONU. Recording stops when you stop talking.\n")
 
-    def hear(lines: list[str], what: str) -> list[str]:
-        heard: list[str] = []
+    def hear(lines: list[str], what: str) -> list[tuple[str, str]]:
+        heard: list[tuple[str, str]] = []
         for number, line in enumerate(lines, 1):
             typer.echo(f"{what} {number:>2}/{len(lines)}  🎙 Say: “{line}”")
             utterance = asyncio.run(record(Endpointing(start_timeout_s=8.0, max_s=6.0), detector=detector))
@@ -180,7 +173,9 @@ def voice_train_wake(ctx: typer.Context) -> None:
                 typer.echo("          (nothing heard — skipped)")
                 continue
             head = wake_head(utterance.audio(), detector)  # what the listener checks
-            heard.append(ears.transcribe(head, WAKE_HINT))
+            heard.append(
+                (ears.transcribe(head, WAKE_HINT), ears.transcribe(head, ""))
+            )  # and the second listen
         return heard
 
     said = hear(WAKE_SAID, "name")
@@ -190,34 +185,29 @@ def voice_train_wake(ctx: typer.Context) -> None:
         typer.echo("✖ Nothing was heard — is the right microphone selected?", err=True)
         raise typer.Exit(code=1)
 
-    use(set(), set(), set())
-    before = (
-        sum(after_wake_word(t) is not None for t in said),
-        sum(after_wake_word(t) is not None for t in lookalikes),
-    )
-    names, greetings, alone = learn_wake(said, lookalikes)
-    use(names, greetings, alone)
-    after = (
-        sum(after_wake_word(t) is not None for t in said),
-        sum(after_wake_word(t) is not None for t in lookalikes),
-    )
-
+    found = train(said, lookalikes)
+    use(found.names, found.greetings, found.alone, found.second_listen)
     typer.echo("")
-    for text in said:
-        typer.echo(f"   {'✔' if after_wake_word(text) is not None else '✖'} {text}")
-    for text in lookalikes:
-        typer.echo(f"   {'✖ woke on' if after_wake_word(text) is not None else '✔ ignored'} {text}")
+    for sample in said:
+        typer.echo(
+            f"   {'✔' if wakes(sample, found.second_listen) else '✖'} {sample[0]}   (2nd: {sample[1]})"
+        )
+    for sample in lookalikes:
+        woke = wakes(sample, found.second_listen)
+        typer.echo(f"   {'✖ woke on' if woke else '✔ ignored'} {sample[0]}   (2nd: {sample[1]})")
+    use(set(), set(), set())
     typer.echo(
-        f"\nYour “Hey Sonu”: {before[0]}/{len(said)} heard before, {after[0]}/{len(said)} now. "
-        f"Look-alikes that woke it: {before[1]}/{len(lookalikes)} before, {after[1]}/{len(lookalikes)} now."
+        f"\nYour “Hey Sonu”: {found.before[0]}/{len(said)} heard before, {found.now[0]}/{len(said)} now. "
+        f"Look-alikes that woke it: {found.before[1]}/{len(lookalikes)} before, "
+        f"{found.now[1]}/{len(lookalikes)} now."
     )
-    learned = sorted(names | alone)
+    if found.second_listen:
+        typer.echo("Listening twice: the name must still be there without the hint (it kept all of yours).")
+    learned = sorted(found.names | found.alone)
     if learned:
         typer.echo(f"Learned how your “Sonu” is heard: {', '.join(learned)}")
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / LEARNED_FILE).write_text(
-        json.dumps({"names": sorted(names), "greetings": sorted(greetings), "alone": sorted(alone)}) + "\n"
-    )
+    (folder / LEARNED_FILE).write_text(json.dumps(found.saved()) + "\n")
     typer.echo("✔ Saved. `systemctl --user restart sonud` to use it (no recordings were kept).")
 
 

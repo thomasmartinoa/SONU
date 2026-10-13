@@ -51,6 +51,10 @@ CLOSE = 0.7  # "Soin" 0.75, "Sovenue" 0.73, "Soenu" 0.89 — "Sonny" 0.67, "Sunn
 LEARNED_NAMES: set[str] = set()
 LEARNED_GREETINGS: set[str] = set()
 LEARNED_ALONE: set[str] = set()  # the name heard as one word at the start ("Hasonu")
+# The second listen (D101): once "Hey Sonu" is heard with the hint, the same audio again without it — the
+# name must still be there. The hint makes Whisper write "Hey Sunny" and "Hey, so new" as "Hey Sonu" (found
+# on the laptop, the owner's training run); on only when training measured it keeps the owner's "Hey Sonu"s.
+SECOND_LISTEN = [False]
 _GREETINGS = ("hey", "hay", "he", "his", "hi", "hello", "ok", "okay", "yo")
 LEARNED_FILE = "wake-learned.json"  # in the voice folder
 
@@ -65,7 +69,8 @@ def sounds_like_sonu(word: str) -> bool:
 
 
 # Whisper sometimes writes the two words as one: "HeySanu", "HiSonu".
-_JOINED = re.compile(r"\b(?:Hey|Hi|Hay)(S[a-z']+)\b")
+# Without the hint (the second listen) also "Heisanu" (measured with Kokoro's voices).
+_JOINED = re.compile(r"\b(?:Hey|Hei|Hi|Hay)(s[a-z']+)\b", re.I)
 
 
 def _called() -> re.Pattern[str]:
@@ -147,18 +152,66 @@ def learn_wake(said: list[str], lookalikes: list[str]) -> tuple[set[str], set[st
     return kept
 
 
+Heard = tuple[str, str]  # one sample: with the hint, and without it (the second listen)
+
+
+@dataclass(frozen=True, slots=True)
+class Training:
+    """What `sonu voice train-wake` found: the words to learn, whether to listen twice, and how it would do —
+    (your "Hey Sonu"s that wake it, look-alikes that wake it) before and now."""
+
+    names: set[str]
+    greetings: set[str]
+    alone: set[str]
+    second_listen: bool
+    before: tuple[int, int]
+    now: tuple[int, int]
+
+    def saved(self) -> dict[str, object]:
+        return {
+            "names": sorted(self.names),
+            "greetings": sorted(self.greetings),
+            "alone": sorted(self.alone),
+            "second_listen": self.second_listen,
+        }
+
+
+def wakes(sample: Heard, second_listen: bool) -> bool:
+    hinted, plain = sample
+    return after_wake_word(hinted) is not None and (not second_listen or after_wake_word(plain) is not None)
+
+
+def train(said: list[Heard], lookalikes: list[Heard]) -> Training:
+    """Learn from the owner's samples (both passes), then listen twice only if that loses none of their
+    "Hey Sonu"s and wakes on fewer look-alikes."""
+
+    def score(second: bool) -> tuple[int, int]:
+        return sum(wakes(s, second) for s in said), sum(wakes(s, second) for s in lookalikes)
+
+    with _learning(set(), set(), set()):
+        before = score(False)
+    names, greetings, alone = learn_wake(
+        [text for sample in said for text in sample], [text for sample in lookalikes for text in sample]
+    )
+    with _learning(names, greetings, alone):
+        once, twice = score(False), score(True)
+    second = twice[0] >= once[0] and twice[1] < once[1]
+    return Training(names, greetings, alone, second, before, twice if second else once)
+
+
 @contextlib.contextmanager
 def _learning(names: set[str], greetings: set[str], alone: set[str]) -> Any:
     """Try learned words for a moment (then back as they were)."""
-    saved = (set(LEARNED_NAMES), set(LEARNED_GREETINGS), set(LEARNED_ALONE))
-    use(names, greetings, alone)
+    saved = (set(LEARNED_NAMES), set(LEARNED_GREETINGS), set(LEARNED_ALONE), SECOND_LISTEN[0])
+    use(names, greetings, alone, SECOND_LISTEN[0])
     try:
         yield
     finally:
         use(*saved)
 
 
-def use(names: set[str], greetings: set[str], alone: set[str]) -> None:
+def use(names: set[str], greetings: set[str], alone: set[str], second_listen: bool = False) -> None:
+    SECOND_LISTEN[0] = second_listen
     LEARNED_NAMES.clear()
     LEARNED_NAMES.update(names)
     LEARNED_GREETINGS.clear()
@@ -171,7 +224,12 @@ def load_learned(path: Path) -> bool:
     """What `sonu voice train-wake` learned from the owner's voice (a missing or broken file: nothing)."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        use(set(data.get("names", [])), set(data.get("greetings", [])), set(data.get("alone", [])))
+        use(
+            set(data.get("names", [])),
+            set(data.get("greetings", [])),
+            set(data.get("alone", [])),
+            data.get("second_listen") is True,
+        )
     except (OSError, ValueError, TypeError, AttributeError):
         return False
     return True
@@ -263,6 +321,9 @@ class WakeListener:
             segment.head = await asyncio.to_thread(self.transcribe, segment.audio(), WAKE_HINT)
             segment.head_length = segment.length
             segment.woke = after_wake_word(segment.head) is not None
+            if segment.woke and SECOND_LISTEN[0]:
+                plain = await asyncio.to_thread(self.transcribe, segment.audio(), "")
+                segment.woke = after_wake_word(plain) is not None
             if not segment.woke:
                 segment.frames.clear()
         if not ended:
