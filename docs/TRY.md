@@ -26,6 +26,13 @@ missing.
 - [ ] **Local music**: put some songs in `~/Music`. Optional: `sudo pacman -S mpv-mpris` so the rice's media keys
   control SONU's music too.
 
+## Train "Hey Sonu" on your voice (#94)
+
+1. If "Hey Sonu" is on, say "stop listening for Hey Sonu" first.
+2. `sonu voice train-wake` — say each line it shows, the way you'd call SONU (about 3 minutes, in a normal room).
+3. It prints how many of your "Hey Sonu"s were heard before and after, and that no look-alike wakes it.
+4. `systemctl --user restart sonud`, then "listen for Hey Sonu" and try it from across the room.
+
 ## The HUD (#71)
 
 - [ ] press the SONU key and ask something: the HUD at the top centre shows listening → what you said → each step

@@ -96,7 +96,7 @@ from sonu.voice.engines import (
 from sonu.voice.interrupt import user_talked
 from sonu.voice.session import VoiceSession
 from sonu.voice.speech import shorten_list
-from sonu.voice.wake import WakeListener, after_wake_word, fix_name
+from sonu.voice.wake import LEARNED_FILE, WakeListener, after_wake_word, fix_name, load_learned
 from sonu.world.origin import ancestor_pids
 from sonu.world.snapshot import WorldSnapshot
 
@@ -920,6 +920,8 @@ class _WakeWord:
     def __init__(self, daemon: Daemon) -> None:
         self.daemon = daemon
         self.file = voice_dir(daemon.paths.data_dir) / "wake-word"
+        # how the owner's "Hey Sonu" sounds, learned by `sonu voice train-wake` (D100) — for requests too
+        load_learned(voice_dir(daemon.paths.data_dir) / LEARNED_FILE)
         self.task: asyncio.Task[None] | None = None
         self.argv: Sequence[str] = RECORD_ARGV  # the microphone (tests read a file)
 
