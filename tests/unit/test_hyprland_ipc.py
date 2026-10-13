@@ -11,6 +11,7 @@ from sonu.desktop.hyprland import (
     HyprlandProtocolError,
     HyprlandRequestError,
 )
+from sonu.desktop.hyprland.errors import HyprlandDispatchError
 from sonu.testing.fake_hyprland import FakeHyprland, make_window
 
 
@@ -131,3 +132,12 @@ async def test_garbage_json_is_a_protocol_error(fake_hypr: FakeHyprland) -> None
     fake_hypr.windows = "not a list"  # type: ignore[assignment]
     with pytest.raises(HyprlandProtocolError, match="unexpected shape"):
         await HyprlandClient(fake_hypr.instance).clients()
+
+
+@pytest.mark.anyio
+async def test_the_fake_refuses_a_workspace_name_it_doesnt_know(fake_hypr: FakeHyprland) -> None:
+    """Found by `sonu eval` (gemma4:e4b planned workspace "youtube"): the fake crashed instead of
+    answering."""
+    client = HyprlandClient(fake_hypr.instance)
+    with pytest.raises(HyprlandDispatchError, match="no workspace named 'youtube'"):
+        await client.dispatch('dispatch hl.dsp.focus({ workspace = "youtube" })')

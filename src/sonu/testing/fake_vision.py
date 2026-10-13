@@ -17,6 +17,11 @@ class FakeScreenReader(ScreenReader):
         self.questions.append((what, question))
         return self.answer
 
+    async def locate(self, png: bytes, target: str) -> tuple[float, float] | None:
+        """Nothing found by looking (found by `sonu eval`: the real one's checks crashed on this stand-in)."""
+        self.questions.append(("locate", target))
+        return None
+
 
 class FakePageReader(PageReader):
     """A stand-in for the local model reading a page (D71): records what it was given."""
