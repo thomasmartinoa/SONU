@@ -150,6 +150,8 @@ class FakeSystem:
     # Switches whose status lags behind once, like the rice's night light (its status still says the
     # old state after on/off until it's asked again).
     stale_once: set[str] = field(default_factory=set)
+    # Quickshell started without a UTF-8 locale prints a warning before every answer (found on the laptop).
+    qs_locale_warning: bool = False
     notifications: int = 3
     # xdg-mime: file suffix → type, type → the desktop-file id set to open it.
     mime_types: dict[str, str] = field(
@@ -846,6 +848,15 @@ class FakeSystem:
     _hypr_wall = _orrery_wall
 
     def _qs(self, args: list[str]) -> tuple[int, str, str]:
+        code, out, err = self._qs_answer(args)
+        if self.qs_locale_warning:
+            out = (
+                '\x1b[33m  WARN\x1b[0m: Detected locale "C" with character encoding "ANSI_X3.4-1968", '
+                'which is not UTF-8.\nQt depends on a UTF-8 locale, and has switched to "C.UTF-8" instead.\n'
+            ) + out
+        return code, out, err
+
+    def _qs_answer(self, args: list[str]) -> tuple[int, str, str]:
         target, function = args[2], args[3]
         if target in ("nightlight", "caffeine"):
             if function in ("on", "off"):

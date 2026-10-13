@@ -511,8 +511,14 @@ _PULL_REQUESTS = re.compile(r"\b(?:pull requests?|prs?)\b")
 _LOCAL_MUSIC = re.compile(
     r"\bshuffle\b|\b(?:from|in)\s+my\s+(?:music|songs)\b|\bplay\s+my\s+(?:music|songs)\b"
 )
-_COPY_PATH = re.compile(
-    r"\bcopy (?:the )?(?:path|location|full path) (?:of|to) (?:my |the )?(?P<name>[\w .'-]+?)\s*$"
+_COPY_PATH = (
+    re.compile(  # the name stops at a next step: "… then paste it", "… and paste it" (found on the laptop)
+        r"\bcopy (?:the )?(?:path|location|full path) (?:of|to) (?:my |the )?(?P<name>[\w .'-]+?)"
+        r"\s*(?:$|,|\s(?:and|then)\s)"
+    )
+)
+_TYPE_IN_TERMINAL = re.compile(
+    r"\btype (?P<text>.+?) (?:in|into|on) (?:my |the |this )?(?P<app>terminal|kitty|foot|alacritty|wezterm)\b"
 )
 _ANOTHER = re.compile(r"\b(?:another|one more|a second|a new|new (?:\w+ )?window)\b")
 _ABOUT_US = re.compile(
@@ -835,6 +841,17 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
                         f"step {index + 1} (system.stop_program) is only for 'kill / quit / stop "
                         "<program>' — closing a window is windows.close"
                     )
+    # Found on the laptop: "type claude in my terminal" was planned as dev.type (Claude Code SONU opened) and
+    # failed. Words for your terminal go there as keystrokes: screen.type into it.
+    typing = _TYPE_IN_TERMINAL.search(said)
+    if typing and "dev.type" in {step.tool for step in plan.steps}:
+        wanted = json.dumps(
+            {
+                "tool": "screen.type",
+                "args": {"text": typing.group("text"), "window": {"app": typing.group("app")}},
+            }
+        )
+        problems.append(f"typing into the user's terminal is screen.type, not dev.type — plan {wanted}")
     # Found in the evals (v47, after a rule was added): "copy the path of my invoice" planned files.find and
     # copied nothing. Copying a file's path is clipboard.copy (it finds the file itself).
     copying = _COPY_PATH.search(said)

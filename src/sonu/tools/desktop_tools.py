@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -305,9 +306,15 @@ class LaunchApp(Tool):
 
         learned = ctx.learned(entry)
 
+        # A terminal app (btop, htop) runs inside the terminal SONU started it in: its window is that
+        # terminal's (found on the laptop: "open btop" said it couldn't confirm, the window being kitty's).
+        host = Path(plan.argv[0]).name.lower() if entry.terminal and plan.argv else ""
+
         def new_app_window(snapshot: WorldSnapshot) -> Window | None:
             for window in snapshot.new_windows(before):
                 if window_matches(entry, (window.window_class, window.initial_class), learned):
+                    return window
+                if host and host in window.window_class.lower():
                     return window
             return None
 

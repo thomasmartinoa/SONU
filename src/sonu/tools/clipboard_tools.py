@@ -39,9 +39,14 @@ _COPY_OF = re.compile(
 )
 
 
+# A next step after the copy: "… then paste it somewhere", "… and paste it in kitty" (found on the laptop: the
+# name became "parking notes then paste it in somewhere"). A plain "and" stays: "copy salt and pepper".
+_NEXT_STEP = re.compile(r"\s*,?\s+(?:and\s+then|then|and\s+(?=(?:paste|put|send|open|show|type)\b)).*$", re.I)
+
+
 def _name_said(request: str) -> str | None:
     """ "copy the path of my invoice" → "my invoice"."""
-    said = _COPY_OF.match(" ".join(request.split()))
+    said = _COPY_OF.match(_NEXT_STEP.sub("", " ".join(request.split())))
     return said.group(1) if said else None
 
 

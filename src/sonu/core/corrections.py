@@ -20,9 +20,10 @@ from __future__ import annotations
 import re
 
 _MARKER = re.compile(
-    r"(?:,\s*(?P<soft>no|sorry|actually)"
+    # after a comma — or a full stop: found on the laptop, Whisper wrote "Open … workspace 4. No, no. 5."
+    r"(?:[,.!?]\s*(?P<soft>no(?:[,.!]?\s+no)*|sorry|actually)"
     r"|(?:,\s*|\s+)(?P<hard>no,?\s+wait|wait,?\s+no|i mean|or rather|make that))"
-    r"(?:,\s*|\s+)",
+    r"(?:[,.!]?\s+)",
     re.IGNORECASE,
 )
 _DEFINING = re.compile(r"\b(?:say|says|said|call|by)\b", re.IGNORECASE)

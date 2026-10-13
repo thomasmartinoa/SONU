@@ -660,3 +660,21 @@ def test_copying_a_path_is_one_copy_step() -> None:
         )
         == []
     )
+
+
+def test_copying_a_path_then_doing_more() -> None:
+    found = _plan(("files.find", {"name": "parking notes"}))
+    [problem] = _problems(found, REGISTRY, "copy the path of parking notes then paste it in somewhere")
+    assert '"name": "parking notes"' in problem
+
+
+def test_typing_into_your_terminal_is_screen_type() -> None:
+    """Found on the laptop: "type claude in my terminal" was planned as dev.type and failed."""
+    wrong = _plan(("dev.type", {"text": "claude"}))
+    [problem] = _problems(wrong, REGISTRY, "no, I need you to type claude in my terminal")
+    assert (
+        '"tool": "screen.type"' in problem
+        and '"text": "claude"' in problem
+        and '"app": "terminal"' in problem
+    )
+    assert _problems(wrong, REGISTRY, "tell claude: add a readme") == []

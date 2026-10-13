@@ -895,3 +895,12 @@ async def test_a_browser_asked_for_on_a_workspace_opens_there_and_leaves_yours(h
     launched = len(harness.fake.launched)
     await harness.engine(plans).run("open my browser", confirm=Confirmations(False))
     assert len(harness.fake.launched) == launched  # no workspace named: the open one is brought up
+
+
+@pytest.mark.anyio
+async def test_a_terminal_app_is_confirmed_by_the_terminal_it_runs_in(harness: Harness) -> None:
+    """Found on the laptop: "open btop" opened it, then said it couldn't confirm — the window was kitty's."""
+    plans = {"open btop": steps_plan(("apps.launch", {"app": "btop"}))}
+    report = await harness.engine(plans).run("open btop", confirm=Confirmations(False))
+    assert report.status == "done", report.lines()
+    assert harness.fake.launched[-1][0].endswith("kitty")
