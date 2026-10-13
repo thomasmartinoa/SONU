@@ -19,10 +19,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from pathlib import Path
+from typing import Any
 
 from sonu.voice.audio import DETECT_EVERY, FRAME_BYTES, FRAME_MS, RATE, RECORD_ARGV, SpeechDetector, frames
 
@@ -43,9 +46,18 @@ _WORDS = {"son", "sons", "soon", "sun", "song", "sonny", "sunny", "some", "soul"
 CLOSE = 0.7  # "Soin" 0.75, "Sovenue" 0.73, "Soenu" 0.89 — "Sonny" 0.67, "Sunny" 0.44
 
 
+# Learned from the owner's own voice (D100, `sonu voice train-wake`): how Whisper writes their "Sonu", and the
+# greeting before it — only what never turned up in their look-alike phrases. Loaded by sonud.
+LEARNED_NAMES: set[str] = set()
+LEARNED_GREETINGS: set[str] = set()
+LEARNED_ALONE: set[str] = set()  # the name heard as one word at the start ("Hasonu")
+_GREETINGS = ("hey", "hay", "he", "his", "hi", "hello", "ok", "okay", "yo")
+LEARNED_FILE = "wake-learned.json"  # in the voice folder
+
+
 def sounds_like_sonu(word: str) -> bool:
     w = word.lower().removesuffix("'s")
-    if w in _EXACT:
+    if w in _EXACT or w in LEARNED_NAMES:
         return True
     if w in _WORDS or not w.startswith("s") or not 3 <= len(w) <= 8:
         return False
@@ -56,11 +68,85 @@ def sounds_like_sonu(word: str) -> bool:
 _JOINED = re.compile(r"\b(?:Hey|Hi|Hay)(S[a-z']+)\b")
 
 
+def _called() -> re.Pattern[str]:
+    if not LEARNED_GREETINGS:
+        return _CALLED
+    greetings = sorted({*_GREETINGS, *LEARNED_GREETINGS}, key=len, reverse=True)
+    return re.compile(rf"\b(?:{'|'.join(map(re.escape, greetings))})([\s,.!]+)([a-z']+)", re.I)
+
+
 def fix_name(text: str) -> str:
     """SONU's name as Whisper misheard it, after a greeting, written right: "Listen for Hey Soin" →
     "Listen for Hey Sonu". Other words are left alone."""
     text = _JOINED.sub(lambda m: "Hey Sonu" if sounds_like_sonu(m.group(1)) else m.group(0), text)
-    return _CALLED.sub(lambda m: f"Hey{m.group(1)}Sonu" if sounds_like_sonu(m.group(2)) else m.group(0), text)
+    if LEARNED_ALONE:
+        first = re.match(r"^\W*([A-Za-z']+)", text)
+        if first and first.group(1).lower() in LEARNED_ALONE:
+            text = text[: first.start(1)] + "Hey Sonu" + text[first.end(1) :]
+    return _called().sub(
+        lambda m: f"Hey{m.group(1)}Sonu" if sounds_like_sonu(m.group(2)) else m.group(0), text
+    )
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z']+", text.lower())
+
+
+def learn_wake(said: list[str], lookalikes: list[str]) -> tuple[set[str], set[str], set[str]]:
+    """What to learn from the owner's "Hey Sonu"s (as Whisper wrote them) — names, greetings and one-word
+    forms — keeping only what makes none of their look-alike phrases wake SONU. Returns (names, greetings,
+    alone)."""
+    names: set[str] = set()
+    greetings: set[str] = set()
+    alone: set[str] = set()
+    for text in said:
+        if after_wake_word(text) is not None:
+            continue  # already heard
+        words = _words(text)
+        if len(words) >= 2:
+            greetings.add(words[0])
+            names.add(words[1])
+        elif words:
+            alone.add(words[0])
+    # Kept one at a time, only if no look-alike phrase then wakes SONU (greetings last: they pair with names).
+    kept: tuple[set[str], set[str], set[str]] = (set(), set(), set())
+    for index, learned in ((0, names), (2, alone), (1, greetings)):
+        for word in sorted(learned):
+            kept[index].add(word)
+            with _learning(*kept):
+                if any(after_wake_word(text) is not None for text in lookalikes):
+                    kept[index].discard(word)
+    return kept
+
+
+@contextlib.contextmanager
+def _learning(names: set[str], greetings: set[str], alone: set[str]) -> Any:
+    """Try learned words for a moment (then back as they were)."""
+    saved = (set(LEARNED_NAMES), set(LEARNED_GREETINGS), set(LEARNED_ALONE))
+    use(names, greetings, alone)
+    try:
+        yield
+    finally:
+        use(*saved)
+
+
+def use(names: set[str], greetings: set[str], alone: set[str]) -> None:
+    LEARNED_NAMES.clear()
+    LEARNED_NAMES.update(names)
+    LEARNED_GREETINGS.clear()
+    LEARNED_GREETINGS.update(greetings)
+    LEARNED_ALONE.clear()
+    LEARNED_ALONE.update(alone)
+
+
+def load_learned(path: Path) -> bool:
+    """What `sonu voice train-wake` learned from the owner's voice (a missing or broken file: nothing)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        use(set(data.get("names", [])), set(data.get("greetings", [])), set(data.get("alone", [])))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
+    return True
 
 
 def after_wake_word(text: str) -> str | None:

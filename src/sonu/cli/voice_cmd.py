@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import typer
 
@@ -99,6 +100,128 @@ def voice_status(ctx: typer.Context) -> None:
     if not all(ok for _, ok in rows):
         typer.echo("→ sonu voice setup")
         raise typer.Exit(code=1)
+
+
+# What to say for `sonu voice train-wake` (D100): SONU's name, alone and before requests, then look-alikes and
+# everyday phrases that must NOT wake it.
+WAKE_SAID = [
+    "Hey Sonu",
+    "Hey Sonu",
+    "Hey Sonu",
+    "Hey Sonu",
+    "Sonu",
+    "Hey Sonu",
+    "Hey Sonu, open kitty",
+    "Hey Sonu, what's my battery?",
+    "Hey Sonu, play some music",
+    "Hey Sonu, open my browser",
+    "Hey Sonu, what time is it?",
+    "Hey Sonu, turn the volume down",
+    "Hey Sonu, take a screenshot",
+    "Hey Sonu, open Spotify",
+    "Hey Sonu, brief me",
+    "Hey Sonu, close this window",
+    "Hey Sonu",
+    "Hey Sonu",
+]
+WAKE_LOOKALIKES = [
+    "Hey Sunny, how are you?",
+    "I told Sonny about it",
+    "Hey son, come here",
+    "What song is this?",
+    "Hey, so new",
+    "The sun is out today",
+    "Sony headphones are good",
+    "Hey, soon I'll be done",
+    "Open the window",
+    "It's time for lunch",
+    "Hey, what's up",
+    "Some water, please",
+]
+
+
+@app.command("train-wake")
+def voice_train_wake(ctx: typer.Context) -> None:
+    """Teach SONU how your "Hey Sonu" sounds: say it ~18 times and a dozen look-alikes; nothing is kept but
+    the words learned (D100)."""
+    from sonu.voice.audio import FRAME_BYTES, Endpointing, record
+    from sonu.voice.engines import WhisperEars, silero_detector
+    from sonu.voice.wake import (
+        HEAD_FRAMES,
+        LEARNED_FILE,
+        PRE_ROLL_FRAMES,
+        WAKE_HINT,
+        after_wake_word,
+        learn_wake,
+        use,
+    )
+
+    state = get_state(ctx)
+    if not voice_installed():
+        typer.echo("✖ The voice extra isn't installed — see `sonu voice setup`", err=True)
+        raise typer.Exit(code=1)
+    folder = voice_dir(state.paths.data_dir)
+    if (folder / "wake-word").exists():
+        typer.echo(
+            "✖ 'Hey Sonu' is on, so SONU would act on what you say. Say “stop listening for Hey Sonu” first "
+            "(and turn it on again after).",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    ears = WhisperEars(state.settings.voice.stt_model, state.settings.voice.device)
+    detector = silero_detector()
+    typer.echo("Say each line the way you'd call SONU. Recording stops when you stop talking.\n")
+
+    def hear(lines: list[str], what: str) -> list[str]:
+        heard: list[str] = []
+        for number, line in enumerate(lines, 1):
+            typer.echo(f"{what} {number:>2}/{len(lines)}  🎙 Say: “{line}”")
+            utterance = asyncio.run(record(Endpointing(start_timeout_s=8.0, max_s=6.0), detector=detector))
+            if not utterance.spoke:
+                typer.echo("          (nothing heard — skipped)")
+                continue
+            head = utterance.audio()[
+                : (HEAD_FRAMES + PRE_ROLL_FRAMES) * FRAME_BYTES
+            ]  # what the listener checks
+            heard.append(ears.transcribe(head, WAKE_HINT))
+        return heard
+
+    said = hear(WAKE_SAID, "name")
+    typer.echo("\nNow phrases that must NOT wake SONU:\n")
+    lookalikes = hear(WAKE_LOOKALIKES, "other")
+    if not said:
+        typer.echo("✖ Nothing was heard — is the right microphone selected?", err=True)
+        raise typer.Exit(code=1)
+
+    use(set(), set(), set())
+    before = (
+        sum(after_wake_word(t) is not None for t in said),
+        sum(after_wake_word(t) is not None for t in lookalikes),
+    )
+    names, greetings, alone = learn_wake(said, lookalikes)
+    use(names, greetings, alone)
+    after = (
+        sum(after_wake_word(t) is not None for t in said),
+        sum(after_wake_word(t) is not None for t in lookalikes),
+    )
+
+    typer.echo("")
+    for text in said:
+        typer.echo(f"   {'✔' if after_wake_word(text) is not None else '✖'} {text}")
+    for text in lookalikes:
+        typer.echo(f"   {'✖ woke on' if after_wake_word(text) is not None else '✔ ignored'} {text}")
+    typer.echo(
+        f"\nYour “Hey Sonu”: {before[0]}/{len(said)} heard before, {after[0]}/{len(said)} now. "
+        f"Look-alikes that woke it: {before[1]}/{len(lookalikes)} before, {after[1]}/{len(lookalikes)} now."
+    )
+    learned = sorted(names | alone)
+    if learned:
+        typer.echo(f"Learned how your “Sonu” is heard: {', '.join(learned)}")
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / LEARNED_FILE).write_text(
+        json.dumps({"names": sorted(names), "greetings": sorted(greetings), "alone": sorted(alone)}) + "\n"
+    )
+    typer.echo("✔ Saved. `systemctl --user restart sonud` to use it (no recordings were kept).")
 
 
 @app.command("check")
