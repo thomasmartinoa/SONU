@@ -144,16 +144,15 @@ WAKE_LOOKALIKES = [
 def voice_train_wake(ctx: typer.Context) -> None:
     """Teach SONU how your "Hey Sonu" sounds: say it ~18 times and a dozen look-alikes; nothing is kept but
     the words learned (D100)."""
-    from sonu.voice.audio import FRAME_BYTES, Endpointing, record
+    from sonu.voice.audio import Endpointing, record
     from sonu.voice.engines import WhisperEars, silero_detector
     from sonu.voice.wake import (
-        HEAD_FRAMES,
         LEARNED_FILE,
-        PRE_ROLL_FRAMES,
         WAKE_HINT,
         after_wake_word,
         learn_wake,
         use,
+        wake_head,
     )
 
     state = get_state(ctx)
@@ -180,9 +179,7 @@ def voice_train_wake(ctx: typer.Context) -> None:
             if not utterance.spoke:
                 typer.echo("          (nothing heard — skipped)")
                 continue
-            head = utterance.audio()[
-                : (HEAD_FRAMES + PRE_ROLL_FRAMES) * FRAME_BYTES
-            ]  # what the listener checks
+            head = wake_head(utterance.audio(), detector)  # what the listener checks
             heard.append(ears.transcribe(head, WAKE_HINT))
         return heard
 

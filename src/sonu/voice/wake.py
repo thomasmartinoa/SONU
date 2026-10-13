@@ -92,6 +92,33 @@ def _words(text: str) -> list[str]:
     return re.findall(r"[a-z']+", text.lower())
 
 
+def wake_head(audio: bytes, detector: SpeechDetector | None) -> bytes:
+    """What the wake listener would check in a recording: from just before the speech starts, its first
+    ~1.8 s. Found on the laptop: training took the recording's first seconds — mostly the silence while the
+    owner read the line — and Whisper made words up from it ("you", "Okay", "So when")."""
+    speech = detector(audio) if detector is not None else []
+    start = speech[0][0] * 2 if speech else 0  # samples → bytes (16-bit)
+    start = max(0, start - PRE_ROLL_FRAMES * FRAME_BYTES)
+    return audio[start : start + HEAD_FRAMES * FRAME_BYTES]
+
+
+# What a learned word must sound like (found on the laptop: Whisper's made-up "you" and "okay" were learned as
+# the whole name — every "Okay, …" would have woken SONU). A greeting: one of these; a name: close to "Sonu";
+# one word: close to "Hey Sonu".
+_LEARNABLE_GREETINGS = {"a", "ay", "eh", "ey", "hae", "hai", "hay", "he", "hei", "hey", "hi", "oi", "yo"}
+LOOSE = 0.5  # "sonny" 0.67, "sunu" 0.75 — "when" 0, "so" 0.67 but too short
+
+
+def _learnable_name(word: str) -> bool:
+    return (
+        word.startswith("s") and 3 <= len(word) <= 8 and SequenceMatcher(None, word, "sonu").ratio() >= LOOSE
+    )
+
+
+def _learnable_alone(word: str) -> bool:
+    return "s" in word and 4 <= len(word) <= 10 and SequenceMatcher(None, word, "heysonu").ratio() >= 0.6
+
+
 def learn_wake(said: list[str], lookalikes: list[str]) -> tuple[set[str], set[str], set[str]]:
     """What to learn from the owner's "Hey Sonu"s (as Whisper wrote them) — names, greetings and one-word
     forms — keeping only what makes none of their look-alike phrases wake SONU. Returns (names, greetings,
@@ -103,10 +130,11 @@ def learn_wake(said: list[str], lookalikes: list[str]) -> tuple[set[str], set[st
         if after_wake_word(text) is not None:
             continue  # already heard
         words = _words(text)
-        if len(words) >= 2:
-            greetings.add(words[0])
+        if len(words) >= 2 and _learnable_name(words[1]):
             names.add(words[1])
-        elif words:
+            if words[0] in _LEARNABLE_GREETINGS:
+                greetings.add(words[0])
+        elif words and _learnable_alone(words[0]):
             alone.add(words[0])
     # Kept one at a time, only if no look-alike phrase then wakes SONU (greetings last: they pair with names).
     kept: tuple[set[str], set[str], set[str]] = (set(), set(), set())

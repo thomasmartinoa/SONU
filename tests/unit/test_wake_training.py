@@ -109,3 +109,26 @@ def test_the_command_learns_and_saves(
         "greetings": ["a", "hey"],
         "alone": [],
     }
+
+
+def test_words_whisper_made_up_are_never_learned() -> None:
+    """Found on real hardware: the owner's training learned "you" and "okay" as the whole name and "when"
+    after "hey" / "so" — every "Okay, …" would have woken SONU."""
+    names, greetings, alone = learn_wake(["You", "Okay.", "So when?", "Hey, when.", "you"], LOOKALIKES)
+    assert (names, greetings, alone) == (set(), set(), set())
+    use(names, greetings, alone)
+    assert after_wake_word("Okay, let's go") is None and after_wake_word("You know what") is None
+
+
+def test_the_head_starts_where_the_speech_does() -> None:
+    """Found on real hardware: training transcribed the recording's first ~2 s — the silence while the owner
+    read the line — instead of the start of what they said."""
+    from sonu.voice.audio import FRAME_BYTES, RATE
+    from sonu.voice.wake import HEAD_FRAMES, PRE_ROLL_FRAMES, wake_head
+
+    silence, speech = b"\x00" * (RATE * 2 * 2), b"\x01" * (RATE * 2 * 3)  # 2 s quiet, then 3 s of talk
+    audio = silence + speech
+    head = wake_head(audio, lambda _: [(RATE * 2, RATE * 5)])  # the detector: speech from 2 s
+    assert len(head) == HEAD_FRAMES * FRAME_BYTES
+    assert head[: PRE_ROLL_FRAMES * FRAME_BYTES] == b"\x00" * (PRE_ROLL_FRAMES * FRAME_BYTES)  # 0.5 s before
+    assert head[PRE_ROLL_FRAMES * FRAME_BYTES :] == b"\x01" * ((HEAD_FRAMES - PRE_ROLL_FRAMES) * FRAME_BYTES)
