@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from sonu.voice.wake import after_wake_word, fix_name, learn_wake, load_learned, use
+from sonu.voice.wake import WAKE_HINT, after_wake_word, fix_name, learn_wake, load_learned, train, use
 
 SAID = [
     "Hey Sonu.",
@@ -71,11 +71,11 @@ def test_the_command_learns_and_saves(
     from sonu.cli.app import app
     from sonu.config.paths import SonuPaths
 
+    # each sample is heard twice: with the hint, then without it (the second listen)
+    said = [("Hey Sonu.", "Hey, Sanu.")] * 6 + [("Hey Sonny, open kitty.", "Hey Sonny, open kitty.")] * 6
+    said += [("A Sonu, play music.", "A Sonu, play music.")] * 6
     heard = iter(
-        ["Hey Sonu."] * 6
-        + ["Hey Sonny, open kitty."] * 6
-        + ["A Sonu, play music."] * 6
-        + ["Hey son, come here."] * 12
+        [text for sample in said + [("Hey son, come here.", "Hey son, come here.")] * 12 for text in sample]
     )
 
     class Ears:
@@ -108,6 +108,7 @@ def test_the_command_learns_and_saves(
         "names": ["sonny", "sonu"],
         "greetings": ["a", "hey"],
         "alone": [],
+        "second_listen": False,  # no look-alike woke it: nothing to gain
     }
 
 
@@ -132,3 +133,52 @@ def test_the_head_starts_where_the_speech_does() -> None:
     assert len(head) == HEAD_FRAMES * FRAME_BYTES
     assert head[: PRE_ROLL_FRAMES * FRAME_BYTES] == b"\x00" * (PRE_ROLL_FRAMES * FRAME_BYTES)  # 0.5 s before
     assert head[PRE_ROLL_FRAMES * FRAME_BYTES :] == b"\x01" * ((HEAD_FRAMES - PRE_ROLL_FRAMES) * FRAME_BYTES)
+
+
+# The owner's training run (10-13), as Whisper wrote it with the hint; without it, what Whisper wrote for
+# the same kind of audio in Kokoro's voices.
+OWNER_SAID = (
+    [("Hey Sonu", "Hey, Sanu.")] * 16
+    + [("Okay, Sonu", "Okay, Sanu.")]
+    + [("Okay, so now open", "Okay, so now open.")]
+)
+OWNER_LOOKALIKES = [
+    ("Hey Sonu", "Hey Sunny, how are you?"),
+    ("I told Sonu about", "I told Sonny about it."),
+    ("Hey Son, come here", "Hey son, come here."),
+    ("Hey Sonu", "Hey, so new."),
+    ("Hey, Sonu Airby", "Hey, soon I'll be done."),
+    ("Open the window", "Open the window."),
+]
+
+
+def test_listening_twice_when_it_keeps_all_of_yours() -> None:
+    """Found on real hardware: with the hint, Whisper wrote "Hey Sunny", "Hey, so new" and "Hey, soon I'll be
+    done" as "Hey Sonu" — 3 of the owner's 12 look-alikes woke SONU."""
+    found = train(OWNER_SAID, OWNER_LOOKALIKES)
+    assert found.second_listen
+    assert found.before == (17, 3) and found.now == (17, 0)
+    assert found.saved()["second_listen"] is True
+
+
+def test_not_twice_when_it_would_miss_one_of_yours() -> None:
+    lost = [("Hey Sonu", "Hey Sonny."), *OWNER_SAID[1:]]  # without the hint, one of yours isn't the name
+    found = train(lost, OWNER_LOOKALIKES)
+    assert not found.second_listen and found.now == (17, 3)
+
+
+def test_the_name_written_joined_without_the_hint() -> None:
+    assert after_wake_word("Heisanu OpenKitty") == "OpenKitty"  # measured: Kokoro's voices, no hint
+    assert after_wake_word("History is fun") is None
+
+
+@pytest.mark.anyio
+async def test_the_listener_listens_twice(tmp_path: Path) -> None:
+    from tests.unit.test_wake import Script, listen, silence, speech
+
+    use(set(), set(), set(), second_listen=True)
+    script = Script("Hey Sonu, how are you?", "Hey Sunny, how are you?")
+    assert await listen(tmp_path, silence(0.6) + speech(1.2) + silence(1.5), script) == []
+    assert [hint for _, hint in script.asked] == [WAKE_HINT, ""]  # the second look: no hint
+    script = Script("Hey Sonu, open kitty", "Hey, Sanu. Open kitty.")
+    assert await listen(tmp_path, silence(0.6) + speech(1.2) + silence(1.5), script) == ["open kitty"]
