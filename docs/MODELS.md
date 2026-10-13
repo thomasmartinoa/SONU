@@ -44,7 +44,12 @@ the bigger ones split between the 8 GB GPU and RAM).
 | `qwen3.5:9b` | 162 / 171 | 2.9 s | |
 | `llama3.1:8b` | 156 / 171 | 3.3 s | |
 | `gpt-oss:20b` | 155 / 171 | 12.2 s | slow here |
-| `qwen3.6:35b-a3b` | 146 / 171 | 3.5 s | answers questions itself instead of using SONU's tools |
+| `qwen3.6:35b-a3b` | 146 / 171 | 3.5 s | asks or answers instead of using SONU's tools — with thinking on, 13 of those 14 misses pass, at 18.6 s a plan |
+| `gemma4:26b` | 160 / 171 | 4.3 s | MoE (~4B active), split GPU/RAM |
+| `ministral-3:8b` | 155 / 171 | 10.7 s | new (checked 10-13) |
+| `granite4.2:8b` | 148 / 171 | 13.0 s | new; trained for function calling, still not SONU's way |
+| `gemma4:e2b` | 134 / 171 | 0.7 s | new; fastest, too small |
+| `nemotron-3-nano:4b` | 92 / 171 | 7.2 s | new; a poor fit |
 
 The 4B stays the default: the most right and among the fastest. Worth a look: `gemma4:e4b` (faster; its misses
 are on reading the screen and pages, which SONU's rules could steer) and `glm-4.7-flash`. Two crashes in the
