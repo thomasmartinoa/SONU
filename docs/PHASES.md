@@ -35,7 +35,7 @@ The bugs that make SONU feel broken everywhere. Nothing else is trustworthy unti
 - ◐ (#103, D104: the cloud half — failures are said; Gemini works) **Switching models doesn't fully switch.** Choosing Gemini or Groq still planned with the local model;
   `qwen3.6:35b-a3b` stayed loaded in the GPU after switching away; "changing models in the settings is fully
   bugging". → a switch must take effect, say so, and unload the model it replaced.
-- **API keys don't stick.** A key pasted in the Control Center is gone after a restart, and long keys spill out
+- ✅ (#105: they did stick — the window didn't show it) **API keys don't stick.** A key pasted in the Control Center is gone after a restart, and long keys spill out
   of the input box. Blocks Sarvam and Gemini.
 - **`sonu voice check` crashed** with `CUBLAS_STATUS_ALLOC_FAILED` loading Whisper large-v3 after turbo (GPU
   memory): free one model before the next, or fall back to the CPU.
