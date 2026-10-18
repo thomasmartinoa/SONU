@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from sonu.audit.log import AuditError, AuditLog
-from sonu.core.conversation import Conversation, Turn, results_of
+from sonu.core.conversation import Conversation, Turn, refers_back, results_of
 from sonu.core.corrections import corrected
 from sonu.core.planning import Plan, Planner, PlanningError
 from sonu.core.report import StepRecord, TaskReport
@@ -141,7 +141,11 @@ class Engine:
         if request != said:
             start["said"] = said  # the user's words as they came, before the correction
         self._audit("task.start", start)
-        history = self.conversation.recent() if self.conversation is not None else []
+        everything = self.conversation.recent() if self.conversation is not None else []
+        # The planner (and what counts as the user's words) sees the conversation only when this request
+        # points back to it (D103). Found on real hardware: shown it every time, the 4B repeated earlier
+        # requests: "play something relaxing" also copied a path; "hi sonu, long day" listed the CPU.
+        history = everything if refers_back(request) else []
         self.ctx.request_text = request
         self.ctx.user_words = " ".join([*(turn.request for turn in history), request])
         self.ctx.recent_windows = self.conversation.last_windows() if self.conversation is not None else ()
@@ -167,7 +171,7 @@ class Engine:
         except (HyprlandError, PlanningError) as exc:
             report.error = str(exc)
             self._audit("task.end", {"status": "error", "error": str(exc)})
-            return await self._finish(report, history)
+            return await self._finish(report, everything)
 
         report.plan = plan
         self._audit(
@@ -192,7 +196,7 @@ class Engine:
             if self.recover and recoverable(report):
                 await self._try_another_way(report, labels, history, confirm, choose, observer)
 
-        return await self._finish(report, history)
+        return await self._finish(report, everything)  # the reply may talk about the whole conversation
 
     async def _run_steps(
         self,

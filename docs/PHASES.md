@@ -26,7 +26,7 @@ it changes how the owner works on SONU, not SONU itself.
 
 The bugs that make SONU feel broken everywhere. Nothing else is trustworthy until these are fixed.
 
-- **Old results leak into new answers.** Seen many times, with every model: "play something relaxing" said
+- ✅ (#102, D103) **Old results leak into new answers.** Seen many times, with every model: "play something relaxing" said
   "Copied the path of parking-notes"; "hi sonu, long day huh" answered with CPU usage; "can you book a train
   ticket" first answered with system usage; research said "No media player is running" three times in a row;
   "search the arch wiki" showed the folder list from an earlier "make a folder" question; "how are you" showed
