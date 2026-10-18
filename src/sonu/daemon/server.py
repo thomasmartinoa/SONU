@@ -236,11 +236,41 @@ QUIET_END: dict[str, Any] = {
     "headline": "",
     "report": {},
 }
-_ENDS = re.compile(
-    r"^\W*(thanks?|thank you|that'?s (all|it)|nothing( else)?|no,? thanks?|never ?mind|stop|bye|goodbye|"
-    r"cancel|i'?m (done|good)|all good)(,? (sonu|very much|a lot))?\W*$",  # the whole of what was said
+# A goodbye, said any way (found on real hardware: "Okay, bye.", "Okay. Thank you.", "Stop. Bye.", "No,
+# nothing. Bye." went to the planner as requests): every phrase, without filler words, is a goodbye — and at
+# least one is.
+_GOODBYE = re.compile(
+    r"(?:(?:thanks?|thank you|that'?s (?:all|it)|nothing(?: else)?|no thanks?|never ?mind|stop|bye"
+    r"|good ?bye|cancel|i'?m (?:done|good)|all good|see you(?: later)?|good ?night|later)"
+    r"(?: (?:very much|a lot|for now))?"
+    r"(?: |$))+",
     re.I,
 )
+_FILLER = {
+    "okay",
+    "ok",
+    "hey",
+    "hi",
+    "so",
+    "well",
+    "alright",
+    "right",
+    "yeah",
+    "yes",
+    "great",
+    "guys",
+    "sonu",
+    "then",
+    "now",
+    "and",
+    "no",
+    "fine",
+    "cool",
+    "oh",
+    "um",
+    "uh",
+    "hmm",
+}
 
 
 def briefing_due(now: datetime, at: str, last: str | None) -> bool:
@@ -250,7 +280,15 @@ def briefing_due(now: datetime, at: str, last: str | None) -> bool:
 
 
 def ends_conversation(text: str) -> bool:
-    return bool(_ENDS.match(text))
+    said = False
+    for phrase in re.split(r"[,.!?;]+", text):
+        words = [w for w in re.findall(r"[a-z']+", phrase.lower()) if w not in _FILLER]
+        if not words:
+            continue
+        if not _GOODBYE.fullmatch(" ".join(words) + " "):
+            return False  # a phrase that asks for something: a request, not the end
+        said = True
+    return said
 
 
 def holds_private(report: TaskReport) -> bool:

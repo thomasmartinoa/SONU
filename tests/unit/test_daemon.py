@@ -482,6 +482,20 @@ async def test_follow_ups_can_be_turned_off(rig: Rig) -> None:
         ("open kitty", False),
         ("what's my battery", False),
         ("pause the music", False),
+        # found on real hardware: these went to the planner as requests
+        ("Okay, bye.", True),
+        ("Okay. Bye.", True),
+        ("Bye, bye.", True),
+        ("Stop. Bye.", True),
+        ("Okay. Okay. Thank you.", True),
+        ("No, nothing. Bye. Nothing. Bye.", True),
+        ("Thank you, thank you, thank you.", True),
+        ("hey ok then bye", True),
+        ("thanks sonu, that's all", True),
+        ("okay", False),  # no goodbye in it
+        ("no", False),
+        ("No. I want you to change the volume to 30. That's it.", False),
+        ("Thank you, screenshot.", False),
     ],
 )
 def test_ends_conversation(text: str, ends: bool) -> None:
