@@ -111,6 +111,24 @@ async def test_gemini_gets_a_schema_and_no_thinking_and_falls_back() -> None:
 
 
 @pytest.mark.anyio
+async def test_gemini_refusing_a_big_schema_without_naming_it() -> None:
+    """Found on real hardware (gemini-3.8-flash): SONU's plan schema was refused with only "Request contains
+    an invalid argument"; asked again without it, the plan came back right — and later requests skip it."""
+    answer = {"candidates": [{"content": {"parts": [{"text": '{"kind": "steps"}'}]}}]}
+    refused = '{"error": {"code": 400, "message": "Request contains an invalid argument."}}'
+    service = Service(
+        httpx.Response(400, text=refused), httpx.Response(200, json=answer), httpx.Response(200, json=answer)
+    )
+    gemini = model("gemini", service)
+    assert (await gemini.complete_json(ASK, SCHEMA)).content == '{"kind": "steps"}'
+    assert "responseJsonSchema" in service.body(0)["generationConfig"]
+    assert "responseJsonSchema" not in service.body(1)["generationConfig"]
+    assert service.body(1)["generationConfig"]["responseMimeType"] == "application/json"
+    await gemini.complete_json(ASK, SCHEMA)
+    assert "responseJsonSchema" not in service.body(2)["generationConfig"]  # not tried again
+
+
+@pytest.mark.anyio
 async def test_limits_refused_keys_and_missing_keys_are_said_plainly() -> None:
     limited = Service(httpx.Response(429, headers={"retry-after": "30"}))
     with pytest.raises(ChatModelLimited) as caught:

@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 RATE = 16_000
 HEARING = ("sarvam", "groq", "gemini")  # providers that can hear
-DEFAULT_MODEL = {"sarvam": "saaras:v4", "groq": "whisper-large-v3-turbo", "gemini": "gemini-2.5-flash"}
+DEFAULT_MODEL = {"sarvam": "saaras:v4", "groq": "whisper-large-v3-turbo", "gemini": "gemini-flash-latest"}
 MAX_TERMS = 50  # Sarvam's limit for key terms
 TIMEOUT_S = 20.0
 

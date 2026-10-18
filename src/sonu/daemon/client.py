@@ -221,6 +221,8 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                 continue
             if progress is not None:
                 progress.update(message)
+            if kind == "plan" and message.get("fallback") and not as_json:
+                out.write(_style(f"⚠ {message['fallback']}", "33", out) + "\n")
             if kind == "plan" and message.get("kind") == "steps" and not as_json:
                 steps = message["steps"]
                 out.write(
