@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 RATE = 24_000
 SPEAKING = ("sarvam", "gemini")
-DEFAULT_MODEL = {"sarvam": "bulbul:v3", "gemini": "gemini-2.5-flash-preview-tts"}
+DEFAULT_MODEL = {"sarvam": "bulbul:v3", "gemini": "gemini-3.1-flash-tts-preview"}
 DEFAULT_VOICE = {"sarvam": "shubh", "gemini": "Kore"}
 TIMEOUT_S = 20.0
 

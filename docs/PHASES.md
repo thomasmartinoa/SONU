@@ -32,7 +32,7 @@ The bugs that make SONU feel broken everywhere. Nothing else is trustworthy unti
   "search the arch wiki" showed the folder list from an earlier "make a folder" question; "how are you" showed
   folder paths. "It needs a restart to be normal again." → find where a past step, reply or pending question
   survives into the next request (conversation follow-ups, pending choices, the reply writer) and test it.
-- **Switching models doesn't fully switch.** Choosing Gemini or Groq still planned with the local model;
+- ◐ (#103, D104: the cloud half — failures are said; Gemini works) **Switching models doesn't fully switch.** Choosing Gemini or Groq still planned with the local model;
   `qwen3.6:35b-a3b` stayed loaded in the GPU after switching away; "changing models in the settings is fully
   bugging". → a switch must take effect, say so, and unload the model it replaced.
 - **API keys don't stick.** A key pasted in the Control Center is gone after a restart, and long keys spill out

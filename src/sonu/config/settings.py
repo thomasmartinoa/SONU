@@ -118,7 +118,7 @@ class VoiceSettings(_Section):
     # "gemini" — only with "speaking" in [cloud] use_for; a reply holding something private is always Kokoro.
     speaking: Literal["local", "sarvam", "gemini"] = "local"
     speaking_voice: str = Field(default="", max_length=40)  # "": shubh (Sarvam), Kore (Gemini)
-    speaking_model: str = Field(default="", max_length=80)  # "": bulbul:v3, gemini-2.5-flash-preview-tts
+    speaking_model: str = Field(default="", max_length=80)  # "": bulbul:v3, gemini-3.1-flash-tts-preview
     device: Literal["cuda", "cpu"] = "cuda"
     # SONU's voice (Kokoro): af_heart, af_bella, am_michael, bm_george, … — `sonu voice test` to hear one.
     voice: str = Field(default="af_heart", pattern=r"^[a-z]{2}_[a-z]{1,20}$")
@@ -483,7 +483,7 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # <provider>` (kept in your keyring). Nothing is sent unless [privacy] cloud = "allow" — then only for the
 # uses below; every send is in the audit log (cloud.send). Cloud models never go in [models].
 # provider = "ollama"
-# model = "gpt-oss:120b-cloud"          # e.g. claude-haiku-5-5 (anthropic), gemini-2.5-flash (gemini)
+# model = "gpt-oss:120b-cloud"          # e.g. claude-haiku-5-5 (anthropic), gemini-flash-latest (gemini)
 # vision_provider = "ollama"
 # vision_model = "gemma4:31b-cloud"
 # prompts  : your idea for Claude Code (your own words) → a better prompt

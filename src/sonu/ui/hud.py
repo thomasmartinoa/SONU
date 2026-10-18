@@ -143,6 +143,8 @@ class Hud:
         elif kind == "heard":
             self.begin(str(message.get("text") or ""), "thinking")
         elif kind == "plan":
+            if message.get("fallback"):  # the cloud wasn't used: say so (D104)
+                self._steps().append({"text": str(message["fallback"]), "status": "unverified"})
             self.show(state="acting" if message.get("steps") else "thinking")
         elif kind == "step_start":
             self._steps().append({"text": str(message.get("description") or ""), "status": "running"})

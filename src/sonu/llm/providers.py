@@ -155,6 +155,7 @@ class RemoteModel:
         # style API thought for 8.7 s and spent the whole reply on it; reasoning_effort "none": 0.1 s)
         self.provider, self.name, self.key, self.think = provider, model, key, think
         self._client = httpx.AsyncClient(transport=transport, timeout=timeout_s)
+        self._refused: set[str] = set()  # request fields this model refused once: not sent again
 
     def check_key(self) -> None:
         """Before anything is recorded as sent: no key, nothing to send (found by a test — the audit log said
@@ -348,6 +349,8 @@ class RemoteModel:
             config["responseJsonSchema"] = schema
         if not self.think:
             config["thinkingConfig"] = {"thinkingBudget": 0}
+        for field in self._refused:
+            config.pop(field, None)
         body: dict[str, Any] = {
             "contents": [part(m) for m in messages if m.role != "system"],
             "generationConfig": config,
@@ -367,10 +370,16 @@ class RemoteModel:
                 refused = [
                     f for f in ("responseJsonSchema", "thinkingConfig") if f in config and f in str(exc)
                 ]
+                # Found on real hardware (gemini-3.8-flash): SONU's plan schema (one branch per tool, ~48k
+                # characters) is refused with only "Request contains an invalid argument" — without it, the
+                # plan came back right (SONU checks every plan itself anyway).
+                if not refused and "invalid argument" in str(exc).lower() and "responseJsonSchema" in config:
+                    refused = ["responseJsonSchema"]
                 if not refused:
                     raise
                 for field in refused:
                     config.pop(field)
+                    self._refused.add(field)
         try:
             parts = data["candidates"][0]["content"]["parts"]
             content = "".join(str(p.get("text") or "") for p in parts)
