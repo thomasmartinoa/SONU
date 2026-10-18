@@ -7,6 +7,7 @@ Owner: [@thomasmartinoa](https://github.com/thomasmartinoa). It is never called 
 
 1. [`docs/STATUS.md`](docs/STATUS.md) — what works on real hardware, what's next, open questions, every PR so far.
    [`docs/TRY.md`](docs/TRY.md) — what's built but not yet tried by the owner, with the exact words to say.
+   [`docs/PHASES.md`](docs/PHASES.md) — **the plan now**: phases 1–7 from the owner's testing, one at a time.
 2. [`docs/DECISIONS.md`](docs/DECISIONS.md) — every decision and why. Don't re-open a decision without a new reason.
 3. [`docs/CAPABILITIES.md`](docs/CAPABILITIES.md) — the map of abilities (done / next / planned) and how each works.
 4. As needed: [`docs/PROPOSAL.md`](docs/PROPOSAL.md) (design, research, roadmap), [`docs/threat-model.md`](docs/threat-model.md),
