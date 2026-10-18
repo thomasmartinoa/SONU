@@ -214,6 +214,40 @@ async def test_it_and_again_come_from_the_conversation(engine_rig: tuple[ToolCon
     assert second.reply == "Playing it again."
 
 
+@pytest.mark.anyio
+async def test_a_new_request_doesnt_see_the_last_one(engine_rig: tuple[ToolContext, FakeSystem]) -> None:
+    """Found on real hardware (D103): shown the conversation every time, the 4B repeated earlier requests —
+    "play something relaxing" also copied parking-notes' path; "hi sonu, long day huh" listed the CPU."""
+    ctx, system = engine_rig
+    system.other_players["spotify"] = ["Old Song", "Paused"]
+    planner = ScriptedPlanner(
+        {
+            "play faded on spotify": steps_plan(("media.play", {"query": "faded", "service": "spotify"})),
+            # the model took "faded" from the conversation, though nothing in these words points back to it
+            "play something calm on spotify": steps_plan(
+                ("media.play", {"query": "faded", "service": "spotify"})
+            ),
+        }
+    )
+    model = FakeTextModel(say="Playing.")
+    engine = Engine(
+        planner=planner,
+        registry=ToolRegistry(),
+        ctx=ctx,
+        policy=Policy("confirm-risky"),
+        conversation=Conversation(),
+        responder=Responder(model),
+    )
+
+    async def approve(request: ConfirmRequest) -> bool:
+        return True
+
+    await engine.run("play faded on spotify", confirm=approve)
+    second = await engine.run("play something calm on spotify", confirm=approve)
+    assert planner.histories[1] == []  # the planner never saw the earlier request
+    assert second.status != "done"  # and "faded" isn't the user's word for this one
+
+
 def test_a_reply_never_claims_an_action_the_results_dont_show() -> None:
     # Found on real hardware: "merge the pull request in SONU" was planned as only listing it, and
     # the reply said "I merged PR #31" — nothing was merged.

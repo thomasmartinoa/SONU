@@ -10,6 +10,7 @@ CLI share it and a restart doesn't forget mid-task.
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -43,6 +44,30 @@ def results_of(report: TaskReport) -> tuple[str, ...]:
             f"{ICONS[record.outcome.status]} {PRIVATE if record.outcome.private else record.outcome.summary}"
         )
     return tuple(lines) + tuple(report.not_done)
+
+
+# Words that point back to the conversation (D103): "move it to 4", "play that again", "the same on 3",
+# "another one", "no, I meant 5", "what about zen?", "what did you just say?".
+_BACK = re.compile(
+    r"\b(?:it|its|it's|that|those|them|they|there|again|same|another|too|also|instead|else|back|undo|previous"
+    r"|last|earlier|before|just|meant|mean|said|one more|other one|which one|the one|what about|how about)\b",
+    re.IGNORECASE,
+)
+# A short follow-up: "and on 2", "now 40", "then zen", "no, 4", "on 5". Not a whole new sentence after
+# "and": found on real hardware, "search the arch wiki" heard as "and the third art wiki for pipe wire"
+# copied a folder from earlier.
+_FOLLOW_UP = re.compile(r"^\W*(?:(?:and|then|now|no|nope|but|plus|or)\b\W*)?(?P<rest>.*)$", re.IGNORECASE)
+
+
+def refers_back(request: str) -> bool:
+    """Whether the request needs the conversation to be understood ("move it to 4") — if not, the planner
+    doesn't see it, so it can't repeat an earlier request (found on real hardware, D103)."""
+    if _BACK.search(request):
+        return True
+    match = _FOLLOW_UP.match(request)
+    rest = re.findall(r"[\w']+", match.group("rest") if match else request)
+    led = match is not None and len(rest) < len(re.findall(r"[\w']+", request))
+    return (led and len(rest) <= 3) or (len(rest) <= 2 and any(word.isdigit() for word in rest))
 
 
 @dataclass
