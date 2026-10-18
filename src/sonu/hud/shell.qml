@@ -247,15 +247,16 @@ ShellRoot {
                 anchors { left: voiceMark.right; right: right.left; top: parent.top; leftMargin: 12; rightMargin: 12; topMargin: 14 }
                 spacing: 8
 
-                // one line: what SONU is doing (or what you said)
+                // what SONU is doing, or what you said — all of it (found on the laptop: a long request was cut
+                // to one line with "…")
                 Text {
                     Layout.fillWidth: true
                     text: root.headline
                     color: root.asking ? root.accent : root.c.fg
                     font.family: root.font; font.pixelSize: 14; font.bold: root.asking
                     elide: Text.ElideRight
-                    wrapMode: root.asking ? Text.Wrap : Text.NoWrap
-                    maximumLineCount: root.asking ? 3 : 1
+                    wrapMode: Text.Wrap
+                    maximumLineCount: root.asking ? 5 : 4
                 }
                 // the answer
                 Text {
