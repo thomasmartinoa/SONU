@@ -182,6 +182,7 @@ class Engine:
                 "unsupported": list(plan.unsupported),
                 "model": plan.model,
                 "duration_s": round(plan.duration_s, 3),
+                **({"fallback": plan.fallback} if plan.fallback else {}),
                 "attempts": plan.attempts,
             },
         )

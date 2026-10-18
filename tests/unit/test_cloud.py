@@ -218,6 +218,34 @@ async def test_cloud_away_plans_locally_and_local_failure_asks_the_cloud() -> No
         await both.plan("open kitty", SNAPSHOT, REGISTRY)
 
 
+@pytest.mark.parametrize(
+    ("error", "said"),
+    [
+        (
+            "Google Gemini answered 404: models/gemini-2.5-flash is no longer available",
+            "doesn't have that model",
+        ),
+        ("Groq answered 413: Request too large for model", "too big for your plan"),
+        ("Google Gemini answered 429: You exceeded your current quota", "out of quota"),
+        ("Sarvam didn't answer (ConnectError)", "couldn't be reached"),
+    ],
+)
+async def test_a_cloud_failure_is_said_not_hidden(error: str, said: str) -> None:
+    """Found on real hardware: Gemini (a retired model name) and Groq (too big for its free tier) failed every
+    time and SONU planned locally without a word — "it's still using the local model" (D104)."""
+
+    class Refusing(LLMPlanner):
+        async def plan(self, *args: Any, **kwargs: Any) -> Any:
+            raise PlanningError(f"the planner model failed: {error}")
+
+    client = OllamaClient(transport=fake_ollama().transport)
+    local = LLMPlanner(OllamaChatModel(client, PlannerRole(), OllamaSettings()))
+    plan = await RoutedPlanner(local, Refusing(local.model), always=True).plan(
+        "open kitty", SNAPSHOT, REGISTRY
+    )
+    assert plan.model == LOCAL and said in plan.fallback and plan.fallback.endswith("so I planned this here")
+
+
 async def test_deep_goes_to_the_cloud_when_planning_is_allowed() -> None:
     fake = fake_ollama()
     parts = model_parts(

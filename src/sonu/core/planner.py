@@ -12,6 +12,7 @@ import logging
 import re
 import time
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -1055,6 +1056,25 @@ def is_hard(request: str) -> bool:
     return len(_PARTS.findall(request)) >= 2 or len(request.split()) >= 25
 
 
+def cloud_trouble(error: str) -> str:
+    """What went wrong with a cloud service, in a few words, from its error."""
+    status = re.search(r"answered (\d{3})", error)
+    code = int(status.group(1)) if status else 0
+    if code in (401, 403) or "refused the API key" in error or "no API key" in error:
+        return "refused the API key"
+    if code == 404:
+        return "doesn't have that model (check its name)"
+    if code == 413:
+        return "said the request is too big for your plan"
+    if code == 429:
+        return "is out of quota for now"
+    if code >= 500:
+        return "is busy or down right now"
+    if "didn't answer" in error or "timed out" in error.lower() or "connect" in error.lower():
+        return "couldn't be reached"
+    return "gave no usable plan"
+
+
 class RoutedPlanner:
     """The local planner, and a bigger one — Ollama Cloud (D62) or a bigger local model (D91) — for hard
     requests or when the local one fails.
@@ -1087,7 +1107,13 @@ class RoutedPlanner:
                 return await with_(self.cloud)
             except PlanningError as exc:
                 logger.warning("the cloud planner failed, planning locally: %s", exc)
-                return await with_(self.local)
+                # Found on real hardware: Gemini (a retired model name) and Groq (too big for its free tier)
+                # failed every time, and SONU planned locally without a word — "it's still using the local
+                # model". The plan now says why (D104).
+                plan = await with_(self.local)
+                return replace(
+                    plan, fallback=f"The cloud planner {cloud_trouble(str(exc))}, so I planned this here"
+                )
         try:
             return await with_(self.local)
         except PlanningError as exc:

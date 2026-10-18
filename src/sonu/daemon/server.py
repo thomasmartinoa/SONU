@@ -169,6 +169,7 @@ class _Relay(Observer):
                 "model": plan.model,
                 "duration_s": plan.duration_s,
                 "steps": len(plan.steps),
+                "fallback": plan.fallback,
             }
         )
 

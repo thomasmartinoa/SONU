@@ -85,7 +85,7 @@ CATALOG: tuple[Entry, ...] = (
         "cloud.model",
         "Brain",
         "Cloud model",
-        "The provider's model name, e.g. gpt-oss:120b-cloud (Ollama), claude-haiku-5-5, gemini-2.5-flash, "
+        "The provider's model name, e.g. gpt-oss:120b-cloud (Ollama), claude-haiku-5-5, gemini-flash-latest, "
         "openai/gpt-oss-120b (Groq), meta-llama/llama-3.3-70b-instruct:free (OpenRouter).",
         "text",
     ),
@@ -210,7 +210,7 @@ CATALOG: tuple[Entry, ...] = (
         "voice.hearing_model",
         "Voice",
         "Cloud hearing model",
-        "Empty: the provider's best (saaras:v4, whisper-large-v3-turbo, gemini-2.5-flash).",
+        "Empty: the provider's best (saaras:v4, whisper-large-v3-turbo, gemini-flash-latest).",
         "text",
     ),
     Entry(

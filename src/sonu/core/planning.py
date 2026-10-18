@@ -34,6 +34,8 @@ class Plan:
     model: str = ""
     duration_s: float = 0.0
     attempts: int = 1
+    # Why the cloud planner wasn't used, when it was meant to be (shown to the user, never hidden — D104).
+    fallback: str = ""
 
 
 class Planner(Protocol):

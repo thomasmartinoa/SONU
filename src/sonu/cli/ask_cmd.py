@@ -133,6 +133,8 @@ class TerminalObserver(Observer):
 
     def on_plan(self, plan: Plan) -> None:
         self.stop()
+        if self.enabled and plan.fallback:
+            self.console.print(f"[yellow]⚠ {escape(plan.fallback)}[/]")
         if self.enabled and plan.kind == "steps":
             steps = len(plan.steps)
             plural = "s" if steps != 1 else ""
