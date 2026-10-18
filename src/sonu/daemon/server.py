@@ -532,6 +532,24 @@ class Daemon:
         finally:
             tracker.stop()
 
+    async def _let_go_of_the_last_model(self) -> None:
+        """SONU holds its planner in the GPU for as long as it runs (KEEP_LOADED). Found on real hardware:
+        after switching planners, the old one (qwen3.6:35b-a3b) stayed loaded — sonud restarts in place
+        without unloading. The model SONU held is noted; a different one at the next start is let go first.
+        Only a model SONU itself loaded: never one the user runs in Ollama themselves."""
+        note = self.paths.state_dir / "held-model"
+        try:
+            previous = note.read_text(encoding="utf-8").strip()
+        except OSError:
+            previous = ""
+        if previous and previous != self.model:
+            logger.info("unloading %s: the planner is now %s", previous, self.model)
+            with contextlib.suppress(OllamaError):
+                await self.ollama.load(previous, keep_alive="0")
+        with contextlib.suppress(OSError):
+            note.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            note.write_text(self.model + "\n", encoding="utf-8")
+
     async def warm_up(self) -> None:
         """Load the planner model and plan once, holding requests until then.
 
@@ -543,6 +561,7 @@ class Daemon:
             # First, so the practice plan below already has their tools (a server that fails is left out).
             self.outside = await outside_tools(self.settings, self.registry)
             try:
+                await self._let_go_of_the_last_model()
                 await self.ollama.load(self.model, keep_alive=KEEP_LOADED)
                 await self.models.local_planner.plan(
                     "what's open right now?", WorldSnapshot(windows=()), self.registry

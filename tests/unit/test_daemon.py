@@ -4,6 +4,7 @@ import asyncio
 import builtins
 import io
 import json
+import re
 import socket
 import sys
 from collections.abc import AsyncIterator, Callable
@@ -160,11 +161,9 @@ async def test_a_request_through_the_daemon(rig: Rig) -> None:
     assert code == 0
     lines = out.splitlines()
     assert lines[0].startswith("plan by qwen3.5:4b in ") and lines[0].endswith("· 1 step")
-    assert lines[1:] == [
-        "✔ Opened kitty on workspace 2",
-        "» Done, kitty's on 2.",
-        "Done — every step verified",
-    ]
+    assert lines[1:3] == ["✔ Opened kitty on workspace 2", "» Done, kitty's on 2."]
+    # the whole time, not only the plan's (found on real hardware: "plan in 1.1 s" read as the whole wait)
+    assert re.fullmatch(r"Done — every step verified · \d+\.\d s", lines[3])
     assert [w["workspace"]["id"] for w in rig.fake.windows_of_class("kitty")] == [2]
     # The model was loaded at start and kept (no cold start), and a practice plan warmed it up.
     assert rig.ollama.keep_alive["qwen3.5:4b"] == KEEP_LOADED
@@ -742,3 +741,31 @@ async def test_new_settings_restart_sonud_once_its_idle(rig: Rig) -> None:
     assert rig.daemon._reloading is not None
     await asyncio.wait_for(rig.daemon._reloading, 5)
     assert restarted == [True]  # stopped and started again while holding the lock
+
+
+@pytest.mark.anyio
+async def test_switching_planners_lets_go_of_the_old_one(short_tmp: Path, xdg_env: dict[str, str]) -> None:
+    """Found on real hardware: after switching from qwen3.6:35b-a3b, it stayed loaded in the GPU — sonud
+    restarts for new settings without unloading. Only a model SONU itself held is let go."""
+    ollama = FakeOllama()
+    for name in ("qwen3.6:35b-a3b", "qwen3.5:4b"):
+        ollama.add_model(name, size_gib=3.2, capabilities=["completion", "tools"])
+    ollama.chat_responder = lambda body: json.dumps({"kind": "reply", "message": "Hi!", "steps": []})
+    paths = SonuPaths.from_env(xdg_env)
+
+    def daemon_with(model: str) -> Daemon:
+        settings = Settings.model_validate({"models": {"planner": {"model": model}}})
+        return Daemon(settings, paths, xdg_env, ollama_transport=ollama.transport)
+
+    first = daemon_with("qwen3.6:35b-a3b")
+    await first.warm_up()
+    await first.stop(unload=False)  # a restart for new settings
+    assert ollama.keep_alive == {"qwen3.6:35b-a3b": "-1m"}
+    second = daemon_with("qwen3.5:4b")
+    await second.warm_up()
+    assert ollama.keep_alive == {"qwen3.6:35b-a3b": "0", "qwen3.5:4b": "-1m"}
+    await second.stop(unload=False)
+    third = daemon_with("qwen3.5:4b")  # the same planner again: nothing let go
+    await third.warm_up()
+    assert ollama.keep_alive["qwen3.5:4b"] == "-1m"
+    await third.stop()

@@ -32,15 +32,15 @@ The bugs that make SONU feel broken everywhere. Nothing else is trustworthy unti
   "search the arch wiki" showed the folder list from an earlier "make a folder" question; "how are you" showed
   folder paths. "It needs a restart to be normal again." → find where a past step, reply or pending question
   survives into the next request (conversation follow-ups, pending choices, the reply writer) and test it.
-- ◐ (#103, D104: the cloud half — failures are said; Gemini works) **Switching models doesn't fully switch.** Choosing Gemini or Groq still planned with the local model;
+- ✅ (#103, D104: cloud failures said, Gemini works; #106: the old planner unloaded) **Switching models doesn't fully switch.** Choosing Gemini or Groq still planned with the local model;
   `qwen3.6:35b-a3b` stayed loaded in the GPU after switching away; "changing models in the settings is fully
   bugging". → a switch must take effect, say so, and unload the model it replaced.
 - ✅ (#105: they did stick — the window didn't show it) **API keys don't stick.** A key pasted in the Control Center is gone after a restart, and long keys spill out
   of the input box. Blocks Sarvam and Gemini.
-- **`sonu voice check` crashed** with `CUBLAS_STATUS_ALLOC_FAILED` loading Whisper large-v3 after turbo (GPU
+- ✅ (#106) **`sonu voice check` crashed** with `CUBLAS_STATUS_ALLOC_FAILED` loading Whisper large-v3 after turbo (GPU
   memory): free one model before the next, or fall back to the CPU.
-- **Times:** the line says "plan in 1.1 s", but the answer took ~3 s. Show the whole time, not only planning.
-- **Wi-Fi off in Balanced:** it worked but was too slow. Notice there's no network and go local at once.
+- ✅ (#106) **Times:** the line says "plan in 1.1 s", but the answer took ~3 s. Show the whole time, not only planning.
+- ✅ (#106) **Wi-Fi off in Balanced:** it worked but was too slow. Notice there's no network and go local at once.
 
 ## Phase 2 — Voice first: hear right, answer by voice
 
