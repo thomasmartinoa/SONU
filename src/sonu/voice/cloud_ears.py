@@ -101,12 +101,14 @@ class CloudEars:
         *,
         audit: AuditLog | None = None,
         transport: httpx.BaseTransport | None = None,
+        sarvam_key_terms: bool = False,
     ) -> None:
         if provider.kind not in HEARING and provider.name not in HEARING:
             raise ValueError(f"{provider.label} can't hear")
         self.provider, self.key, self.audit = provider, key, audit
         self.model = model or DEFAULT_MODEL.get(provider.name, DEFAULT_MODEL.get(provider.kind, ""))
         self.name = f"{provider.label} ({self.model})"
+        self.sarvam_key_terms = sarvam_key_terms
         self._client = httpx.Client(transport=transport, timeout=TIMEOUT_S)
 
     def load(self) -> None:
@@ -162,7 +164,9 @@ class CloudEars:
 
     def _sarvam(self, audio: bytes, hint: str) -> str:
         fields: dict[str, str] = {"model": self.model, "language_code": "en-IN"}
-        if hint and self.model.endswith("v4"):  # key terms: the app names SONU expects
+        # Key terms (the app names SONU expects) made names worse on the owner's voice: 17 of 32 right with
+        # them, 20 without (`sonu voice bench`, D106) — only the bench still sends them, to measure
+        if hint and self.sarvam_key_terms and self.model.endswith("v4"):
             fields["keyterms"] = json.dumps(key_terms(hint))
         data = self._post(
             f"{self.provider.base_url.rstrip('/')}/speech-to-text",

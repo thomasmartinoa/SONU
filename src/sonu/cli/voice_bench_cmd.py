@@ -137,7 +137,9 @@ def _make_ears(name: str, ctx: typer.Context) -> tuple[Any, bool]:
         key = lookup_key(provider, os.environ)
         if not key:
             raise VoiceUnavailable(f"no {provider.label} key — add it in the Control Center")
-        ears = CloudEars(provider, key, model, audit=AuditLog(state.paths.audit_file))
+        ears = CloudEars(
+            provider, key, model, audit=AuditLog(state.paths.audit_file), sarvam_key_terms=hinted
+        )
         return ears, hinted
     if name == "parakeet":
         ears = ParakeetEars()

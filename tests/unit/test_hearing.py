@@ -45,8 +45,9 @@ def ears(name: str, service: Service, audit: AuditLog | None = None, key: str | 
     return CloudEars(BUILT_IN[name], key, audit=audit, transport=httpx.MockTransport(service))
 
 
-def test_sarvam_hears_indian_english_with_sonus_key_terms(tmp_path: Any) -> None:
-    """Found on the laptop: "kitty on" was heard as "Kitchen" — the app names go along as key terms."""
+def test_sarvam_hears_indian_english_without_key_terms(tmp_path: Any) -> None:
+    """Measured on the owner's voice (`sonu voice bench`, D106): Sarvam heard names better without SONU's key
+    terms (20 of 32 right, 17 with) — "btop" and "Zen" became "Vim" with them. Only the bench sends them."""
     service = Service(httpx.Response(200, json={"transcript": "open kitty on workspace 3"}))
     audit = AuditLog(tmp_path / "audit.jsonl")
     assert ears("sarvam", service, audit).transcribe(AUDIO, HINT) == "open kitty on workspace 3"
@@ -58,7 +59,7 @@ def test_sarvam_hears_indian_english_with_sonus_key_terms(tmp_path: Any) -> None
     body = request.content
     assert b'name="model"\r\n\r\nsaaras:v4' in body and b'name="language_code"\r\n\r\nen-IN' in body
     assert b"RIFF" in body and b"WAVE" in body  # a WAV file
-    assert json.dumps(key_terms(HINT)).encode() in body
+    assert b"keyterms" not in body and b"kitty" not in body
     [send] = [r.data for r in audit.records() if r.kind == "cloud.send"]
     assert send == {
         "use": "hearing",
@@ -66,6 +67,12 @@ def test_sarvam_hears_indian_english_with_sonus_key_terms(tmp_path: Any) -> None
         "model": "saaras:v4",
         "audio_s": 1.0,
     }  # never the words
+
+    measuring = Service(httpx.Response(200, json={"transcript": "open kitty"}))
+    CloudEars(
+        BUILT_IN["sarvam"], "sk", transport=httpx.MockTransport(measuring), sarvam_key_terms=True
+    ).transcribe(AUDIO, HINT)
+    assert json.dumps(key_terms(HINT)).encode() in measuring.seen[0].content  # the bench's "sarvam"
 
 
 def test_groq_and_gemini_hear_too() -> None:

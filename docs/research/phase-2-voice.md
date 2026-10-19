@@ -68,7 +68,16 @@ Groq (hosted Whisper) is left out: the owner removed it (D102), and it's the sam
 5. **Results** go to the test page and `docs/MODELS.md`, per group, so "Sarvam is best at names, Parakeet at
    answers" is visible.
 
-### Then choosing (a proposed rule — the owner decides with the numbers)
+### The owner's results (2026-10-19, [D106](../DECISIONS.md))
+
+Key words right: Sarvam 80 % (answers 91 %), Whisper large-v3 70 %, Whisper turbo 69 % (answers 82 %), Parakeet 37 %;
+Gemini 3.5 Transcribe, on the 18 name lines it heard before its daily limit, 26 of 32 names (Sarvam 20, turbo 14) —
+full table in [`MODELS.md`](../MODELS.md). **The owner keeps local Whisper turbo as the default** and turns Sarvam on
+when they want it; Sarvam goes without key terms (they made names worse). The misses shared by every model (Claude →
+"Cloud", Zen → "send", five → "file", nine → "night") mean the next fix is SONU matching what was heard against what
+exists, by sound — and Gemini 3.5 Transcribe as a second opinion only when a heard name matches nothing.
+
+### Then choosing (the proposed rule, before the results)
 
 - **Requests:** the model with the best key-word score, if it answers in ≲ 1.5 s. If a cloud model wins clearly,
   it hears requests and the best local model is the fallback (offline, no key, a limit).
@@ -128,8 +137,9 @@ stays an option ("say it when I'm alone, type it when someone is near")
 1. **`sonu voice bench`** — record (kept with consent), run every candidate, score by group, results table.
    Adds Gemini 3.5 Transcribe and Sarvam's modes as engines, and Parakeet (ONNX) as a local engine.
 2. **The owner records** (~15–20 min) and runs it; results posted; the hearing choice made.
-3. **Hearing set to the winner** (and the local fallback), the hint/key terms per request (app names, the
-   choices on screen).
+3. ✅ **The choice** (#114): Whisper turbo by default, Sarvam when turned on, no key terms for Sarvam.
+   **Then: matching by sound** (what was heard → the installed app, package, folder, or a number where one is
+   expected), Gemini 3.5 Transcribe as a second opinion for an unknown name, a plan-level score in the bench.
 4. **Choosing by voice** (§3).
 5. **Installs:** typed password only, the package name heard or chosen by voice, the "Cozy → dunesh" bug.
 6. The owner tests phase 2 (a test-page section).
