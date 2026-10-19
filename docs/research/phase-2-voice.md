@@ -102,7 +102,8 @@ the same benchmark. It ships only if it beats the best model on the key-word sco
 
 ## 4. Installing: no spoken passwords
 
-- **Recommendation: drop "say the password"** (`password_by_voice`, off by default already). By voice, SONU says
+- **The owner keeps "say the password"** as an option (D105) — for when they're alone; typing stays the default.
+  Proposed earlier: drop it. By voice, SONU says
   "type your password in the window", and the prompt is SONU's own kitty window (`polkit_tty.py`) — or the
   owner's polkit-gnome dialog. A misheard password fails and is heard by anyone in the room.
 - **Hearing the package name right** is the real problem (§1): names go to the hearing model as key terms
@@ -110,7 +111,9 @@ the same benchmark. It ships only if it beats the best model on the key-word sco
   (§3) instead of "no answer given".
 - **Bug:** "Cozy" chose `dunesh` — the package search must not pick a name that isn't like what was said.
 
-## 5. Decisions for the owner
+## 5. Decisions for the owner — answered 2026-10-19 ([D105](../DECISIONS.md)): keep the recordings; yes, send
+the test recordings to Sarvam and Gemini; English only (no code-mixing); lock asks first; the spoken password
+stays an option ("say it when I'm alone, type it when someone is near")
 
 1. **Recordings:** keep the benchmark recordings on the laptop (needed to re-test and, later, to train)?
 2. **Cloud in the benchmark:** send the test recordings (only those) to Sarvam and Gemini? About 70 clips, a few

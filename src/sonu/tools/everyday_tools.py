@@ -301,7 +301,8 @@ class DesktopShell(Tool):
             "clear_notifications": "Clear all notifications",
             "lock_screen": "Lock the screen",
         }[action]
-        return Prepared(text, action)
+        # The owner's choice (D105): locking asks first — "Should I lock the screen? Say yes or no."
+        return Prepared(text, action, risk=Risk.MEDIUM if action == "lock_screen" else None)
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
         action = cast(ShellAction, prepared.payload)
