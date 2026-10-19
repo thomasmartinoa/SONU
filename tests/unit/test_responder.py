@@ -356,6 +356,7 @@ _SAID = {
     "obs.scene": "OBS",
     "packages.install": "Install",
     "packages.remove": "remove software",
+    "packages.check": "whether something is installed",
     "reminders.cancel": "Reminders",
     "reminders.list": "Reminders",
     "reminders.set": "Reminders and timers",
