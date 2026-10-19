@@ -230,6 +230,8 @@ GOLDEN: dict[str, dict[str, Any]] = {
     ),
     "install-in-the-users-words": steps(("packages.install", {"name": "obs studio"})),
     "install-already-there": steps(("packages.install", {"name": "kitty"})),
+    "is-it-installed": steps(("packages.check", {"name": "yay"})),
+    "do-i-have-it": steps(("packages.check", {"name": "vlc"})),
     "github-open-prs": steps(("github.prs", {})),
     "github-merge-asks": steps(("github.merge", {"repo": "SONU"})),
     "github-failing-checks-not-merged": steps(("github.merge", {"repo": "hypr dotfiles"})),

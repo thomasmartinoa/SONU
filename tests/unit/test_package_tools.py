@@ -14,6 +14,7 @@ from sonu.config.settings import AppsSettings, Settings, VerifySettings
 from sonu.core.engine import ConfirmRequest, Engine
 from sonu.core.report import TaskReport
 from sonu.desktop.apps import AppCatalog, AppResolver
+from sonu.desktop.apps.entry import AppEntry
 from sonu.desktop.hyprland.desktop import HyprlandDesktop
 from sonu.integrations.kitty import SonuTerminals
 from sonu.policy import Policy
@@ -360,3 +361,40 @@ async def test_remove_with_the_password_by_voice(rig: Rig) -> None:
     rig.system.installed_packages["vlc"] = "3.0.21-1"
     report = await rig.run("uninstall vlc", ("packages.remove", {"name": "vlc"}))
     assert "the spoken password didn't work — remove it again and type the password" in lines(report)[0]
+
+
+# ---- "is it installed?" (found on real hardware: "Is yay installed?" was planned as "what's using memory")
+@pytest.mark.anyio
+async def test_is_it_installed_says_yes_with_the_version_and_asks_nothing(rig: Rig) -> None:
+    rig.system.installed_packages["yay"] = "13.0.1-1"
+    report = await rig.run("Is yay installed?", ("packages.check", {"name": "yay"}))
+    assert report.status == "done" and lines(report) == ["Yes, yay 13.0.1-1 is installed"]
+    assert rig.confirmations == [] and package_tools.CheckInstalled.risk is Risk.READ_ONLY
+
+
+@pytest.mark.anyio
+async def test_an_app_by_its_name_says_the_package_it_came_with(rig: Rig) -> None:
+    """Found on the laptop: "do I have obs" found OBS Studio and called it "not from pacman"."""
+    desktop_file = "com.obsproject.Studio.desktop"
+    obs = AppEntry(desktop_file, Path("/usr/share/applications") / desktop_file, "OBS Studio")
+    appimage = AppEntry("krita.desktop", Path("/home/me/.local/share/applications/krita.desktop"), "Krita")
+    rig.ctx.resolver = AppResolver(AppCatalog(entries=(obs, appimage)))
+    rig.system.installed_packages["obs-studio"] = "32.2.2-1"
+    rig.system.owned_files[desktop_file] = "obs-studio"
+    report = await rig.run("do I have obs", ("packages.check", {"name": "obs"}))
+    assert lines(report) == ["Yes, OBS Studio is installed (obs-studio 32.2.2-1)"]
+    report = await rig.run("is krita installed", ("packages.check", {"name": "krita"}))
+    assert lines(report) == ["Yes, Krita is installed (an app, not from pacman: a Flatpak, an AppImage…)"]
+
+
+@pytest.mark.anyio
+async def test_not_installed_says_whether_it_can_be(rig: Rig) -> None:
+    report = await rig.run("is vlc installed", ("packages.check", {"name": "vlc"}))
+    assert report.status == "done"
+    assert lines(report)[0].startswith("No, vlc isn't installed — vlc 3.0.21-1 from the official extra repo")
+    assert lines(report)[0].endswith('can be installed: say "install vlc"')
+    assert "vlc" not in rig.system.installed_packages  # nothing installed
+    report = await rig.run("is flurbo installed", ("packages.check", {"name": "flurbo"}))
+    assert lines(report) == ["No, flurbo isn't installed"]
+    report = await rig.run("is my player installed", ("packages.check", {"name": "rhythmbox"}))
+    assert report.status == "failed" and "must be your words" in lines(report)[0]

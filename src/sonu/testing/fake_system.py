@@ -204,6 +204,8 @@ class FakeSystem:
         }
     )
     installed_packages: dict[str, str] = field(default_factory=lambda: {"kitty": "0.49.1-1"})
+    # pacman -Qo: a file's name (an app's .desktop file) → the installed package it came with.
+    owned_files: dict[str, str] = field(default_factory=dict)
     # Removing (pacman -Rs): what each installed package alone pulled in, and what needs it.
     only_needs: dict[str, tuple[str, ...]] = field(default_factory=dict)
     required_by: dict[str, tuple[str, ...]] = field(default_factory=dict)
@@ -390,6 +392,11 @@ class FakeSystem:
                 if version
                 else (1, "", f"error: package '{args[1]}' was not found\n")
             )
+        if args[0] == "-Qo":
+            owner = self.owned_files.get(Path(args[-1]).name)
+            if owner is None or owner not in self.installed_packages:
+                return 1, "", f"error: No package owns {args[-1]}\n"
+            return 0, f"{args[-1]} is owned by {owner} {self.installed_packages[owner]}\n", ""
         if args[0] == "-Si":
             found = self.repo_packages.get(args[1])
             if found is None:
