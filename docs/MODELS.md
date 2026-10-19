@@ -67,7 +67,21 @@ or `gpt-oss:120b-cloud` for the hardest requests.
 
 **Seeing.** Cloud strongly preferred (`gemma4:31b-cloud`, Gemini, Claude) — anything on screen is sent.
 
-**Hearing.**
+**Hearing.** Measured on the owner's voice — `sonu voice bench`, 70 recorded lines (2026-10-19, [D106](DECISIONS.md)):
+
+| Model | Where | Key words | Names | Numbers | Answers | "Hey Sonu" | Word errors | Seconds | Cost |
+|---|---|---|---|---|---|---|---|---|---|
+| Sarvam Saaras v4 (no key terms) | cloud | **80 %** | 70 % | 90 % | **91 %** | 43 % | 16 % | 0.95 | ≈ ₹40 / 1000 requests |
+| Sarvam Saaras v4 (key terms) | cloud | 79 % | 63 % | 90 % | 91 % | 57 % | 16 % | 0.94 | ≈ ₹40 / 1000 |
+| Whisper large-v3 | local | 70 % | 54 % | 90 % | 73 % | **71 %** | 21 % | 0.37 | free (~3 GB) |
+| **Whisper large-v3-turbo** (default) | local | 69 % | 57 % | 90 % | 82 % | 43 % | 24 % | **0.22** | free |
+| Parakeet TDT 0.6B v3 | local | 37 % | 20 % | 70 % | 45 % | 0 % | 51 % | 0.46 | free |
+| Gemini 3.5 Transcribe (18 name lines) | cloud | — | **26/32** names (Sarvam 20, turbo 14) | — | — | — | 14 % | 4.1 | $0.005 / min; free: 3 a minute, a daily cap |
+
+The misses every model makes (Claude → "Cloud", Zen → "send", five → "file") come from the accent, not the model:
+SONU matches what was heard against what exists instead. Re-run with `sonu voice bench run -m <model>`.
+
+Published numbers (not this voice):
 
 | Model | Where | Note |
 |---|---|---|
@@ -98,7 +112,7 @@ ElevenLabs (most expressive).
 | Reading, research | 4B | cloud | cloud |
 | Prompts | 4B | cloud | cloud |
 | Seeing | local | cloud | cloud |
-| Hearing | Whisper turbo | Whisper turbo | Sarvam / Google / Deepgram |
+| Hearing | Whisper turbo | Whisper turbo | Sarvam (measured best on the owner's voice) |
 | Speaking | Kokoro | Kokoro | Sarvam Bulbul / Cartesia |
 | What leaves the laptop | nothing | your words for hard requests; text you asked to read | your voice, your words, screenshots you ask about |
 
