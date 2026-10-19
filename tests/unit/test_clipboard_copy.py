@@ -153,3 +153,16 @@ def test_the_name_stops_at_the_next_step() -> None:
     assert _name_said("Copy the path of my room and paste it somewhere") == "my room"
     assert _name_said("copy hello from sonu, then open kitty") == "hello from sonu"
     assert _name_said("copy salt and pepper") == "salt and pepper"  # a plain "and" is part of it
+
+
+def test_the_name_after_can_you() -> None:
+    """Found on real hardware: "can you copy the path of resume pdf and open claude code in dev works" was
+    planned as files.find + a copy with no name, and the copy found no name in the request (it had to start
+    with "copy"), so it failed with "Which file?"."""
+    from sonu.tools.clipboard_tools import _name_said
+
+    said = "can you copy the path of resume pdf and open claude code in dev works"
+    assert _name_said(said) == "resume pdf"
+    assert _name_said("sonu, could you please copy my kestrel photo to the clipboard?") == "my kestrel photo"
+    assert _name_said("open kitty and copy the path of my invoice") == "my invoice"
+    assert _name_said("what's on my clipboard") is None

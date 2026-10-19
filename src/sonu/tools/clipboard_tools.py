@@ -32,11 +32,13 @@ SOURCE = "src:"
 What = Literal["path", "file", "screenshot", "link", "text"]
 
 
+# "copy" anywhere in the request (found on the laptop: "can you copy the path of resume pdf and open claude
+# code in dev works" found no name — only a request starting with "copy" did).
 _COPY_OF = re.compile(
-    r"^\s*(?:please\s+)?copy\s+(?:the\s+)?(?:(?:full\s+)?(?:path|location)\s+(?:of|to|for)\s+)?(.+?)"
-    r"(?:\s+(?:to|onto|into)\s+(?:the|my)\s+clipboard)?[.!?]*\s*$",
+    r"\bcopy\s+(?:the\s+)?(?:(?:full\s+)?(?:path|location)\s+(?:of|to|for)\s+)?(.+)$",
     re.I,
 )
+_TO_CLIPBOARD = re.compile(r"\s+(?:to|onto|into)\s+(?:the|my)\s+clipboard$", re.I)
 
 
 # A next step after the copy: "… then paste it somewhere", "… and paste it in kitty" (found on the laptop: the
@@ -45,9 +47,12 @@ _NEXT_STEP = re.compile(r"\s*,?\s+(?:and\s+then|then|and\s+(?=(?:paste|put|send|
 
 
 def _name_said(request: str) -> str | None:
-    """ "copy the path of my invoice" → "my invoice"."""
-    said = _COPY_OF.match(_NEXT_STEP.sub("", " ".join(request.split())))
-    return said.group(1) if said else None
+    """ "can you copy the path of my invoice and open kitty" → "my invoice"."""
+    said = _COPY_OF.search(" ".join(request.split()))
+    if not said:
+        return None
+    name = _NEXT_STEP.sub("", said.group(1)).rstrip(" .!?")
+    return _TO_CLIPBOARD.sub("", name) or None
 
 
 class CopyArgs(BaseModel):
