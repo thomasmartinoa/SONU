@@ -84,6 +84,27 @@ def test_groq_and_gemini_hear_too() -> None:
     assert sent["contents"][0]["parts"][1]["inlineData"]["mimeType"] == "audio/wav"
 
 
+def test_gemini_transcribe_hears_with_the_names_as_vocabulary() -> None:
+    """Gemini 3.5 Transcribe (phase 2): its own API, the expected names as custom vocabulary — checked on the
+    laptop with a Kokoro clip: "install cowsay" was "Kausay" without them, "cowsay" with."""
+    answer = {
+        "status": "completed",
+        "steps": [{"type": "model_output", "content": [{"type": "text", "text": "Install cowsay."}]}],
+    }
+    service = Service(httpx.Response(200, json=answer))
+    hearing = CloudEars(
+        BUILT_IN["gemini"], "sk", "gemini-3.5-transcribe", transport=httpx.MockTransport(service)
+    )
+    assert hearing.transcribe(AUDIO, HINT + ", cowsay") == "Install cowsay."
+    assert str(service.seen[0].url).endswith("/v1beta/interactions")
+    sent = json.loads(service.seen[0].content)
+    assert sent["model"] == "gemini-3.5-transcribe"
+    assert sent["input"][0]["type"] == "audio" and sent["input"][0]["mime_type"] == "audio/wav"
+    config = sent["generation_config"]["transcription_config"]
+    assert "cowsay" in config["custom_vocabulary"] and "kitty" in config["custom_vocabulary"]
+    assert service.seen[0].headers["x-goog-api-key"] == "sk"
+
+
 def test_the_local_whisper_hears_it_when_the_cloud_cant(tmp_path: Any) -> None:
     audit = AuditLog(tmp_path / "audit.jsonl")
     local = LocalEars()
