@@ -6,17 +6,30 @@ identifiers from the desktop entry — ``StartupWMClass``, the desktop-file ID, 
 the name — exactly, or as a prefix at a word boundary (``zen`` ↔ ``zen-browser``). Classes SONU
 has observed for an app before ("learned") are accepted too.
 
+A web app Chromium opens (``--app=URL``) gets a class made from the link: ``chrome-<host>__<path>-<profile>``,
+where each ``/`` of the path became ``_``. Found on the laptop: the Gmail web app's entry said
+``chrome-mail.google.com__mail-Default`` but its window was ``chrome-mail.google.com__mail_-Default`` (the
+link's last ``/``), so SONU couldn't confirm Gmail had opened. Those trailing ``_`` don't count.
+
 This is only ever used on *new* windows (not present before a launch) or to find existing
 windows of a named app, which keeps false positives rare.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
 from sonu.desktop.apps.entry import AppEntry
 
 _BOUNDARY = "-_. "
+_WEB_APP = re.compile(r"^(?:chrome|chromium|brave|msedge|vivaldi)-.+__")
+_PATH_END = re.compile(r"_+(?=-[^-]+$)")  # "…__mail_-Default" → "…__mail-Default"
+
+
+def _same(value: str) -> str:
+    value = value.lower().strip()
+    return _PATH_END.sub("", value) if _WEB_APP.match(value) else value
 
 
 def expected_classes(entry: AppEntry) -> tuple[str, ...]:
@@ -40,9 +53,9 @@ def _boundary_prefix(short: str, long: str) -> bool:
 
 
 def window_matches(entry: AppEntry, classes: Iterable[str], learned: Iterable[str] = ()) -> bool:
-    candidates = set(expected_classes(entry)) | {value.lower() for value in learned}
+    candidates = {_same(value) for value in (*expected_classes(entry), *learned)}
     for window_class in classes:
-        value = window_class.lower().strip()
+        value = _same(window_class)
         if not value:
             continue
         if value in candidates:

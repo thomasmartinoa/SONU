@@ -310,6 +310,28 @@ def test_window_class_matching(catalog: AppCatalog) -> None:
     assert expected_classes(zen)[0] == "zen"
 
 
+def test_a_chromium_web_app_matches_its_window(tmp_path: Path) -> None:
+    """Found on real hardware: the Gmail web app's entry says ``chrome-mail.google.com__mail-Default``, its
+    window is ``chrome-mail.google.com__mail_-Default`` (the link's last "/"). "open gmail" couldn't confirm
+    it, and "focus on gmail" said no Gmail window was open."""
+    from sonu.desktop.apps.entry import parse_desktop_entry
+
+    file = tmp_path / "orrery-webapp-gmail.desktop"
+    file.write_text(
+        "[Desktop Entry]\nType=Application\nName=Gmail\n"
+        'Exec=orrery-webapp launch "https://mail.google.com/mail/" orrery-webapp-gmail chromium\n'
+        "StartupWMClass=chrome-mail.google.com__mail-Default\n"
+    )
+    gmail = parse_desktop_entry(file, "orrery-webapp-gmail.desktop")
+    assert gmail is not None
+    assert window_matches(gmail, ["chrome-mail.google.com__mail_-Default"])
+    assert window_matches(gmail, ["chrome-mail.google.com__mail-Default"])
+    # other web apps and plain Chromium are still not Gmail
+    assert not window_matches(gmail, ["chrome-github.com__thomasmartinoa-Default"])
+    assert not window_matches(gmail, ["chrome-mail.google.com__mail_-Profile_1"])
+    assert not window_matches(gmail, ["chromium"])
+
+
 def test_default_browser_found_by_name_when_binary_differs(tmp_path: Path) -> None:
     apps = tmp_path / "share" / "applications"
     _write(

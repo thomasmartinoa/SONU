@@ -261,7 +261,7 @@ ShellRoot {
                     font.family: root.font; font.pixelSize: 14; font.bold: root.asking
                     elide: Text.ElideRight
                     wrapMode: Text.Wrap
-                    maximumLineCount: root.asking ? 5 : 4
+                    maximumLineCount: root.asking ? 5 : 10  // a long request is shown whole (found on the laptop)
                 }
                 // the answer
                 Text {
