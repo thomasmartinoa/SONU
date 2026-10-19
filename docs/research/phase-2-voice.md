@@ -140,7 +140,8 @@ stays an option ("say it when I'm alone, type it when someone is near")
 3. ✅ **The choice** (#114): Whisper turbo by default, Sarvam when turned on, no key terms for Sarvam.
    ✅ **Matching by sound** (#115, D107): a heard name → the installed app or project it sounds like (turbo 69 % →
    76 % key words; nothing else changed). Measured by dry-running the bench lines: turbo planned 27 of 55 like the
-   true text, Sarvam 38. **Then:** a number where one is expected ("in night", "in file"), packages by sound (with the
+   true text, Sarvam 38. ✅ **A workspace number heard as a word** (#116, D108): "in night" → 9, "in fire" → 5,
+   "workspace for" → 4 (turbo → 79 %). **Then:** packages by sound (with the
    installs PR), Gemini 3.5 Transcribe as a second opinion for an unknown name, the plan-level score in the bench.
 4. **Choosing by voice** (§3).
 5. **Installs:** typed password only, the package name heard or chosen by voice, the "Cozy → dunesh" bug.
