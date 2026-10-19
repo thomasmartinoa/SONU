@@ -104,3 +104,31 @@ async def test_high_risk_is_never_approved_by_voice_alone() -> None:
     session = VoiceSession.__new__(VoiceSession)  # no models needed: it must refuse before listening
     request = ConfirmRequest("Shut down the laptop", "system.power", Risk.HIGH, "high-risk action")
     assert await session.confirm_by_voice(request) is False
+
+
+def test_whisper_loads_the_copy_on_disk_without_asking_the_hub(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Found on real hardware: after a reinstall, Whisper's loading asked the Hugging Face Hub about a model
+    already on disk, the connection hung, and sonud answered no request at all."""
+    import sys
+    import types
+
+    from sonu.voice import engines
+
+    loads: list[dict[str, object]] = []
+    on_disk = {"large-v3-turbo"}
+
+    class WhisperModel:
+        def __init__(self, name: str, **kwargs: object) -> None:
+            loads.append({"name": name, **kwargs})
+            if kwargs.get("local_files_only") and name not in on_disk:
+                raise FileNotFoundError(name)  # huggingface_hub's LocalEntryNotFoundError is one
+
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=WhisperModel))
+    monkeypatch.setattr(engines, "voice_installed", lambda: True)
+    monkeypatch.setattr(engines, "_preload_cuda_libraries", lambda: None)
+
+    engines.WhisperEars("large-v3-turbo").load()
+    assert [load.get("local_files_only") for load in loads] == [True]  # the Hub isn't asked
+    loads.clear()
+    engines.WhisperEars("large-v3").load()  # not downloaded yet: from the Hub, as before
+    assert [load.get("local_files_only") for load in loads] == [True, None]

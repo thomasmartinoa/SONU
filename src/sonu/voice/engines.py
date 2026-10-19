@@ -147,7 +147,12 @@ class WhisperEars:
 
         compute = "int8_float16" if self.device == "cuda" else "int8"
         try:
-            self._model = WhisperModel(self.model_name, device=self.device, compute_type=compute)
+            try:  # the copy on disk: found on the owner's laptop, asking the Hub first hung sonud's start
+                self._model = WhisperModel(
+                    self.model_name, device=self.device, compute_type=compute, local_files_only=True
+                )
+            except FileNotFoundError:  # not downloaded yet (`sonu voice setup` does it first)
+                self._model = WhisperModel(self.model_name, device=self.device, compute_type=compute)
         except (RuntimeError, ValueError, OSError) as exc:
             raise VoiceUnavailable(f"couldn't load Whisper {self.model_name}: {exc}") from exc
 
