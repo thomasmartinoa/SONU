@@ -128,3 +128,51 @@ def test_nothing_recorded_yet(xdg_env: dict[str, str], tmp_path: Path) -> None:
     env = xdg_env | {"XDG_RUNTIME_DIR": str(tmp_path / "run")}
     result = CliRunner().invoke(app, ["voice", "bench", "run", "-m", "turbo"], env=env)
     assert result.exit_code == 1 and "Nothing recorded yet" in result.output
+
+
+def test_a_daily_limit_stops_that_model_and_keeps_what_it_heard(
+    xdg_env: dict[str, str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Found running the bench: Gemini's free tier allows 20 requests a day per model; the run waited on it
+    four times a line, for every line, printing the whole error each time."""
+    from sonu.cli import voice_bench_cmd
+    from sonu.cli.app import app
+    from sonu.voice.cloud_ears import CloudHearingError
+
+    folder = bench.bench_dir(Path(xdg_env["XDG_DATA_HOME"]) / "sonu" / "voice", "quiet")
+    for line in (bench.BY_ID["app-kitty"], bench.BY_ID["ans-yes"], bench.BY_ID["ans-no"]):
+        bench.save_recording(folder, line.id, b"\x00\x00" * 16000)
+        bench.remember_said(folder, line.id, line.text)
+
+    class DailyLimit:
+        calls = 0
+
+        def transcribe(self, pcm16: bytes, hint: str = "") -> str:
+            self.calls += 1
+            if self.calls > 1:
+                raise CloudHearingError(
+                    "Google Gemini answered 429: You exceeded your current quota "
+                    "[GenerateRequestsPerDayPerProjectPerModel-FreeTier: 20] retry in 76533s"
+                )
+            return "Open kitty on workspace 2."
+
+    ears = DailyLimit()
+    monkeypatch.setattr(voice_bench_cmd, "_make_ears", lambda name, ctx: (ears, True))
+    monkeypatch.setattr(
+        "sonu.cli.voice_bench_cmd.time.sleep", lambda s: pytest.fail("waited on a daily limit")
+    )
+    (tmp_path / "run").mkdir(exist_ok=True)
+    env = xdg_env | {"XDG_RUNTIME_DIR": str(tmp_path / "run")}
+
+    result = CliRunner().invoke(app, ["voice", "bench", "run", "-m", "gemini", "--yes"], env=env)
+    assert result.exit_code == 0, result.output
+    assert ears.calls == 2  # stopped at the first used-up answer
+    assert len(bench.load_heard(folder, "gemini")) == 1  # what it heard is kept
+    assert "used up" in result.output and "-m gemini" in result.output
+
+
+def test_used_up_or_wait() -> None:
+    assert bench.used_up("answered 429: quota [GenerateRequestsPerDayPerProjectPerModel-FreeTier: 20]")
+    assert bench.used_up("answered 429: quota retry in 76533s")
+    assert not bench.used_up("answered 429: quota retry in 20s")
+    assert bench.wait_for_limit("answered 429: quota retry in 20s") == 21.0

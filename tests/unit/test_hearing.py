@@ -105,6 +105,34 @@ def test_gemini_transcribe_hears_with_the_names_as_vocabulary() -> None:
     assert service.seen[0].headers["x-goog-api-key"] == "sk"
 
 
+def test_a_used_up_limit_is_said_on_one_line_with_which_limit() -> None:
+    """Found running the bench: Gemini's 429 was printed as 200 characters of JSON over five lines, cut
+    before it said the limit was 20 requests a day."""
+    body = {
+        "error": {
+            "code": 429,
+            "message": "You exceeded your current quota, please check your plan and billing details. "
+            "For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits.",
+            "details": [
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [
+                        {"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier", "quotaValue": "20"}
+                    ],
+                },
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "76533s"},
+            ],
+        }
+    }
+    with pytest.raises(CloudHearingError) as raised:
+        ears("gemini", Service(httpx.Response(429, json=body))).transcribe(AUDIO)
+    said = str(raised.value)
+    assert "\n" not in said and said.startswith("Google Gemini answered 429: You exceeded your current quota")
+    assert "GenerateRequestsPerDayPerProjectPerModel-FreeTier: 20" in said and "retry in 76533s" in said
+    with pytest.raises(CloudHearingError, match="answered 500: oops it broke"):
+        ears("gemini", Service(httpx.Response(500, text="oops\n  it broke"))).transcribe(AUDIO)
+
+
 def test_the_local_whisper_hears_it_when_the_cloud_cant(tmp_path: Any) -> None:
     audit = AuditLog(tmp_path / "audit.jsonl")
     local = LocalEars()

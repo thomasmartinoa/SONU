@@ -422,6 +422,16 @@ def wait_for_limit(error: str) -> float | None:
     return min(float(said.group(1)) + 1, 90.0) if said else 30.0
 
 
+def used_up(error: str) -> bool:
+    """A limit that waiting a minute won't fix (a daily quota, a retry hours away): that model stops for now
+    and keeps what it heard. Found running the bench: Gemini's free tier allows 20 requests a day per model,
+    and the run waited on it line after line."""
+    if "PerDay" in error:
+        return True
+    said = re.search(r"retry in (\d+(?:\.\d+)?)\s*s", error, re.I)
+    return said is not None and float(said.group(1)) > 600
+
+
 def hint_for(line: Line, everyday_hint: str) -> str:
     """What the model is told to expect: SONU's everyday hint (installed apps, yes/no) — never the line's
     own words — plus, for an answer to a list, the choices on screen (as SONU will do, phase 2)."""
