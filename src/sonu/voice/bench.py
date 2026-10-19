@@ -429,7 +429,7 @@ def used_up(error: str) -> bool:
     if "PerDay" in error:
         return True
     said = re.search(r"retry in (\d+(?:\.\d+)?)\s*s", error, re.I)
-    return bool(said) and float(said.group(1)) > 600
+    return said is not None and float(said.group(1)) > 600
 
 
 def hint_for(line: Line, everyday_hint: str) -> str:

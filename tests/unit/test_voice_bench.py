@@ -158,7 +158,9 @@ def test_a_daily_limit_stops_that_model_and_keeps_what_it_heard(
 
     ears = DailyLimit()
     monkeypatch.setattr(voice_bench_cmd, "_make_ears", lambda name, ctx: (ears, True))
-    monkeypatch.setattr(voice_bench_cmd.time, "sleep", lambda s: pytest.fail("waited on a daily limit"))
+    monkeypatch.setattr(
+        "sonu.cli.voice_bench_cmd.time.sleep", lambda s: pytest.fail("waited on a daily limit")
+    )
     (tmp_path / "run").mkdir(exist_ok=True)
     env = xdg_env | {"XDG_RUNTIME_DIR": str(tmp_path / "run")}
 
