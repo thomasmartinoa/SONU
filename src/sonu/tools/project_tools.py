@@ -52,6 +52,7 @@ from sonu.tools.desktop_tools import failed_dispatch, resolve_app
 from sonu.tools.dev_tools import _names
 from sonu.tools.file_tools import find_folders, home_relative, inside_home
 from sonu.tools.grounding import ungrounded_words
+from sonu.tools.targets import workspace_said
 from sonu.tools.web_tools import compact
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
@@ -654,7 +655,6 @@ TERMINAL_FOLDER: dict[str, Callable[[str], tuple[str, ...]]] = {
     "konsole": lambda folder: ("--workdir", folder),
     "gnome-terminal": lambda folder: (f"--working-directory={folder}",),
 }
-_ON_WORKSPACE = re.compile(r"\b(?:on|in|to) workspace (\d{1,2})\b", re.I)
 SHELL_WAIT_S = 3.0  # the shell starts a moment after the window maps
 
 
@@ -724,9 +724,10 @@ class OpenTerminal(Tool):
         if argv is None:
             return ToolOutcome(StepStatus.FAILED, f"{entry.name} can't be started")
         workspace = a.workspace
-        if workspace is None:  # like dev.claude_open: the one workspace the user's words name
-            named = {int(n) for n in _ON_WORKSPACE.findall(ctx.request_text)}
-            workspace = named.pop() if len(named) == 1 and 1 <= min(named) <= 99 else None
+        if workspace is None:  # like dev.claude_open: the workspace the user's words give it
+            names = {entry.name, entry.executable, "terminal"}
+            about = re.compile("|".join(rf"\b{re.escape(name)}\b" for name in names if name), re.I)
+            workspace = workspace_said(ctx.request_text, about)
         where = f" on workspace {workspace}" if workspace else ""
         target = WorkspaceTarget.of(workspace) if workspace else None
         return Prepared(

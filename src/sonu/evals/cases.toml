@@ -1454,3 +1454,137 @@ notes = "Found on the laptop: SONU asked 'which browser?'. Another one is a new 
 windows = [{ class = "zen", title = "Inbox — Zen Browser", workspace = 3, focused = true }]
 expect_status = ["done"]
 expect_windows = [{ class = "zen", count = 2 }]
+
+# ---- Long requests: many steps, many tools, the owner's way of saying them (2026-10-19)
+
+[[case]]
+id = "long-five-apps-in-shorthand"
+request = "open browser in 4 and open btop in 5 and claude code in the SONU folder in 5 and open vscodium in 6 and telegram in 9 and focus on the workspace where vscodium is"
+notes = "Found on real hardware: 'claude code in 5' opened where the owner was (no 'workspace' word)."
+expect_status = ["done"]
+expect_windows = [
+  { class = "zen", workspace = 4 },
+  { class = "kitty", workspace = 5, title_contains = "Claude Code · SONU" },
+  { class = "VSCodium", workspace = 6 },
+  { class = "TelegramDesktop", workspace = 9 },
+]
+expect_claude = { folder = "SONU" }
+expect_shown = 6
+
+[[case]]
+id = "long-settings-five"
+request = "mute the mic, set the volume to 50, turn the brightness down to 30 percent, turn on the night light and switch to power saver"
+expect_status = ["done"]
+expect_system = { mic_muted = true, speaker = 0.5, brightness = 30, night_light = "on", power_mode = "power-saver" }
+
+[[case]]
+id = "long-apps-and-settings"
+request = "open kitty in 2 and chromium in 3, set the volume to 20 percent, turn on do not disturb, then go to workspace 3"
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 2 }, { class = "chromium", workspace = 3 }]
+expect_system = { speaker = 0.2, do_not_disturb = true }
+expect_shown = 3
+
+[[case]]
+id = "long-rambling-voice"
+request = "hey sonu okay so um can you open telegram in 9 and then like open chromium in 4 and search youtube for lofi beats and also turn the volume up to 60 and then show me workspace 4"
+notes = "Filler words by voice; every part still done."
+expect_status = ["done"]
+expect_windows = [
+  { class = "TelegramDesktop", workspace = 9 },
+  { class = "chromium", workspace = 4, title_contains = "youtube.com/results?search_query=lofi" },
+]
+expect_system = { speaker = 0.6 }
+expect_shown = 4
+expect_unsupported = false
+
+[[case]]
+id = "long-two-unsupported-parts"
+request = "open kitty in 3, book me a cab, set the volume to 40 and order groceries for tomorrow"
+notes = "Two parts no tool can do: both reported, the rest done."
+expect_status = ["partial"]
+expect_windows = [{ class = "kitty", workspace = 3 }]
+expect_system = { speaker = 0.4 }
+expect_unsupported = true
+
+[[case]]
+id = "long-move-arrange-show"
+request = "move zen to 3, move telegram to 3 too, put them side by side and go to 3"
+windows = [
+  { class = "kitty", title = "zsh", workspace = 1, focused = true },
+  { class = "zen", title = "Zen Browser", workspace = 1 },
+  { class = "TelegramDesktop", title = "Telegram", workspace = 2 },
+]
+expect_status = ["done"]
+expect_windows = [{ class = "zen", workspace = 3 }, { class = "TelegramDesktop", workspace = 3 }, { class = "kitty", workspace = 1 }]
+expect_side_by_side = ["zen", "TelegramDesktop"]
+expect_shown = 3
+
+[[case]]
+id = "long-question-and-actions"
+request = "what's my battery, set the brightness to 70 and open btop in 8"
+battery = 80
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 8 }]
+expect_system = { brightness = 70 }
+expect_reply_contains = "80"
+
+[[case]]
+id = "long-claude-code-model-and-prompt"
+request = "open claude code in the SONU folder in 7, switch it to sonnet and tell it: fix the failing tests"
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 7, title_contains = "Claude Code · SONU" }]
+expect_claude = { folder = "SONU", model = "Sonnet 5", sent = ["fix the failing tests"] }
+expect_confirmed = ["dev.type"]
+
+[[case]]
+id = "long-bedtime"
+request = "pause the music, turn on bluetooth, keep the laptop awake and remind me in 30 minutes to go to bed"
+system = { player = "Playing" }
+expect_status = ["done"]
+expect_system = { player = "Paused", bluetooth_powered = true, keep_awake = "on", reminders = 1 }
+
+[[case]]
+id = "long-then-chain"
+request = "open thunar in 2 then open kitty in 2 then put them side by side then go to workspace 2"
+expect_status = ["done"]
+expect_windows = [{ class = "Thunar", workspace = 2 }, { class = "kitty", workspace = 2 }]
+expect_side_by_side = ["Thunar", "kitty"]
+expect_shown = 2
+
+[[case]]
+id = "long-ws-shorthand"
+request = "open telegram on ws 7 and kitty on ws 7 and chromium on ws 8 and show ws 7"
+expect_status = ["done"]
+expect_windows = [{ class = "TelegramDesktop", workspace = 7 }, { class = "kitty", workspace = 7 }, { class = "chromium", workspace = 8 }]
+expect_shown = 7
+
+[[case]]
+id = "long-six-apps"
+request = "open kitty in 1, zen in 2, vscodium in 3, telegram in 4, thunar in 5 and btop in 6"
+expect_status = ["done"]
+expect_windows = [
+  { class = "kitty", workspace = 1 },
+  { class = "zen", workspace = 2 },
+  { class = "VSCodium", workspace = 3 },
+  { class = "TelegramDesktop", workspace = 4 },
+  { class = "Thunar", workspace = 5 },
+  { class = "kitty", workspace = 6 },
+]
+
+[[case]]
+id = "long-there-references"
+request = "open chromium in 5 and go to github.com/thomasmartinoa, then open kitty there too and maximize it"
+expect_status = ["done"]
+expect_windows = [
+  { class = "chromium", workspace = 5, title_contains = "github.com/thomasmartinoa" },
+  { class = "kitty", workspace = 5, fullscreen = 1 },
+]
+
+[[case]]
+id = "long-folder-claude-shorthand"
+request = "make a folder called notes-app in dev_works and open claude code there in 6 and tell it: make a markdown notes app"
+expect_status = ["done"]
+expect_windows = [{ class = "kitty", workspace = 6, title_contains = "Claude Code · notes-app" }]
+expect_claude = { folder = "notes-app", sent = ["make a markdown notes app"] }
+require_tools = ["files.make_folder", "dev.claude_open", "dev.type"]

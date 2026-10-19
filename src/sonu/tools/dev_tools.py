@@ -39,10 +39,11 @@ from sonu.tools.base import (
 from sonu.tools.context import ToolContext
 from sonu.tools.file_tools import find_folders, home_relative, inside_home
 from sonu.tools.grounding import ungrounded_words
+from sonu.tools.targets import workspace_said
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
 
-_ON_WORKSPACE = re.compile(r"\b(?:on|in|to) workspace (\d{1,2})\b", re.I)
+_CLAUDE = re.compile(r"\bclaude\b", re.I)
 _FOLDER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$")
 START_TIMEOUT_S = 25.0  # Claude Code takes a few seconds to start
 SCREEN_TIMEOUT_S = 5.0
@@ -249,9 +250,8 @@ class ClaudeOpen(Tool):
         workspace = a.workspace
         if workspace is None:
             # Found on real hardware: "…open claude code there on workspace 9 and tell it …" was planned
-            # without the workspace. The user's words win when they name exactly one (like D35's browser).
-            named = {int(n) for n in _ON_WORKSPACE.findall(ctx.request_text)}
-            workspace = named.pop() if len(named) == 1 and 1 <= min(named) <= 99 else None
+            # without the workspace. The user's words win (like D35's browser).
+            workspace = workspace_said(ctx.request_text, _CLAUDE)
         target = WorkspaceTarget.of(workspace) if workspace else None
         where = f" on workspace {workspace}" if workspace else ""
         # A folder this request just made is new and empty: trusting it needs no question.

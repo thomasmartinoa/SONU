@@ -13,6 +13,35 @@ from sonu.desktop.hyprland.models import Window
 from sonu.tools.context import ToolContext
 from sonu.world.snapshot import WorldSnapshot
 
+_PARTS = re.compile(r"\s*(?:[,;]|\band then\b|\bthen\b|\band\b)\s*", re.I)
+_ANY_WORKSPACE = re.compile(r"\b(?:on|in|to|at)\s+(?:(?:workspace|work space|ws)\s*)?(\d{1,2})\b", re.I)
+_ON_WORKSPACE = re.compile(r"\b(?:on|in|to) workspace (\d{1,2})\b", re.I)
+_OPENS = re.compile(r"\b(?:open|launch|start|run)\b", re.I)  # a part that opens something else
+
+
+def workspace_said(request: str, about: re.Pattern[str]) -> int | None:
+    """The workspace the user's words give a step the planner left without one: the number in the part of
+    the request about it ("… and claude code in 5 and …" → 5), else the one workspace a part that opens
+    nothing else names.
+
+    Found on real hardware: "open browser in 4 and open nvim in 5 and claude code in 5 and …" planned Claude
+    Code with no workspace, and only "on workspace 5" was understood — it opened where the owner was.
+    """
+    named = {
+        int(number)
+        for part in _PARTS.split(" ".join(request.split()))
+        if about.search(part)
+        for number in _ANY_WORKSPACE.findall(part)
+    }
+    if not named:  # "… claude code in sonu, put it on workspace 7" — not "open kitty on workspace 2 and …"
+        named = {
+            int(number)
+            for part in _PARTS.split(" ".join(request.split()))
+            if not _OPENS.search(part)
+            for number in _ON_WORKSPACE.findall(part)
+        }
+    return named.pop() if len(named) == 1 and 1 <= min(named) <= 99 else None
+
 
 class WindowTarget(BaseModel):
     model_config = ConfigDict(extra="forbid")
