@@ -897,6 +897,24 @@ expect_status = ["done"]
 require_tools = ["packages.install"]
 expect_reply_contains = "already installed"
 
+[[case]]
+id = "is-it-installed"
+request = "Is yay installed?"
+system = { installed_packages = { kitty = "0.49.1-1", yay = "13.0.1-1" } }
+notes = "Found on real hardware: planned as system.processes ('what's using the memory')."
+expect_status = ["done"]
+require_tools = ["packages.check"]
+forbid_tools = ["system.processes", "packages.install"]
+
+[[case]]
+id = "do-i-have-it"
+request = "do I have vlc?"
+notes = "Read-only: it says vlc can be installed, and installs nothing."
+expect_status = ["done"]
+require_tools = ["packages.check"]
+forbid_tools = ["packages.install"]
+expect_system = { installed_packages = { kitty = "0.49.1-1" } }
+
 # ---- M6 part 1: reading the screen (v19) — a stand-in for the vision model
 
 [[case]]

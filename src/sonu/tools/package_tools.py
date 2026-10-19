@@ -253,6 +253,75 @@ class Install(Tool):
         )
 
 
+class CheckArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=80, description="the software, in the user's words")
+
+
+class CheckInstalled(Tool):
+    """Found on real hardware: "Is yay installed?" had no tool, and was planned as "what's using memory"."""
+
+    name = "packages.check"
+    description = (
+        "Whether software is installed, and its version: 'is yay installed?', 'do I have obs?' "
+        "(read-only; installs nothing)."
+    )
+    risk = Risk.READ_ONLY
+    effects = frozenset({Effect.SYSTEM_READ})
+    Args = CheckArgs
+    grounded = ("name",)
+
+    async def prepare(
+        self, args: BaseModel, ctx: ToolContext, snapshot: WorldSnapshot, *, choice: str | None = None
+    ) -> Prepared | ToolOutcome:
+        words = cast(CheckArgs, args).name
+        if missing := ungrounded_words(words, ctx.user_words or ctx.request_text):
+            return ToolOutcome(
+                StepStatus.FAILED, f"What to look for must be your words ({', '.join(missing)} isn't)"
+            )
+        return Prepared(f"See whether {words} is installed", words)
+
+    async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
+        words = cast(str, prepared.payload)
+        packages = Packages(ctx.system.runner)
+        pacman = bool(ctx.which("pacman"))
+        for name in candidates(words) if pacman else []:
+            if found := await packages.installed(name):
+                package, version = found
+                said = f"{name} {version}" if package == name else f"{name} — {package} {version}"
+                return ToolOutcome(
+                    StepStatus.DONE,
+                    f"Yes, {said} is installed",
+                    (Check("pacman says it's installed", True, {"package": package}),),
+                )
+        resolution = ctx.resolver.resolve(words)
+        if resolution.status == "found" and resolution.entry is not None:  # "obs" is OBS Studio
+            entry = resolution.entry
+            owner = await packages.owner(entry.path) if pacman else None
+            # Found on the laptop: OBS was called "not from pacman" — its package is obs-studio
+            came = (
+                f" ({owner[0]} {owner[1]})"
+                if owner
+                else " (an app, not from pacman: a Flatpak, an AppImage…)"
+            )
+            return ToolOutcome(
+                StepStatus.DONE,
+                f"Yes, {entry.name} is installed{came}",
+                (Check("the app is installed", True, {"app": entry.desktop_id}),),
+            )
+        available = None
+        for name in candidates(words) if pacman else []:
+            if available := await packages.official(name):
+                break
+        offer = f' — {_describe(available)} can be installed: say "install {words}"' if available else ""
+        return ToolOutcome(
+            StepStatus.DONE,
+            f"No, {words} isn't installed{offer}",
+            (Check("pacman and the apps don't list it", True, {"package": words}),),
+        )
+
+
 # What the system needs to start, log in, show this desktop or ask for the password — and SONU
 # itself. Never removed by voice; the terminal is the place for that.
 _PROTECTED = frozenset(
@@ -378,4 +447,4 @@ class Remove(Tool):
         )
 
 
-PACKAGE_TOOLS: tuple[Tool, ...] = (Install(), Remove())
+PACKAGE_TOOLS: tuple[Tool, ...] = (Install(), Remove(), CheckInstalled())

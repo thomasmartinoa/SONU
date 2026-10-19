@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from sonu.system.commands import CommandError, CommandRunner, ProgramMissing
 
@@ -102,6 +103,12 @@ class Packages:
         ok, out = await self._run("pacman", "-Q", name)
         parts = out.split()
         return (parts[0], parts[1]) if ok and len(parts) >= 2 else None
+
+    async def owner(self, path: Path) -> tuple[str, str] | None:
+        """(the package, its version) a file came with (``pacman -Qo``), or None: not from pacman."""
+        ok, out = await self._run("pacman", "-Qo", "--", str(path))
+        said = re.search(r" is owned by (\S+) (\S+)$", out.strip())
+        return (said.group(1), said.group(2)) if ok and said else None
 
     async def official(self, name: str) -> Package | None:
         ok, out = await self._run("pacman", "-Si", name)
