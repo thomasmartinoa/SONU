@@ -1,5 +1,6 @@
 """The names the user meant when the recogniser wrote them another way — matched by sound against what
-exists: installed apps, the user's projects, SONU's own names (D107).
+exists: installed apps, the user's projects, SONU's own names (D107) — and a workspace number heard as
+another word ("in night" is 9, D108).
 
 Measured on the owner's recordings (`sonu voice bench`): every recogniser writes the same names wrong in
 the same way — Claude as "Cloud", btop as "VTOP", nvim as "NWIM" / "EnVim", dev_works as "Dubworks" — and
@@ -45,6 +46,15 @@ _MANY_WORDS_KEY = 6  # "Cloud Code" → Claude Code
 _MAX_WORDS = 3
 _PLAIN = re.compile(r"^[A-Za-z]+$")
 _INSIDE = re.compile("[^\\w'\N{RIGHT SINGLE QUOTATION MARK}-]")  # punctuation that ends a phrase
+# Numbers are a closed set, unlike names, so what the recognisers wrote for each one on the owner's voice
+# (`sonu voice bench`) is listed — and only used where a workspace number goes, at the end of a phrase:
+# "workspace for." is 4, "in fire only" is 5, "in night" is 9.
+_HEARD_FOR = {
+    "tree": 3, "forum": 4, "file": 5, "fire": 5, "night": 9, "nite": 9, "nand": 9,
+}  # fmt: skip
+# Also everyday words, so only right after "workspace"
+_WORDS_FOR = {"won": 1, "to": 2, "too": 2, "for": 4, "fore": 4, "ate": 8}
+_PHRASE_ENDS = frozenset({"", "only", "and", "too", "please", "now", "then", "also"})
 
 
 def sound_key(text: str) -> str:
@@ -148,7 +158,7 @@ class Names:
                     changes.append((words[i].rstrip(".,!?;:"), joined.rstrip(".,!?;:")))
                 out.append(joined or words[i])
                 i += 1
-        return " ".join(out), changes
+        return " ".join(_numbers(out, changes)), changes
 
     def _name_for(self, span: list[str]) -> str | None:
         """The one existing name these words sound like, if they aren't already it."""
@@ -167,6 +177,31 @@ class Names:
         if len(key) < (_ONE_WORD_KEY if len(core) == 1 else _MANY_WORDS_KEY):
             return None
         return self.by_key.get(key)
+
+
+def _numbers(words: list[str], changes: list[tuple[str, str]]) -> list[str]:
+    """A workspace number heard as another word: after "workspace" ("workspace for." → 4, "workspace Forum
+    and" → 4), or after "in" when it isn't a word there ("in file." → 5, "in night" → 9) — only at the end of
+    a phrase, so "workspace to the left" and "in file manager" stay. Number words ("four") are left to the
+    planner, which reads them."""
+    out = list(words)
+    for i in range(1, len(out)):
+        word = out[i].rstrip(".,!?;:")
+        before = out[i - 1].lower()
+        after = "" if word != out[i] or i + 1 == len(out) else out[i + 1].lower().rstrip(".,!?;:")
+        if after not in _PHRASE_ENDS or before.rstrip(".,!?;:") != before:
+            continue
+        said = word.lower()
+        if before == "workspace":
+            number = _HEARD_FOR.get(said) or _WORDS_FOR.get(said)
+        elif before == "in":
+            number = _HEARD_FOR.get(said)
+        else:
+            number = None
+        if number is not None:
+            out[i] = f"{number}{out[i][len(word) :]}"
+            changes.append((word, str(number)))
+    return out
 
 
 def _fanciness(name: str) -> tuple[int, int]:

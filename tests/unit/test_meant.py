@@ -53,7 +53,6 @@ def test_what_was_heard_right_is_never_changed() -> None:
     "heard",
     [
         "Move Send to 3",  # Zen, misheard — but "send" is a word: never guessed
-        "Open nvim in file",  # five, misheard — a word too
         "switch to the Cloud",  # SONU's cloud settings, not the Claude app
         "Cloud",
         "Open Bulk Rename",  # not vlc ("vee el see")
@@ -69,11 +68,49 @@ def test_two_names_that_sound_alike_are_never_guessed_between() -> None:
     assert sound_key("Claude Code") == sound_key("Cloud Code") and sound_key("VTOP") == sound_key("btop")
 
 
+@pytest.mark.parametrize(
+    ("heard", "meant"),
+    [
+        # A workspace number heard as another word (`sonu voice bench`, 2026-10-19): "in night" opened
+        # Telegram on the workspace the owner was on, "in fire only" got "I cannot put anything on fire".
+        ("Open Telegram in night", "Open Telegram in 9"),
+        ("Hey, okay, so, can you open Telegram in NAND?", "Hey, okay, so, can you open Telegram in 9?"),
+        ("Open nvim in file.", "Open nvim in 5."),
+        ("Do one thing, put kitty in fire only", "Do one thing, put kitty in 5 only"),
+        ("Open Zenon Workspace Forum", "Open Zen on Workspace 4"),
+        ("Open seminar workspace for.", "Open seminar workspace 4."),
+        # The owner's own requests (the audit log), not on the bench:
+        ("OpenSpotify on Workspace file", "OpenSpotify on Workspace 5"),
+        ("can we go to workspace file and create a folder", "can we go to workspace 5 and create a folder"),
+        ("Open kitty Workspace too", "Open kitty Workspace 2"),
+    ],
+)  # fmt: skip
+def test_a_workspace_number_heard_as_a_word_is_the_number(heard: str, meant: str) -> None:
+    assert OWNER.meant(heard)[0] == meant
+
+
+@pytest.mark.parametrize(
+    "heard",
+    [
+        "Move this workspace to the left",  # not at the end of a phrase
+        "Open it in file manager",
+        "Open nvim in five",  # a number word: the planner reads it
+        "Open the file",
+        "Turn on night light",
+        "Search for fire safety",
+        "Open Telegram in the end.",  # two words: not guessed
+    ],
+)
+def test_words_where_no_workspace_number_goes_stay(heard: str) -> None:
+    assert OWNER.meant(heard) == (heard, [])
+
+
 def test_the_changes_are_said() -> None:
     assert OWNER.meant("Open Cloud Code in Dubworks")[1] == [
         ("Cloud Code", "Claude Code"),
         ("Dubworks", "dev_works"),
     ]
+    assert OWNER.meant("Open Zenon Workspace Forum")[1] == [("Zenon", "Zen on"), ("Forum", "4")]
 
 
 def test_projects_are_folders_with_made_up_names_or_git(tmp_path: Path) -> None:
