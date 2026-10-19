@@ -398,6 +398,8 @@ async def test_rice_switches(rig: Rig) -> None:
         "✔ Locked the screen",
     ]
     assert rig.system.night_light == "on" and rig.system.keep_awake == "on" and rig.system.notifications == 0
+    # The owner's choice (D105, from testing: "lock the screen didn't ask"): only locking asks first.
+    assert [c.description for c in rig.confirmations] == ["Lock the screen"]
 
 
 @pytest.mark.anyio
