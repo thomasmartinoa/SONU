@@ -51,6 +51,28 @@ class CloudHearingError(Exception):
     pass
 
 
+def _reason(response: httpx.Response) -> str:
+    """The service's reason on one line — for a used-up limit, which limit and when to retry (found running
+    the bench: Gemini's free tier allows 20 requests a day per model, and the error was cut before saying so).
+    """
+    try:
+        error = response.json().get("error")
+    except (ValueError, AttributeError):
+        error = None
+    if not isinstance(error, dict) or not error.get("message"):
+        return " ".join(response.text.split())[:200]
+    said = [" ".join(str(error["message"]).split()).split(". ")[0][:160]]
+    for detail in error.get("details") or []:
+        if not isinstance(detail, dict):
+            continue
+        for violation in detail.get("violations") or []:
+            if isinstance(violation, dict) and violation.get("quotaId"):
+                said.append(f"[{violation['quotaId']}: {violation.get('quotaValue', '?')}]")
+        if detail.get("retryDelay"):
+            said.append(f"retry in {detail['retryDelay']}")
+    return " ".join(said)
+
+
 def wav(pcm16: bytes) -> bytes:
     """16 kHz mono 16-bit audio as a WAV file."""
     out = io.BytesIO()
@@ -128,7 +150,7 @@ class CloudEars:
             )
         if response.status_code >= 400:
             raise CloudHearingError(
-                f"{self.provider.label} answered {response.status_code}: {response.text[:200]}"
+                f"{self.provider.label} answered {response.status_code}: {_reason(response)}"
             )
         try:
             data = response.json()

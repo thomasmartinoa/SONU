@@ -239,7 +239,7 @@ def bench_run(
                 if not gpu_full(exc):
                     raise
                 ears, hinted = on_the_cpu(WHISPER.get(name, name)), True
-            failed = 0
+            failed, used_up = 0, ""
             for line in todo:
                 pcm = bench.load_recording(folder, line.id)
                 text = None
@@ -249,10 +249,13 @@ def bench_run(
                         text = ears.transcribe(pcm, bench.hint_for(line, hint) if hinted else "")
                         break
                     except CloudHearingError as exc:
+                        if bench.used_up(str(exc)):
+                            used_up = str(exc)
+                            break
                         wait = bench.wait_for_limit(str(exc))
                         if wait is None and attempt > 0:
                             break
-                        typer.echo(f"   {name}: {str(exc)[:120]} — trying again", err=True)
+                        typer.echo(f"   {name}: {str(exc)[:160]} — trying again", err=True)
                         time.sleep(wait or 2.0)
                     except RuntimeError as exc:
                         if not gpu_full(exc) or getattr(ears, "device", "") != "cuda":
@@ -260,13 +263,21 @@ def bench_run(
                         del ears
                         gc.collect()
                         ears = on_the_cpu(WHISPER.get(name, name))
+                if used_up:
+                    typer.echo(f"✖ {name}: {used_up[:200]}", err=True)
+                    typer.echo(
+                        f"   Its limit is used up for now; the {len(heard)} heard are kept — run again later "
+                        f"(-m {name}) to hear the other {len(lines) - len(heard)}.",
+                        err=True,
+                    )
+                    break
                 if text is None:
                     failed += 1  # not saved: the next run tries this line again
                     continue
                 heard[line.id] = (text, time.perf_counter() - started)
+                bench.save_heard(folder, name, heard)  # each line, so Ctrl+C keeps what was heard
             if failed:
                 typer.echo(f"✖ {name}: {failed} recordings not heard — run again to try just those", err=True)
-            bench.save_heard(folder, name, heard)
             del ears
             gc.collect()  # one model on the GPU at a time
     _report(folder, model, misses=False)
