@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+import contextlib
 import io
 import json
 import re
@@ -784,3 +785,34 @@ async def test_a_name_heard_another_way_reaches_the_planner_as_the_app(rig: Rig)
     assert "Open btop" in asked and "Open VTOP" not in asked
     [meant] = [r.data for r in AuditLog(rig.daemon.paths.audit_file).records() if r.kind == "voice.meant"]
     assert meant == {"heard": "Open VTOP", "meant": "Open btop"}
+
+
+@pytest.mark.anyio
+async def test_requests_go_on_while_the_voice_loads(
+    short_tmp: Path, xdg_env: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Found on real hardware: Whisper's loading hung on the network after a reinstall, and sonud held every
+    request — typed ones too — until it finished, which it never did."""
+    ollama = FakeOllama()
+    ollama.add_model("qwen3.5:4b", size_gib=3.2, capabilities=["completion", "tools"])
+    ollama.chat_responder = lambda body: json.dumps({"kind": "reply", "message": "Hi!", "steps": []})
+    daemon = Daemon(Settings(), SonuPaths.from_env(xdg_env), xdg_env, ollama_transport=ollama.transport)
+    loading = asyncio.Event()
+
+    class HangingVoice:
+        async def warm_up(self, name: str | None = None) -> None:
+            loading.set()
+            await asyncio.Event().wait()  # never loads
+
+    monkeypatch.setattr(server, "voice_installed", lambda: True)
+    monkeypatch.setattr(server, "missing_files", lambda folder: [])
+    monkeypatch.setattr(daemon, "voice_session", HangingVoice)
+    warming = asyncio.create_task(daemon.warm_up())
+    await asyncio.wait_for(loading.wait(), 5)
+    assert not daemon.lock.locked()  # a typed request is planned now
+    assert daemon._voice_warming.locked()  # the key waits for the voice
+    warming.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await warming
+    assert not daemon._voice_warming.locked()
+    await daemon.stop()

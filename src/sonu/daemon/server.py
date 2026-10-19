@@ -347,6 +347,7 @@ class Daemon:
         self._server: asyncio.Server | None = None
         self._warming: asyncio.Task[None] | None = None
         self._voice: VoiceSession | None = None
+        self._voice_warming = asyncio.Lock()  # held while the ears and voice load: only voice waits for it
         self._waited = 0  # which "one moment" line is next
         self.wake = _WakeWord(self)
         self.echo = EchoCanceller()
@@ -557,6 +558,9 @@ class Daemon:
         Found on the owner's laptop: the first request took 12 s — the model was still loading and
         then had to read SONU's long instructions. A practice plan leaves them cached in Ollama
         (the desktop part comes last in the prompt, so every real request reuses the rest).
+
+        The ears and the voice load after, without holding requests: found on the owner's laptop, Whisper's
+        loading hung on the network after a reinstall and no request was answered, typed ones too.
         """
         async with self.lock:
             # First, so the practice plan below already has their tools (a server that fails is left out).
@@ -569,15 +573,19 @@ class Daemon:
                 )
             except (OllamaError, PlanningError) as exc:  # Ollama may start later: the first request pays
                 logger.warning("couldn't warm up %s: %s", self.model, exc)
-            if voice_installed() and not missing_files(voice_dir(self.paths.data_dir)):
-                try:  # the ears and voice too, so the first press of the key answers at once
-                    await self.voice_session().warm_up(self._user_name())
-                except VoiceUnavailable as exc:
-                    logger.warning("voice isn't ready: %s", exc)
-                    return
-                # the user turned "Hey Sonu" on earlier
-                if self.wake.file.exists() and (problem := await self.wake.set(True)):
-                    logger.warning("couldn't listen for 'Hey Sonu': %s", problem)
+            if not voice_installed() or missing_files(voice_dir(self.paths.data_dir)):
+                return
+            await self._voice_warming.acquire()  # before requests go on: the key waits for the voice
+        try:  # the ears and voice too, so the first press of the key answers at once
+            await self.voice_session().warm_up(self._user_name())
+        except VoiceUnavailable as exc:
+            logger.warning("voice isn't ready: %s", exc)
+            return
+        finally:
+            self._voice_warming.release()
+        async with self.lock:  # the user turned "Hey Sonu" on earlier (not while a request turns it off)
+            if self.wake.file.exists() and (problem := await self.wake.set(True)):
+                logger.warning("couldn't listen for 'Hey Sonu': %s", problem)
 
     async def serve_forever(self) -> None:
         if self._server is None:
@@ -685,6 +693,8 @@ class Daemon:
             if report is not None:
                 await session.send(final_message(report))
             return
+        async with self._voice_warming:  # still loading: the models aren't loaded twice at once
+            pass
         try:
             voice = self.voice_session()
         except VoiceUnavailable as exc:
