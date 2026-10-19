@@ -104,7 +104,12 @@ ShellRoot {
     readonly property int stepsAll: (root.hud.steps || []).length
     readonly property bool busy: root.mode === "thinking" || root.mode === "acting"
     readonly property bool open: root.asking || ((root.hud.result || "") !== "" && root.hud.state === "done")
-                                 || (root.hud.details || "") !== ""
+                                 || (root.hud.details || "") !== "" || root.longHeadline
+    // what you said doesn't fit the closed capsule's one line: open it, so all of it shows (found on the
+    // laptop: the wrapped lines spilled outside the capsule). Measured, not taken from the text's own line
+    // count, so opening (which widens it) can't flip it back.
+    readonly property bool longHeadline: headlineMetrics.advanceWidth > 250
+    TextMetrics { id: headlineMetrics; text: root.headline; font.family: root.font; font.pixelSize: 14 }
     readonly property var current: {
         const steps = root.hud.steps || []
         const running = steps.filter(s => s.status === "running")
