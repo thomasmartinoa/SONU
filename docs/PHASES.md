@@ -46,6 +46,14 @@ The bugs that make SONU feel broken everywhere. Nothing else is trustworthy unti
 
 The owner: "drive everything by voice — don't make me click the HUD."
 
+**Research: [`research/phase-2-voice.md`](research/phase-2-voice.md) (2026-10-19).** Hearing is chosen by
+measuring, not by patching words: `sonu voice bench` records the owner once (~70 lines: names, numbers, answers,
+their way of talking, free speech), keeps the recordings on the laptop, and scores every candidate — local
+Whisper turbo / large-v3, Parakeet, the 2B leaderboard models, an Indian-English Whisper fine-tune; Sarvam
+Saaras v4 and Gemini 3.5 Transcribe in the cloud — on *key words right*, answers right, word error rate, time and
+cost. Then: hearing set to the winner, choosing from lists by voice, installs with a typed password only. The
+recordings become the test set for phase 7's model of the owner's voice.
+
 - **Sarvam hears requests, Kokoro speaks** (needs the key fix from phase 1). Check that "Hey Sonu", talking over
   SONU and passwords stay local, and that only hearing is billed.
 - **Answer questions by voice:** yes/no ("lock the screen" didn't ask out loud), and **pick from a list by
