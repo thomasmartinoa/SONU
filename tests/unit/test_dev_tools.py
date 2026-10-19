@@ -300,6 +300,40 @@ async def test_the_workspace_the_user_named_is_used_if_the_plan_leaves_it_out(ri
     assert rig.fake.windows_of_class("kitty")[0]["workspace"]["id"] == 9
 
 
+@pytest.mark.anyio
+async def test_claude_code_in_5_said_without_the_word_workspace(rig: Rig) -> None:
+    # Found on real hardware: "open brower in 4 and open nvim in 5 and claude code in 5 and open vs code in 6
+    # …" planned Claude Code with no workspace, and only "on workspace 5" was understood: it opened where
+    # the owner was.
+    request = "make a folder called shop-app in dev_works and claude code there in 5 and open kitty in 6"
+    report = await rig.run(
+        request, ("files.make_folder", {"name": "shop-app", "inside": "dev_works"}), ("dev.claude_open", {})
+    )
+    assert report.status == "done", lines(report)
+    assert rig.fake.windows_of_class("kitty")[0]["workspace"]["id"] == 5
+
+
+@pytest.mark.parametrize(
+    ("request_text", "workspace"),
+    [
+        ("open brower in 4 and open nvim in 5 and claude code in 5 and open vs code in 6", 5),
+        ("make a folder x and open claude code there on workspace 9 and tell it hi", 9),
+        ("open claude code in the SONU folder on workspace 3", 3),
+        ("open claude code in sonu, put it in workspace 7", 7),
+        ("open claude code in sonu and move it to workspace 4", 4),
+        # kitty's workspace isn't Claude Code's
+        ("open kitty on workspace 2 and claude code in sonu", None),
+        ("open claude code in dev works", None),
+    ],
+)
+def test_the_workspace_said_for_claude_code(request_text: str, workspace: int | None) -> None:
+    import re
+
+    from sonu.tools.targets import workspace_said
+
+    assert workspace_said(request_text, re.compile(r"\bclaude\b", re.I)) == workspace
+
+
 # ---------------------------------------------------------------------------- the prompt writer
 PROMPT_TEXT = (
     "Build a small todo app.\nRequirements:\n- add and remove tasks\n- a dark mode\n"

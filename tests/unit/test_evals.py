@@ -294,6 +294,96 @@ GOLDEN: dict[str, dict[str, Any]] = {
     "song-in-a-browser-without-media-controls": steps(
         ("media.play", {"query": "lofi beats", "browser": "chromium"})
     ),
+    # Long requests (2026-10-19)
+    "long-five-apps-in-shorthand": steps(
+        ("apps.launch", {"app": "browser", "workspace": 4}),
+        ("apps.launch", {"app": "btop", "workspace": 5}),
+        ("dev.claude_open", {"folder": "SONU"}),  # the workspace left out, as the 4B did on the laptop
+        ("apps.launch", {"app": "vscodium", "workspace": 6}),
+        ("apps.launch", {"app": "telegram", "workspace": 9}),
+        ("windows.focus", {"window": {"app": "vscodium"}}),
+    ),
+    "long-settings-five": steps(
+        ("settings.volume", {"target": "mic", "mute": True}),
+        ("settings.volume", {"target": "speaker", "level": 50}),
+        ("settings.brightness", {"level": 30}),
+        ("desktop.shell", {"action": "night_light_on"}),
+        ("settings.power_mode", {"mode": "power-saver"}),
+    ),
+    "long-apps-and-settings": steps(
+        ("apps.launch", {"app": "kitty", "workspace": 2}),
+        ("apps.launch", {"app": "chromium", "workspace": 3}),
+        ("settings.volume", {"target": "speaker", "level": 20}),
+        ("desktop.shell", {"action": "do_not_disturb_on"}),
+        ("workspaces.show", {"workspace": 3}),
+    ),
+    "long-rambling-voice": steps(
+        ("apps.launch", {"app": "telegram", "workspace": 9}),
+        ("apps.launch", {"app": "chromium", "workspace": 4}),
+        ("web.search", {"query": "lofi beats", "site": "youtube", "browser": "chromium"}),
+        ("settings.volume", {"target": "speaker", "level": 60}),
+        ("workspaces.show", {"workspace": 4}),
+    ),
+    "long-two-unsupported-parts": {
+        **steps(
+            ("apps.launch", {"app": "kitty", "workspace": 3}),
+            ("settings.volume", {"target": "speaker", "level": 40}),
+        ),
+        "unsupported": ["book me a cab", "order groceries for tomorrow"],
+    },
+    "long-move-arrange-show": steps(
+        ("windows.move", {"window": {"app": "zen"}, "workspace": 3}),
+        ("windows.move", {"window": {"app": "telegram"}, "workspace": 3}),
+        ("windows.side_by_side", {"first": {"app": "zen"}, "second": {"app": "telegram"}}),
+        ("workspaces.show", {"workspace": 3}),
+    ),
+    "long-question-and-actions": steps(
+        ("system.status", {"what": ["battery"]}),
+        ("settings.brightness", {"level": 70}),
+        ("apps.launch", {"app": "btop", "workspace": 8}),
+    ),
+    "long-claude-code-model-and-prompt": steps(
+        ("dev.claude_open", {"folder": "SONU", "workspace": 7}),
+        ("dev.claude_model", {"model": "sonnet"}),
+        ("dev.type", {"text": "fix the failing tests"}),
+    ),
+    "long-bedtime": steps(
+        ("media.control", {"action": "pause"}),
+        ("settings.bluetooth", {"on": True}),
+        ("desktop.shell", {"action": "keep_awake_on"}),
+        ("reminders.set", {"text": "go to bed", "in_minutes": 30}),
+    ),
+    "long-then-chain": steps(
+        ("apps.launch", {"app": "thunar", "workspace": 2}),
+        ("apps.launch", {"app": "kitty", "workspace": 2}),
+        ("windows.side_by_side", {"first": {"app": "thunar"}, "second": {"app": "kitty"}}),
+        ("workspaces.show", {"workspace": 2}),
+    ),
+    "long-ws-shorthand": steps(
+        ("apps.launch", {"app": "telegram", "workspace": 7}),
+        ("apps.launch", {"app": "kitty", "workspace": 7}),
+        ("apps.launch", {"app": "chromium", "workspace": 8}),
+        ("workspaces.show", {"workspace": 7}),
+    ),
+    "long-six-apps": steps(
+        ("apps.launch", {"app": "kitty", "workspace": 1}),
+        ("apps.launch", {"app": "zen", "workspace": 2}),
+        ("apps.launch", {"app": "vscodium", "workspace": 3}),
+        ("apps.launch", {"app": "telegram", "workspace": 4}),
+        ("apps.launch", {"app": "thunar", "workspace": 5}),
+        ("apps.launch", {"app": "btop", "workspace": 6}),
+    ),
+    "long-there-references": steps(
+        ("apps.launch", {"app": "chromium", "workspace": 5}),
+        ("web.open", {"site": "github.com/thomasmartinoa", "browser": "chromium"}),
+        ("apps.launch", {"app": "kitty", "workspace": 5}),
+        ("windows.state", {"window": {"app": "kitty"}, "state": "maximized"}),
+    ),
+    "long-folder-claude-shorthand": steps(
+        ("files.make_folder", {"name": "notes-app", "inside": "dev_works"}),
+        ("dev.claude_open", {}),  # no workspace: "there in 6" comes from the words
+        ("dev.type", {"text": "make a markdown notes app"}),
+    ),
 }
 
 
