@@ -769,3 +769,18 @@ async def test_switching_planners_lets_go_of_the_old_one(short_tmp: Path, xdg_en
     await third.warm_up()
     assert ollama.keep_alive["qwen3.5:4b"] == "-1m"
     await third.stop()
+
+
+@pytest.mark.anyio
+async def test_a_name_heard_another_way_reaches_the_planner_as_the_app(rig: Rig) -> None:
+    # Found with the owner's recordings (`sonu voice bench`): Whisper wrote btop as "VTOP" and the plan
+    # failed with "'vtop' is not installed". Matched by sound to the installed app (D107), and audited.
+    from sonu.audit.log import AuditLog
+
+    voice_rig(rig, "Open VTOP")
+    _, out = await rig.run("listen")
+    assert "You: Open btop" in out
+    asked = [m["messages"][-1]["content"] for m in rig.ollama.chat_requests if "format" in m]
+    assert "Open btop" in asked and "Open VTOP" not in asked
+    [meant] = [r.data for r in AuditLog(rig.daemon.paths.audit_file).records() if r.kind == "voice.meant"]
+    assert meant == {"heard": "Open VTOP", "meant": "Open btop"}

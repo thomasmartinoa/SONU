@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import re
 import wave
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -375,12 +375,14 @@ class Score:
     groups: dict[str, Tally] = field(default_factory=dict)
     misses: list[tuple[str, str, list[str]]] = field(default_factory=list)  # (line id, heard, missed keys)
     audio_seconds: float = 0.0
+    with_sonu: Tally = field(default_factory=Tally)  # after SONU matched names by sound (D107)
 
 
 def score(
     model: str, lines: Iterable[Line], expected: Mapping[str, str], heard: Mapping[str, tuple[str, float]],
-    durations: Mapping[str, float] | None = None,
+    durations: Mapping[str, float] | None = None, meant: Callable[[str], str] | None = None,
 ) -> Score:  # fmt: skip
+    """How well ``model`` heard the lines; ``meant``: SONU's matching of names by sound, scored as well."""
     result = Score(model)
     for line in lines:
         if line.id not in heard or line.id not in expected:
@@ -389,6 +391,8 @@ def score(
         missed = result.all.add(line, expected[line.id], text, seconds)
         result.groups.setdefault(line.group, Tally()).add(line, expected[line.id], text, seconds)
         result.audio_seconds += (durations or {}).get(line.id, 0.0)
+        if meant is not None:
+            result.with_sonu.add(line, expected[line.id], meant(text), seconds)
         if missed:
             result.misses.append((line.id, text, missed))
     return result
@@ -445,6 +449,7 @@ def as_json(scores: Iterable[Score]) -> list[dict[str, Any]]:
             {
                 "model": s.model,
                 "key_words": s.all.key_score,
+                "key_words_with_sonu": s.with_sonu.key_score,
                 "answers": s.groups["answers"].key_score if "answers" in s.groups else None,
                 "wer": s.all.wer,
                 "seconds": s.all.mean_seconds,
