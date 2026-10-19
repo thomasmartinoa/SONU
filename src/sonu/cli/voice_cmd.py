@@ -22,6 +22,15 @@ from sonu.voice.engines import (
 
 app = typer.Typer(help="SONU's voice: set it up, hear it, check it.", no_args_is_help=True)
 
+
+def _bench() -> typer.Typer:
+    from sonu.cli.voice_bench_cmd import app as bench_app
+
+    return bench_app
+
+
+app.add_typer(_bench(), name="bench")
+
 KEYBIND = 'hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu listen"))   -- the SONU key: talk to SONU'
 
 

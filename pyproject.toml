@@ -42,6 +42,7 @@ sonu = "sonu.cli.entry:main"
 voice = [
     "faster-whisper>=1.2,<2",
     "kokoro-onnx>=0.6,<1",
+    "onnx-asr[hub]>=0.12,<0.13",       # Parakeet, for `sonu voice bench` (phase 2)
     "nvidia-cublas-cu12>=12.9,<13",   # CTranslate2's CUDA 12 math library (the system has CUDA 13)
     "nvidia-cudnn-cu12>=9.27.0.42,<10",
 ]
@@ -104,7 +105,7 @@ files = ["src", "tests"]
 
 # The optional voice engines (the `voice` extra) ship without usable type information.
 [[tool.mypy.overrides]]
-module = ["faster_whisper", "faster_whisper.*", "kokoro_onnx", "kokoro_onnx.*"]
+module = ["faster_whisper", "faster_whisper.*", "kokoro_onnx", "kokoro_onnx.*", "onnx_asr", "onnx_asr.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

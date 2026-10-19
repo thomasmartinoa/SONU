@@ -37,6 +37,7 @@ RATE = 16_000
 HEARING = ("sarvam", "groq", "gemini")  # providers that can hear
 DEFAULT_MODEL = {"sarvam": "saaras:v4", "groq": "whisper-large-v3-turbo", "gemini": "gemini-flash-latest"}
 MAX_TERMS = 50  # Sarvam's limit for key terms
+MAX_VOCABULARY = 100  # Gemini 3.5 Transcribe: "about 100 gives the best results"
 TIMEOUT_S = 20.0
 
 
@@ -163,6 +164,8 @@ class CloudEars:
         return str(data.get("text") or "").strip()
 
     def _gemini(self, audio: bytes, hint: str) -> str:
+        if "transcribe" in self.model:  # Gemini 3.5 Transcribe: a speech-to-text model, not a chat model
+            return self._gemini_transcribe(audio, hint)
         words = f" Words that may be said: {hint}." if hint else ""
         body = {
             "contents": [
@@ -186,6 +189,35 @@ class CloudEars:
         except (KeyError, IndexError, TypeError) as exc:
             raise CloudHearingError(f"{self.provider.label} heard nothing") from exc
         return "".join(str(p.get("text") or "") for p in parts).strip()
+
+    def _gemini_transcribe(self, audio: bytes, hint: str) -> str:
+        """Gemini 3.5 Transcribe (Interactions API) with the expected names as its custom vocabulary — checked
+        on the laptop (a Kokoro clip): "install cowsay" came out as "Kausay" without, "cowsay" with."""
+        config: dict[str, Any] = {"language_codes": ["en-IN"]}
+        if hint:
+            config["custom_vocabulary"] = key_terms(hint)[:MAX_VOCABULARY]
+        body = {
+            "model": self.model,
+            "input": [{"type": "audio", "data": base64.b64encode(audio).decode(), "mime_type": "audio/wav"}],
+            "generation_config": {"transcription_config": config},
+        }
+        data = self._post(
+            f"{self.provider.base_url.rstrip('/')}/v1beta/interactions",
+            headers={"x-goog-api-key": str(self.key)},
+            json=body,
+        )
+        try:
+            steps = data["steps"]
+        except (KeyError, TypeError) as exc:
+            raise CloudHearingError(f"{self.provider.label} heard nothing") from exc
+        texts = [
+            str(part.get("text") or "")
+            for step in steps
+            if isinstance(step, dict) and step.get("type") == "model_output"
+            for part in step.get("content") or []
+            if isinstance(part, dict) and part.get("type") == "text"
+        ]
+        return "".join(texts).strip()
 
 
 class FallbackEars:

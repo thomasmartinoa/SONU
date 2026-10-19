@@ -165,6 +165,36 @@ class WhisperEars:
 
 
 # ---------------------------------------------------------------------------- speaking
+class ParakeetEars:
+    """NVIDIA's Parakeet TDT 0.6B v3 (ONNX, int8, on the CPU — via ``onnx-asr``), for the hearing benchmark
+    (phase 2). Small and fast; it takes no hint (names it doesn't know come out as they sound)."""
+
+    name = "parakeet"
+
+    def __init__(self, model: str = "nemo-parakeet-tdt-0.6b-v3") -> None:
+        self.model_name = model
+        self._model: Any = None
+
+    def load(self) -> None:
+        if self._model is not None:
+            return
+        try:
+            import onnx_asr
+        except ImportError as exc:
+            raise VoiceUnavailable("onnx-asr isn't installed (it comes with `sonu[voice]`)") from exc
+        try:
+            self._model = onnx_asr.load_model(self.model_name, quantization="int8")
+        except (RuntimeError, ValueError, OSError) as exc:
+            raise VoiceUnavailable(f"couldn't load {self.model_name}: {exc}") from exc
+
+    def transcribe(self, pcm16: bytes, hint: str = "") -> str:
+        self.load()
+        import numpy as np
+
+        audio = np.frombuffer(pcm16, dtype=np.int16).astype(np.float32) / 32768.0
+        return str(self._model.recognize(audio, sample_rate=16_000) or "").strip()
+
+
 class KokoroVoice:
     """Text → speech (24 kHz float32 samples)."""
 

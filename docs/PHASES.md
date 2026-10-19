@@ -51,7 +51,7 @@ measuring, not by patching words: `sonu voice bench` records the owner once (~70
 their way of talking, free speech), keeps the recordings on the laptop, and scores every candidate — local
 Whisper turbo / large-v3, Parakeet, the 2B leaderboard models, an Indian-English Whisper fine-tune; Sarvam
 Saaras v4 and Gemini 3.5 Transcribe in the cloud — on *key words right*, answers right, word error rate, time and
-cost. Then: hearing set to the winner, choosing from lists by voice, installs with a typed password only. The
+cost (✅ #112: the bench is built — the owner records next). Then: hearing set to the winner, choosing from lists by voice, installs with a typed password only. The
 recordings become the test set for phase 7's model of the owner's voice.
 
 - **Sarvam hears requests, Kokoro speaks** (needs the key fix from phase 1). Check that "Hey Sonu", talking over
