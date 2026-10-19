@@ -68,6 +68,16 @@ def key_file(name: str, env: Mapping[str, str]) -> Path | None:
     return SonuPaths.from_env(env).data_dir / "keys" / name
 
 
+def key_place(provider: Provider, env: Mapping[str, str]) -> str:
+    """Where the provider's key is kept, in words: an environment variable, a private file, your keyring."""
+    if provider.key.startswith("env:"):
+        return "an environment variable"
+    path = key_file(provider.name, env)
+    if path is not None and path.exists():
+        return "a private file (only you can read it)"
+    return "your keyring"
+
+
 def lookup_key(
     provider: Provider, env: Mapping[str, str], run: Any = subprocess.run, which: Any = shutil.which
 ) -> str | None:

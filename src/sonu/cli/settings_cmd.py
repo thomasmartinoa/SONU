@@ -22,7 +22,7 @@ from sonu.config.presets import LABELS, preset
 from sonu.config.presets import current as current_mode
 from sonu.daemon.client import ask_reload
 from sonu.llm.ollama import OllamaClient, OllamaError
-from sonu.llm.providers import BUILT_IN, lookup_key, store_key
+from sonu.llm.providers import BUILT_IN, key_place, lookup_key, store_key
 from sonu.runtime import SetupError, provider_for
 
 app = typer.Typer(help="See and change SONU's settings (what the Control Center does).", no_args_is_help=True)
@@ -161,7 +161,8 @@ def settings_key(
     ),
     from_stdin: bool = typer.Option(False, "--stdin", help="Read the key from standard input (the window)."),
 ) -> None:
-    """Keep a cloud provider's API key in the system keyring (never in a file) (D94)."""
+    """Keep a cloud provider's API key in the system keyring — or, with no keyring, a private file (0600) —
+    never in the settings file (D94)."""
     state = get_state(ctx)
     state.require_valid_config()
     try:
@@ -202,12 +203,17 @@ def settings_providers(
             rows.append({"name": "ollama", "label": "Ollama Cloud", "kind": "ollama", "key": True})
             continue
         found = provider_for(state.settings, name)
+        key = lookup_key(found, os.environ)
         rows.append(
             {
                 "name": name,
                 "label": found.label,
                 "kind": found.kind,
-                "key": lookup_key(found, os.environ) is not None,
+                "key": key is not None,
+                # Found on real hardware: a saved key looked lost — the box was empty again after a restart.
+                # Its last 4 characters show it's there (never more of it), and where it's kept.
+                "ends": key[-4:] if key and len(key) >= 12 else "",
+                "where": key_place(found, os.environ) if key else "",
             }
         )
     if as_json:

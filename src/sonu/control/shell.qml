@@ -26,6 +26,8 @@ ShellRoot {
     property var models: []          // installed local models that can plan: { name, gb }
     property string mode: ""         // the preset the settings are (D99): local, balanced, cloud, custom
     property var providers: []       // cloud providers, and whether each has a key (never the key)
+    readonly property var keptProviders: ["anthropic", "gemini", "sarvam"]
+    readonly property var builtIn: ["ollama", "anthropic", "gemini", "groq", "openrouter", "omniroute", "sarvam"]
     property string status: ""
     property bool busy: false
     property var asking: null        // { title, text, yes, act } waiting for "are you sure?"
@@ -138,7 +140,8 @@ ShellRoot {
         id: providerLister
         command: [root.sonu, "settings", "providers", "--json"]
         running: true
-        stdout: StdioCollector { onStreamFinished: { try { root.providers = JSON.parse(text).filter(p => p.name !== "ollama") } catch (e) {} } }
+        // only the providers the owner kept (D102), and any they added; Ollama Cloud needs no key (`ollama signin`)
+        stdout: StdioCollector { onStreamFinished: { try { root.providers = JSON.parse(text).filter(p => root.keptProviders.indexOf(p.name) >= 0 || root.builtIn.indexOf(p.name) < 0) } catch (e) {} } }
     }
     Process {
         id: keySetter
@@ -516,7 +519,7 @@ ShellRoot {
                             Label { text: "API keys"; font.bold: true }
                             Text {
                                 Layout.fillWidth: true
-                                text: "Kept in your system keyring, never in a file. Only what you allow below is sent."
+                                text: "Paste a key and press Enter. It's kept in your keyring, or in a private file only you can read — never in the settings file, never shown again. Only what you allow below is sent."
                                 color: root.c.accentDim; font.family: root.font; font.pixelSize: 11; wrapMode: Text.Wrap
                             }
                             Repeater {
@@ -532,10 +535,14 @@ ShellRoot {
                                         color: root.c.fg; font.family: root.font; font.pixelSize: 13; elide: Text.ElideRight
                                     }
                                     Text {
-                                        Layout.preferredWidth: 60
-                                        text: keyRow.modelData.key ? "✔ key" : "no key"
+                                        Layout.preferredWidth: 130
+                                        // found on real hardware: a saved key looked lost after a restart (the box was
+                                        // empty again) — say it's saved, and show its last 4 characters
+                                        text: keyRow.modelData.key
+                                            ? "✔ saved" + (keyRow.modelData.ends ? " · …" + keyRow.modelData.ends : "")
+                                            : "no key yet"
                                         color: keyRow.modelData.key ? root.c.accentBright : root.c.accentDim
-                                        font.family: root.font; font.pixelSize: 12
+                                        font.family: root.font; font.pixelSize: 12; font.bold: !!keyRow.modelData.key
                                     }
                                     Rectangle {
                                         Layout.fillWidth: true
@@ -546,6 +553,7 @@ ShellRoot {
                                             id: keyInput
                                             anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; margins: 8 }
                                             echoMode: TextInput.Password
+                                            clip: true  // found on real hardware: a long key ran out of the box
                                             color: root.c.fg; font.family: root.font; font.pixelSize: 12
                                             onAccepted: { root.saveKey(keyRow.modelData.name, text); text = "" }
                                         }

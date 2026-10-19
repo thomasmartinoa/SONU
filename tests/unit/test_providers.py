@@ -176,3 +176,34 @@ def test_without_a_keyring_the_key_is_kept_in_a_private_file(tmp_path: Any) -> N
     assert stat_module.S_IMODE(path.parent.stat().st_mode) == 0o700
     assert lookup_key(BUILT_IN["sarvam"], env, run=no_keyring) == "sk-sarvam"
     assert lookup_key(BUILT_IN["sarvam"], {"PATH": ""}) is None  # no HOME (tests): no file looked at
+
+
+def test_the_control_center_sees_a_saved_key_and_where_it_is(tmp_path: Any) -> None:
+    """Found on real hardware: a key pasted in the Control Center looked lost after a restart (the box was
+    empty again). `sonu settings providers --json` says it's saved — its last 4 characters, never more — and
+    where."""
+    import json
+
+    from typer.testing import CliRunner
+
+    from sonu.cli.app import app
+
+    keys = tmp_path / "data" / "sonu" / "keys"
+    keys.mkdir(parents=True)
+    (keys / "gemini").write_text("AIzaSyExampleKey1234zaDA\n")
+    (tmp_path / "run").mkdir()
+    env = {
+        "HOME": str(tmp_path),
+        "XDG_DATA_HOME": str(tmp_path / "data"),
+        "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+        "XDG_RUNTIME_DIR": str(tmp_path / "run"),
+        "PATH": "",  # no secret-tool: the file
+    }
+    result = CliRunner().invoke(app, ["settings", "providers", "--json"], env=env)
+    assert result.exit_code == 0, result.output
+    rows = {row["name"]: row for row in json.loads(result.stdout)}
+    assert rows["gemini"]["key"] and rows["gemini"]["ends"] == "zaDA"
+    assert rows["gemini"]["where"].startswith("a private file")
+    assert "AIzaSy" not in result.stdout  # never the key itself
+    assert rows["anthropic"] == {**rows["anthropic"], "key": False, "ends": "", "where": ""}
