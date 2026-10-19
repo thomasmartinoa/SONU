@@ -282,7 +282,7 @@ def bench_run(
                 typer.echo(f"✖ {name}: {failed} recordings not heard — run again to try just those", err=True)
             del ears
             gc.collect()  # one model on the GPU at a time
-    _report(folder, model, misses=False)
+    _report(ctx, folder, model, misses=False)
 
 
 @app.command("report")
@@ -301,32 +301,52 @@ def bench_report(
     if as_json:
         import json
 
-        typer.echo(json.dumps(bench.as_json(_scores(folder, names)), indent=1))
+        typer.echo(json.dumps(bench.as_json(_scores(ctx, folder, names)), indent=1))
         return
-    _report(folder, names, misses=misses)
+    _report(ctx, folder, names, misses=misses)
 
 
-def _scores(folder: Path, names: list[str]) -> list[bench.Score]:
+def _scores(ctx: typer.Context, folder: Path, names: list[str]) -> list[bench.Score]:
     lines, expected = bench.recorded(folder), bench.said(folder)
     durations = {line.id: len(bench.load_recording(folder, line.id)) / 2 / bench.RATE for line in lines}
-    return [bench.score(name, lines, expected, bench.load_heard(folder, name), durations) for name in names]
+    meant = _sonus_names(ctx)
+    return [
+        bench.score(name, lines, expected, bench.load_heard(folder, name), durations, meant) for name in names
+    ]
+
+
+def _sonus_names(ctx: typer.Context) -> Any:
+    """What SONU does with a heard request before planning: names matched by sound against this laptop's
+    apps and projects (D107) — so the report shows what reaches the planner, too."""
+    from sonu.desktop.apps.catalog import AppCatalog
+    from sonu.desktop.apps.resolver import AppResolver
+    from sonu.runtime import app_aliases, load_memory
+    from sonu.voice.meant import known_names
+
+    state = get_state(ctx)
+    resolver = AppResolver(
+        AppCatalog.load(os.environ), aliases=app_aliases(state.settings, load_memory(state.paths))
+    )
+    names = known_names(resolver, Path(os.environ.get("HOME") or Path.home()))
+    return lambda text: names.meant(text)[0]
 
 
 def _pct(value: float | None) -> str:
     return "–" if value is None else f"{value * 100:.0f}%"
 
 
-def _report(folder: Path, names: list[str], *, misses: bool) -> None:
+def _report(ctx: typer.Context, folder: Path, names: list[str], *, misses: bool) -> None:
     from rich.console import Console
     from rich.table import Table
 
-    scores = [s for s in _scores(folder, names) if s.all.lines]
+    scores = [s for s in _scores(ctx, folder, names) if s.all.lines]
     scores.sort(key=lambda s: -(s.all.key_score or 0))
     total = len(bench.recorded(folder))
     table = Table(title=f"How well each model hears you ({total} recordings)")
     table.add_column("model", no_wrap=True)
     table.add_column("heard", justify="right")
     table.add_column("KEY WORDS", justify="right", style="bold")
+    table.add_column("+ SONU", justify="right")
     for group in ("names", "numbers", "answers", "talk", "wake"):
         table.add_column(group, justify="right")
     table.add_column("WER", justify="right")
@@ -338,6 +358,7 @@ def _report(folder: Path, names: list[str], *, misses: bool) -> None:
             s.model,
             f"{s.all.lines}/{total}",
             _pct(s.all.key_score),
+            _pct(s.with_sonu.key_score),
             *(
                 _pct(s.groups[g].key_score) if g in s.groups else "–"
                 for g in ("names", "numbers", "answers", "phrasing", "wake")
@@ -350,6 +371,7 @@ def _report(folder: Path, names: list[str], *, misses: bool) -> None:
     console.print(table)
     console.print(
         "KEY WORDS: the app / number / package / file / song in each line, exact — the main score. "
+        "+ SONU: after SONU matched names by sound to your apps and projects. "
         "talk: your way of talking · WER: word errors · s: seconds per request · per 1000: requests' cost"
     )
     if misses:

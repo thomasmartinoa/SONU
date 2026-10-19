@@ -94,6 +94,7 @@ from sonu.voice.engines import (
     voice_installed,
 )
 from sonu.voice.interrupt import user_talked
+from sonu.voice.meant import known_names
 from sonu.voice.session import VoiceSession
 from sonu.voice.speech import shorten_list
 from sonu.voice.wake import LEARNED_FILE, WakeListener, after_wake_word, fix_name, load_learned
@@ -699,6 +700,7 @@ class Daemon:
                 await voice.greet(self._user_name())
             await session.send({"type": "listening"})
             text = fix_name(await voice.hear())
+        text = self._meant(engine, text)
         await session.send({"type": "heard", "text": text})
         if not text:
             await session.send(final_message(TaskReport(request="", error="I didn't hear anything")))
@@ -718,12 +720,25 @@ class Daemon:
                 )  # talked over: it stops and listens
             if not follow_up:
                 return
-            follow = await self._follow_up(session, voice)
+            follow = await self._follow_up(session, voice, engine)
             if follow is None:
                 return
             text = follow
 
-    async def _follow_up(self, session: _Session | _DesktopSession, voice: VoiceSession) -> str | None:
+    def _meant(self, engine: Engine, heard: str) -> str:
+        """The names the user meant, matched by sound against what exists ("Cloud Code" → Claude Code,
+        D107). What changed goes in the audit log."""
+        if not heard:
+            return heard
+        text, changes = known_names(engine.ctx.resolver, engine.ctx.system.home).meant(heard)
+        if changes and self.audit is not None:
+            with contextlib.suppress(OSError, AuditError):
+                self.audit.append("voice.meant", {"heard": heard, "meant": text})
+        return text
+
+    async def _follow_up(
+        self, session: _Session | _DesktopSession, voice: VoiceSession, engine: Engine
+    ) -> str | None:
         """After a spoken request, keep listening a little: the next request needs no key and no
         "Hey Sonu". Silence, or "thanks" / "that's all", ends the conversation (None).
 
@@ -731,7 +746,9 @@ class Daemon:
         """
         await session.send({"type": "listening", "follow_up": True})
         heard = fix_name(await voice.hear(Endpointing(start_timeout_s=self.settings.voice.follow_up_s)))
-        text = after_wake_word(heard) or heard if heard else ""  # "Hey Sonu, …" again is fine too
+        text = self._meant(
+            engine, after_wake_word(heard) or heard if heard else ""
+        )  # "Hey Sonu, …" again too
         if not text:
             await session.send(QUIET_END)
             return None
