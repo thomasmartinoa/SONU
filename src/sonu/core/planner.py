@@ -1070,6 +1070,8 @@ def cloud_trouble(error: str) -> str:
         return "is out of quota for now"
     if code >= 500:
         return "is busy or down right now"
+    if "offline" in error:
+        return "couldn't be reached (this laptop is offline)"
     if "didn't answer" in error or "timed out" in error.lower() or "connect" in error.lower():
         return "couldn't be reached"
     return "gave no usable plan"

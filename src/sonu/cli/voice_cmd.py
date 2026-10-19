@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 
 import typer
 
@@ -211,6 +212,21 @@ def voice_train_wake(ctx: typer.Context) -> None:
     typer.echo("✔ Saved. `systemctl --user restart sonud` to use it (no recordings were kept).")
 
 
+def gpu_full(exc: BaseException) -> bool:
+    """CUDA (or cuBLAS) ran out of GPU memory."""
+    text = str(exc)
+    return "out of memory" in text.lower() or "ALLOC_FAILED" in text or "CUDA failed" in text
+
+
+def on_the_cpu(name: str) -> Any:
+    from sonu.voice.engines import WhisperEars
+
+    typer.echo(f"   the GPU is full (SONU's own models use it) — {name} goes on with the CPU, slower")
+    ears = WhisperEars(name, "cpu")
+    ears.load()
+    return ears
+
+
 @app.command("check")
 def voice_check(
     ctx: typer.Context,
@@ -225,7 +241,6 @@ def voice_check(
     import gc
     import os
     import time
-    from typing import Any
 
     from sonu.audit.log import AuditLog
     from sonu.daemon.server import speech_hint
@@ -280,6 +295,10 @@ def voice_check(
             except VoiceUnavailable as exc:
                 typer.echo(f"✖ {exc}", err=True)
                 continue
+            except RuntimeError as exc:
+                if not gpu_full(exc):
+                    raise
+                ears = on_the_cpu(name)
         score = Score(name)
         for sentence, audio in recordings:
             started = time.perf_counter()
@@ -288,6 +307,16 @@ def voice_check(
             except CloudHearingError as exc:
                 typer.echo(f"✖ {exc}", err=True)
                 break
+            except RuntimeError as exc:
+                # Found on real hardware: large-v3 after turbo crashed with CUBLAS_STATUS_ALLOC_FAILED —
+                # sonud's own Whisper, Kokoro and planner share the 8 GB. Go on with this model on the CPU.
+                if not gpu_full(exc) or getattr(ears, "device", "") != "cuda":
+                    raise
+                del ears
+                gc.collect()
+                ears = on_the_cpu(name)
+                started = time.perf_counter()
+                heard = ears.transcribe(audio, hint)
             score.add(sentence, heard, time.perf_counter() - started)
         if len(score.heard) < len(recordings):
             continue

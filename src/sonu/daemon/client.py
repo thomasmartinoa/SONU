@@ -13,6 +13,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 from typing import Any, TextIO
 
 from sonu.daemon.protocol import ENV_KEYS, decode, encode, socket_path
@@ -213,6 +214,9 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
     code: int | None = None
     with conn, conn.makefile("rb") as reader:
         conn.sendall(encode(request))
+        # Found on real hardware: "plan in 1.1 s" read as the whole wait, when the answer took ~3 s. The
+        # whole time is shown with the result: from the request (by voice: from when SONU heard you).
+        started = time.monotonic()
         for raw in reader:
             message = decode(raw)
             kind = message["type"]
@@ -240,6 +244,7 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                 )
                 out.write(_style(still, "36", out) + "\n")
             elif kind == "heard" and not as_json:
+                started = time.monotonic()  # by voice: from when SONU had heard you
                 out.write(_style(f"You: {message['text'] or '(nothing)'}", "2", out) + "\n")
             elif kind == "show" and not as_json:
                 _show(message, out)
@@ -264,7 +269,8 @@ def try_run(argv: list[str], out: TextIO = sys.stdout, notice: Notice | None = N
                         out.write(line + "\n")
                     headline = message.get("headline")
                     if headline:
-                        out.write(_style(headline, _COLOURS.get(message["status"], "31"), out) + "\n")
+                        took = _style(f" · {time.monotonic() - started:.1f} s", "2", out)
+                        out.write(_style(headline, _COLOURS.get(message["status"], "31"), out) + took + "\n")
                 out.flush()
                 if message.get("report"):  # a quiet end (silence after a follow-up) keeps the last code
                     code = 0 if message["status"] in SUCCESS else 1

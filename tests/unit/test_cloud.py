@@ -34,6 +34,7 @@ from sonu.llm.cloud import (
     cloud_allowed,
     cloud_usage,
     is_cloud_model,
+    online,
 )
 from sonu.runtime import SetupError, model_parts
 from sonu.testing.fake_hyprland import make_monitor, make_window
@@ -452,3 +453,39 @@ async def test_a_hard_request_goes_to_the_chosen_provider_audited_first(tmp_path
     assert len(sends) == len(sent)  # every send audited first
     assert all(d["provider"] == "Anthropic" and d["use"] == "planning" for d in sends)
     assert isinstance(parts.replies, LocalFallback)  # "replies" allowed: the cloud writes them
+
+
+_ROUTE_HEAD = "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n"
+
+
+def test_online_is_a_default_route(tmp_path: Path) -> None:
+    v4, v6 = tmp_path / "route", tmp_path / "ipv6_route"
+    v4.write_text(_ROUTE_HEAD + "wlan0\t00000000\t0101A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n")
+    v6.write_text("")
+    assert online((str(v4), str(v6)))
+    v4.write_text(
+        _ROUTE_HEAD + "docker0\t000011AC\t00000000\t0001\t0\t0\t0\t0000FFFF\t0\t0\t0\n"
+    )  # no default
+    assert not online((str(v4), str(v6)))
+    v6.write_text(
+        "0" * 32 + " 00 " + "0" * 32 + " 00 fe800000000000000000000000000001 00000064 00 00 00450003 wlan0\n"
+    )
+    assert online((str(v4), str(v6)))  # IPv6 only
+    assert online((str(tmp_path / "missing"),))  # can't tell: let the request find out
+
+
+async def test_offline_doesnt_wait_for_the_cloud() -> None:
+    """Found on real hardware: with Wi-Fi off in Balanced, "open kitty on 2" worked but was far too slow —
+    SONU waited for the cloud to time out. Offline, it plans here at once and says why."""
+    fake = fake_ollama()
+    client = OllamaClient(transport=fake.transport)
+    local = LLMPlanner(OllamaChatModel(client, PlannerRole(), OllamaSettings()))
+    offline = CloudModel(
+        OllamaChatModel(client, PlannerRole(model=CLOUD), OllamaSettings()),
+        "planning",
+        None,
+        is_online=lambda: False,
+    )
+    plan = await RoutedPlanner(local, LLMPlanner(offline), always=True).plan("open kitty", SNAPSHOT, REGISTRY)
+    assert plan.model == LOCAL and "offline" in plan.fallback
+    assert system_prompts(fake, CLOUD) == []  # nothing was tried

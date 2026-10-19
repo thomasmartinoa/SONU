@@ -124,6 +124,31 @@ def staying_local(until: float) -> str:
     return f"SONU stays local until {datetime.fromtimestamp(until).strftime('%H:%M')}"
 
 
+def online(route_files: tuple[str, ...] = ("/proc/net/route", "/proc/net/ipv6_route")) -> bool:
+    """Whether this laptop has a way out to the internet: a default route (IPv4 or IPv6), read from the
+    kernel — instant, nothing run, nothing sent. Unreadable: assume online (the request finds out)."""
+    found_any = False
+    for name in route_files:
+        try:
+            lines = Path(name).read_text().splitlines()
+        except OSError:
+            continue
+        found_any = True
+        for line in lines:
+            fields = line.split()
+            if name.endswith("ipv6_route"):
+                if len(fields) >= 10 and fields[0] == "0" * 32 and fields[1] == "00" and fields[9] != "lo":
+                    return True
+            elif (
+                len(fields) >= 4
+                and fields[1] == "00000000"
+                and fields[0] != "Iface"
+                and int(fields[3], 16) & 1
+            ):
+                return True
+    return not found_any
+
+
 class CloudModel:
     """A cloud model for one use: each send is audited first, and a failure says what to do."""
 
@@ -135,8 +160,10 @@ class CloudModel:
         pause: CloudPause | None = None,
         *,
         label: str = "Ollama Cloud",  # who it is, in what SONU says (D94: any provider)
+        is_online: Callable[[], bool] = online,
     ) -> None:
         self.inner, self.use, self.audit, self.label = inner, use, audit, label
+        self.is_online = is_online
         self.pause = pause or CloudPause()
         self.name = inner.name
 
@@ -151,6 +178,10 @@ class CloudModel:
         until = self.pause.until()
         if until is not None:
             raise ChatModelLimited(f"{self.label}'s usage limit was reached — {staying_local(until)}")
+        # Found on real hardware: with Wi-Fi off in Balanced, "open kitty on 2" worked but was far too slow —
+        # SONU waited for the cloud to time out. No way out to the internet: don't try.
+        if not self.is_online():
+            raise ChatModelError(f"{self.label} couldn't be reached: this laptop is offline")
 
     def _done(self, result: ChatResult) -> None:
         self._audit(
