@@ -898,6 +898,14 @@ require_tools = ["packages.install"]
 expect_reply_contains = "already installed"
 
 [[case]]
+id = "install-me-a-kind-of-app"
+request = "can you install me a video editor"
+notes = "Found on real hardware (after packages.check): planned as 'is video editor installed?'. A kind of app is an install; the fake repos have no video editor, so it fails to find one — what counts is that it was an install."
+expect_status = ["failed"]
+require_tools = ["packages.install"]
+forbid_tools = ["packages.check"]
+
+[[case]]
 id = "is-it-installed"
 request = "Is yay installed?"
 system = { installed_packages = { kitty = "0.49.1-1", yay = "13.0.1-1" } }

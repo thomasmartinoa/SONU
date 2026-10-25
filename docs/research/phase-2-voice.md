@@ -118,7 +118,7 @@ the same benchmark. It ships only if it beats the best model on the key-word sco
 - **Hearing the package name right** is the real problem (§1): names go to the hearing model as key terms
   (Sarvam, Gemini 3.5), and when the name isn't an exact package, SONU offers the closest packages **by voice**
   (§3) instead of "no answer given".
-- **Bug:** "Cozy" chose `dunesh` — the package search must not pick a name that isn't like what was said.
+- ✅ **Bug fixed** (#121): "Cozy" offered `dunesh` ("The cozy shell") — a single word is matched against package names only, never descriptions.
 
 ## 5. Decisions for the owner — answered 2026-10-19 ([D105](../DECISIONS.md)): keep the recordings; yes, send
 the test recordings to Sarvam and Gemini; English only (no code-mixing); lock asks first; the spoken password
