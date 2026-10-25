@@ -143,6 +143,6 @@ stays an option ("say it when I'm alone, type it when someone is near")
    true text, Sarvam 38. ✅ **A workspace number heard as a word** (#116, D108): "in night" → 9, "in fire" → 5,
    "workspace for" → 4 (turbo → 79 %). **Then:** packages by sound (with the
    installs PR), Gemini 3.5 Transcribe as a second opinion for an unknown name, the plan-level score in the bench.
-4. **Choosing by voice** (§3).
+4. ✅ **Choosing by voice** (#122, D109).
 5. **Installs:** typed password only, the package name heard or chosen by voice, the "Cozy → dunesh" bug.
 6. The owner tests phase 2 (a test-page section).

@@ -123,6 +123,11 @@ async def rig(
         "stop listening for hey sonu": WAKE_OFF,
         "Listen for Hey Sonu": WAKE_ON,
         "which kitty?": {"kind": "ask", "message": "Did you mean kitty or Kitty URL Launcher?", "steps": []},
+        "open vs code": {
+            "kind": "steps",
+            "message": "Opening VS Code.",
+            "steps": [{"tool": "apps.launch", "args": {"app": "vs code"}}],
+        },
     }
 
     def respond(body: dict[str, Any]) -> str:
@@ -816,3 +821,65 @@ async def test_requests_go_on_while_the_voice_loads(
         await warming
     assert not daemon._voice_warming.locked()
     await daemon.stop()
+
+
+@pytest.mark.anyio
+async def test_a_choice_is_said_and_answered_by_voice(rig: Rig) -> None:
+    """Found on the laptop: by voice, a choice only showed buttons — "2 packages could be 'cozy' — no answer
+    given". SONU says the choices and listens; "the second one" picks VSCodium."""
+    rig.fake.apps["codium"] = FakeApp("VSCodium", "Welcome")
+    voice = voice_rig(rig, "open vs code", "the second one")
+    code, out = await rig.run("listen")
+    assert code == 0
+    assert (
+        "Which app did you mean by 'vs code'? There are 2: first, Code - OSS; second, VSCodium. "
+        "Say which one, or none."
+    ) in " ".join(voice.said)
+    assert "✔ Opened VSCodium" in out
+    assert rig.fake.windows_of_class("VSCodium")
+
+
+@pytest.mark.anyio
+async def test_an_unclear_answer_is_asked_again_then_left_to_the_buttons(rig: Rig) -> None:
+    from sonu.tools.base import Choice, Choices
+
+    voice = voice_rig(rig, "Namaste John.", "")  # "the first one", as turbo wrote it — then nothing
+    session = rig.daemon._voice
+    assert session is not None
+    clicked = asyncio.Event()
+
+    async def buttons(choices: Choices) -> str | None:
+        await clicked.wait()
+        return "b"
+
+    choose = rig.daemon._voice_chooser(session, buttons, buttons=True)
+    asking = asyncio.create_task(choose(Choices("Which one?", (Choice("Apple", "a"), Choice("Banana", "b")))))
+    while "I'll leave the choices on the screen." not in voice.said:  # noqa: ASYNC110 — the fake voice's list
+        await asyncio.sleep(0.01)
+    assert "Sorry, which one? Say first, second, the last one — or none." in " ".join(voice.said)
+    clicked.set()  # the buttons kept working: the click is the answer
+    assert await asyncio.wait_for(asking, 5) == "b"
+
+
+@pytest.mark.anyio
+async def test_a_spoken_answer_closes_the_buttons(rig: Rig) -> None:
+    from sonu.tools.base import Choice, Choices
+
+    voice_rig(rig, "banana")
+    session = rig.daemon._voice
+    assert session is not None
+    waiting = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def buttons(choices: Choices) -> str | None:
+        waiting.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()  # the HUD closes its question when this is cancelled
+            raise
+        return None
+
+    choose = rig.daemon._voice_chooser(session, buttons, buttons=True)
+    picked = await choose(Choices("Which one?", (Choice("Apple", "a"), Choice("Banana", "b"))))
+    assert picked == "b" and waiting.is_set() and cancelled.is_set()

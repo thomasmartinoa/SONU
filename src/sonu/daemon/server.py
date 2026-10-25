@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from datetime import time as dt_time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -80,6 +80,7 @@ from sonu.tools.registry import ToolRegistry
 from sonu.ui.desktop_ui import Picker
 from sonu.ui.hud import Hud, hud_chooser, hud_confirmer, hud_folder
 from sonu.voice.audio import RECORD_ARGV, Endpointing
+from sonu.voice.choosing import Picked, hint_for, pick, spoken_list
 from sonu.voice.cloud_ears import request_ears
 from sonu.voice.cloud_voice import cloud_voice
 from sonu.voice.echo import SINK as ECHO_SINK
@@ -702,6 +703,7 @@ class Daemon:
             return
         voice.hint = speech_hint(engine.ctx.resolver.catalog)
         confirm = self._voice_confirmer(voice, confirm, session)
+        choose = self._voice_chooser(voice, choose, buttons=mode == "gui" and self.hud is not None)
         if self.settings.voice.password_by_voice:  # D57: this spoken request's install may ask
             engine.ctx.ask_secret = voice.hear_secret
         text = str(request.get("heard") or "")  # "Hey Sonu, open kitty": already heard
@@ -895,6 +897,50 @@ class Daemon:
                     session.hud.show(state="acting", question=None)
 
         return confirm
+
+    def _voice_chooser(self, voice: VoiceSession, physical: Any, *, buttons: bool) -> Any:
+        """By voice, a choice is said and listened for, while the HUD's buttons (``buttons``) work too: the
+        first answer wins. Found on the laptop: only the buttons were shown — "2 packages could be 'cozy' — no
+        answer given". A choice says which; the step's own risk is still asked about afterwards."""
+
+        async def choose(choices: Choices) -> str | None:
+            by_hand = asyncio.create_task(physical(choices)) if physical and buttons else None
+            by_voice = asyncio.create_task(self._choose_by_voice(voice, choices))
+            try:
+                waiting: set[asyncio.Task[Any]] = {by_voice} | ({by_hand} if by_hand else set())
+                while waiting:
+                    done, waiting = await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+                    if by_hand in done:
+                        return cast("str | None", by_hand.result())  # clicked (or nobody answered)
+                    picked = by_voice.result()
+                    if picked.kind != "unclear":
+                        return picked.value
+                # Unclear, and no buttons beside it: the terminal or the desktop picker, after
+                return cast("str | None", await physical(choices)) if physical and by_hand is None else None
+            finally:
+                for task in (by_hand, by_voice):
+                    if task is not None and not task.done():
+                        task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await task
+
+        return choose
+
+    async def _choose_by_voice(self, voice: VoiceSession, choices: Choices) -> Picked:
+        """Say the choices, listen twice at most. Heard with the local ears only: a choice's labels (the
+        hearing hint) can be window titles, and window content never leaves the machine."""
+        await voice.say(spoken_list(choices))
+        for attempt in range(2):
+            heard = await voice.hear(
+                Endpointing(start_timeout_s=8.0, silence_s=0.8, max_s=8.0), hint=hint_for(choices), local=True
+            )
+            picked = pick(heard, choices.options)
+            if picked.kind != "unclear":
+                return picked
+            if attempt == 0:
+                await voice.say("Sorry, which one? Say first, second, the last one — or none.")
+        await voice.say("I'll leave the choices on the screen.")
+        return Picked("unclear")
 
     async def _read_answers(self, session: _Session, task: asyncio.Task[TaskReport]) -> None:
         """Answers from the client; if it disconnects, the request is cancelled."""
