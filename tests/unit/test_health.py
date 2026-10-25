@@ -163,12 +163,13 @@ async def test_with_a_fake_proc_nothing_is_signalled(rig: Rig) -> None:
 # ---------------------------------------------------------------------------- real processes (our own)
 @pytest.fixture
 def programs(tmp_path: Path) -> Iterator[dict[str, subprocess.Popen[bytes]]]:
-    """Programs with names nothing else has (copies of sleep and bash): the real /proc, our own children."""
+    """Programs with names nothing else has (copies of bash): the real /proc, our own children. Not a copy of
+    sleep: on CI `sleep` is a multi-call binary (uutils coreutils) that exits 1 under another name."""
     nap, stubborn = tmp_path / "sonutestnap", tmp_path / "sonustubborn"
-    shutil.copy(shutil.which("sleep") or "/usr/bin/sleep", nap)
+    shutil.copy(shutil.which("bash") or "/usr/bin/bash", nap)
     shutil.copy(shutil.which("bash") or "/usr/bin/bash", stubborn)
     started = {
-        "nap": subprocess.Popen([str(nap), "30"]),
+        "nap": subprocess.Popen([str(nap), "-c", "while :; do sleep 0.2; done"]),
         "stubborn": subprocess.Popen([str(stubborn), "-c", 'trap "" TERM; while :; do sleep 0.2; done']),
     }
     yield started
