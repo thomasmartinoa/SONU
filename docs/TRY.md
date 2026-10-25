@@ -45,7 +45,7 @@ missing.
 ### Phase 2: hearing you right (#115–#122)
 - [ ] "open Claude Code in dev works" · "open btop" · "open nvim in five" — the HUD shows the right names and numbers
 - [ ] "is yay installed?" · "do I have obs?"
-- [ ] By voice: "install cozy" (or any request with several matches) — SONU says the choices; answer "the second
+- [ ] By voice: "install a video editor" (or any request with several matches) — SONU says the choices; answer "the second
   one", "number one", "the last one" or "none"; the HUD's buttons work too
 
 ### Projects and terminals (#52, #53)
