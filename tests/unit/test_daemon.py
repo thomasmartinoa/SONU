@@ -831,10 +831,9 @@ async def test_a_choice_is_said_and_answered_by_voice(rig: Rig) -> None:
     voice = voice_rig(rig, "open vs code", "the second one")
     code, out = await rig.run("listen")
     assert code == 0
-    assert (
-        "Which app did you mean by 'vs code'? There are 2: first, Code - OSS; second, VSCodium. "
-        "Say which one, or none."
-    ) in " ".join(voice.said)
+    # Said sentence by sentence: the first is always made (the test's speaker exits, so later ones may not be;
+    # what the whole list says is tested in test_choosing.py)
+    assert "Which app did you mean by 'vs code'?" in voice.said
     assert "✔ Opened VSCodium" in out
     assert rig.fake.windows_of_class("VSCodium")
 
@@ -856,7 +855,7 @@ async def test_an_unclear_answer_is_asked_again_then_left_to_the_buttons(rig: Ri
     asking = asyncio.create_task(choose(Choices("Which one?", (Choice("Apple", "a"), Choice("Banana", "b")))))
     while "I'll leave the choices on the screen." not in voice.said:  # noqa: ASYNC110 — the fake voice's list
         await asyncio.sleep(0.01)
-    assert "Sorry, which one? Say first, second, the last one — or none." in " ".join(voice.said)
+    assert "Sorry, which one?" in voice.said  # asked again (its first sentence)
     clicked.set()  # the buttons kept working: the click is the answer
     assert await asyncio.wait_for(asking, 5) == "b"
 
