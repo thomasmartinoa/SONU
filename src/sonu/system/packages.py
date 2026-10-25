@@ -170,7 +170,8 @@ _NEEDED_BY = re.compile(r"breaks dependency '[^']+' required by (\S+)")
 def rank(packages: list[Package], words: str) -> list[Package]:
     """Best first: the name the user said, then names starting with it, then names with all their
     words, then descriptions; the AUR by votes. Found on the laptop: pacman lists alphabetically, so
-    "spotify" put gst-plugin-spotify before spotify-launcher."""
+    "spotify" put gst-plugin-spotify before spotify-launcher. Found on real hardware: a misheard "Cozy"
+    offered dunesh ("The cozy shell") — a description alone doesn't make a package for a single word."""
     names = candidates(words)
     terms = [t for t in re.split(r"[^a-z0-9]+", words.lower()) if t]
 
@@ -182,8 +183,10 @@ def rank(packages: list[Package], words: str) -> list[Package]:
             points = 60
         elif terms and all(t in name for t in terms):
             points = 40
-        elif terms and all(t in package.description.lower() for t in terms):
-            points = 10
+        elif len(terms) > 1 and all(t in package.description.lower() for t in terms):
+            points = (
+                10  # "music player" may be described; one word is a name — "cozy" is not "The cozy shell"
+            )
         else:
             points = 0
         return points, package.votes or 0

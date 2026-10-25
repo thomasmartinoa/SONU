@@ -678,3 +678,41 @@ def test_typing_into_your_terminal_is_screen_type() -> None:
         and '"app": "terminal"' in problem
     )
     assert _problems(wrong, REGISTRY, "tell claude: add a readme") == []
+
+
+def _plan_of(tool: str, *more: str, name: str = "video editor") -> dict[str, Any]:
+    return {
+        "kind": "steps",
+        "message": "",
+        "steps": [{"tool": t, "args": {"name": name}} for t in (tool, *more)],
+    }
+
+
+@pytest.mark.anyio
+async def test_asking_to_install_is_not_planned_as_a_question() -> None:
+    """Found on real hardware: after packages.check was added, the 4B model planned "can you install a video
+    editor" as "is a video editor installed?" — twice, even after being told, and once beside the install."""
+    request = "can you install a video editor"
+    asked = _plan_of("packages.check")
+    plan = await make_planner(fake_with(asked, asked)).plan(request, SNAPSHOT, REGISTRY)
+    assert [(s.tool, s.args) for s in plan.steps] == [("packages.install", {"name": "video editor"})]
+    both = _plan_of("packages.check", "packages.install")
+    plan = await make_planner(fake_with(both, both)).plan(request, SNAPSHOT, REGISTRY)
+    assert [s.tool for s in plan.steps] == ["packages.install"]  # not two installs
+
+
+@pytest.mark.anyio
+async def test_a_question_about_installed_stays_a_check() -> None:
+    plan = await make_planner(fake_with(_plan_of("packages.check", name="yay"))).plan(
+        "Is yay installed?", SNAPSHOT, REGISTRY
+    )
+    assert [s.tool for s in plan.steps] == ["packages.check"]
+
+
+def test_a_mix_up_is_sent_back_either_way() -> None:
+    check, cpu = _plan_of("packages.check"), {"kind": "steps", "message": "", "steps": [
+        {"tool": "system.processes", "args": {}}]}  # fmt: skip
+    install = _problems(_PlanModel.model_validate(check), REGISTRY, "install a video editor")
+    assert any("plan packages.install" in p for p in install)
+    asked = _problems(_PlanModel.model_validate(cpu), REGISTRY, "is a video editor installed")
+    assert any("plan packages.check" in p for p in asked)

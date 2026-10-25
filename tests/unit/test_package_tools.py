@@ -194,6 +194,18 @@ def test_ranking() -> None:
     assert [p.name for p in rank(found, "spotify")] == ["spotify-launcher", "spotifyd", "gst-plugin-spotify"]
 
 
+def test_a_single_word_is_not_matched_by_a_description() -> None:
+    """Found on real hardware: "install cowsay" heard as "Cozy" offered dunesh ("The cozy shell")."""
+    found = parse_search(
+        "extra/cozy-stack 1:1.6.37-1\n    Digital home: brings all your web services in the same space\n"
+        "extra/dunesh 0.1.9-1\n    The cozy shell\n"
+    )
+    assert [p.name for p in rank(found, "Cozy")] == ["cozy-stack"]
+    # Several words may describe what the user wants: "a music player" is not a name.
+    players = parse_search("extra/rhythmbox 3.4-1\n    A music player for GNOME\n")
+    assert [p.name for p in rank(players, "music player")] == ["rhythmbox"]
+
+
 # ---------------------------------------------------------------------------- the password by voice (D57)
 def by_voice(rig: Rig, spoken: str | None) -> list[str]:
     """Turn "password by voice" on; a spoken request whose user says ``spoken``."""

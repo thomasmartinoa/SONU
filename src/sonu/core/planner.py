@@ -11,7 +11,7 @@ import json
 import logging
 import re
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any, Literal
 
@@ -560,6 +560,13 @@ _WHY_HOT = re.compile(
 )
 _REMOVE_WORDS = re.compile(r"\b(?:uninstall|remove|get rid of|delete)\b")
 _STOP_WORDS = re.compile(r"\b(?:kill|force quit|quit|stop|end|terminate)\b")
+_INSTALL_WORDS = re.compile(r"\binstall\b")  # not "installed"
+_IS_INSTALLED = re.compile(r"\binstalled\b|\bdo i have\b|\bhave i got\b")
+_NOT_AN_INSTALL = {
+    "packages.check",
+    "system.processes",
+    "system.status",
+}  # what the 4B model mixes it up with
 _MEDIA_STOP = re.compile(r"\bstop\b.*\b(?:music|song|songs|video|playing|playback|recording|stream)\b")
 _SONGS_IN = re.compile(r"\b(?:songs|music|tracks)\s+(?:in|from)\s+(?:my|the)\b")
 _A_FILE = re.compile(r"\b(?:pdf|docx?|odt|txt|md|file|document|notes|resume|cv|invoice)\b|\.\w{2,4}\b")
@@ -827,6 +834,17 @@ def _problems(plan: _PlanModel, registry: ToolRegistry, request: str) -> list[st
     if _WHY_HOT.search(said) and "system.processes" not in tools and ("system.status" in tools or not tools):
         wanted = json.dumps({"tool": "system.processes", "args": {}})
         problems.append(f"the user asked what's making the laptop loud, hot or slow — plan {wanted}")
+    # Found on the laptop (dry run): after packages.check was added, "can you install me a video editor" was
+    # planned as "is a video editor installed?". Asking to install is packages.install.
+    if _INSTALL_WORDS.search(said) and "packages.install" not in tools and tools & _NOT_AN_INSTALL:
+        problems.append(
+            "the user asked to install software — plan packages.install with name = their exact words "
+            "for what to install (a kind of app is fine: 'video editor')"
+        )
+    elif _IS_INSTALLED.search(said) and "packages.check" not in tools and tools & _NOT_AN_INSTALL:
+        problems.append(
+            "the user asked whether software is installed — plan packages.check with name = their words"
+        )
     # Found in the evals (v39): "get rid of <app>" (uninstall) became system.stop_program. A program is
     # stopped only when the user says kill, quit, stop, end or terminate.
     if not _STOP_WORDS.search(said):
@@ -1026,10 +1044,14 @@ class LLMPlanner:
                 if not problems or attempt == self.max_attempts:
                     # On the last attempt, hand over what we have: the engine reports bad steps
                     # individually instead of failing the whole request.
+                    said = " ".join([*(t.request for t in history), request]).lower()
                     return Plan(
                         kind=parsed.kind,
                         message=parsed.message.strip(),
-                        steps=tuple(PlannedStep(step.tool, step.args) for step in parsed.steps[:MAX_STEPS]),
+                        steps=_once(
+                            PlannedStep(_install_not_check(step.tool, said), step.args)
+                            for step in parsed.steps[:MAX_STEPS]
+                        ),
                         unsupported=_clean(parsed.unsupported),
                         model=self.model.name,
                         duration_s=time.monotonic() - started,
@@ -1046,6 +1068,24 @@ class LLMPlanner:
                 ),
             ]
         raise PlanningError(f"the planner model ({self.model.name}) gave no usable plan: {last_problem}")
+
+
+def _once(steps: Iterable[PlannedStep]) -> tuple[PlannedStep, ...]:
+    """The steps without an exact repeat (a check turned into the install it sat beside)."""
+    kept: list[PlannedStep] = []
+    for step in steps:
+        if not any(step.tool == k.tool and step.args == k.args for k in kept):
+            kept.append(step)
+    return tuple(kept)
+
+
+def _install_not_check(tool: str, said: str) -> str:
+    """Found on the laptop: the 4B model kept planning "can you install a video editor" as packages.check
+    (a question) after being told twice. Asking to install is packages.install — the same name, still
+    grounded in the user's words and still asked about (high risk)."""
+    if tool == "packages.check" and _INSTALL_WORDS.search(said) and not _IS_INSTALLED.search(said):
+        return "packages.install"
+    return tool
 
 
 # Where a request has several parts: "make a folder …, open Claude Code there and tell it …".
