@@ -176,3 +176,20 @@ def test_used_up_or_wait() -> None:
     assert bench.used_up("answered 429: quota retry in 76533s")
     assert not bench.used_up("answered 429: quota retry in 20s")
     assert bench.wait_for_limit("answered 429: quota retry in 20s") == 21.0
+
+
+def test_an_answer_is_scored_by_the_choice_sonu_would_make() -> None:
+    # Found on real hardware: "Namaste John." for "The first one" has no key word and no choice;
+    # "No. 3" has the key word wrong in spelling but is still the third option.
+    lines = [bench.BY_ID[i] for i in ("ans-first", "ans-three", "ans-none", "ans-second")]
+    expected = {line.id: line.text for line in lines}
+    heard = {
+        "ans-first": ("Namaste John.", 0.4),
+        "ans-three": ("No. 3", 0.3),
+        "ans-none": ("None of them.", 0.3),
+        "ans-second": ("The first one.", 0.3),  # heard clearly, but the wrong one
+    }
+    result = bench.score("turbo", lines, expected, heard)
+    assert (result.chosen, result.chosen_of) == (2, 4)
+    assert result.wrong_choices == [("ans-first", "Namaste John."), ("ans-second", "The first one.")]
+    assert bench.as_json([result])[0]["choices_understood"] == 0.5
