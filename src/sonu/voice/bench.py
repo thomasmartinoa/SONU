@@ -43,6 +43,11 @@ class Line:
     options: tuple[str, ...] = ()  # answers: the choices SONU would be offering (go to the model as a hint)
 
 
+# What each answer to a list means: the option's place (0 = the first), or None for "none".
+CHOSEN: dict[str, int | None] = {
+    "ans-first": 0, "ans-second": 1, "ans-three": 2, "ans-last": 2, "ans-downloads": 0, "ans-none": None,
+}  # fmt: skip
+
 GROUPS = {
     "names": "Names SONU must get exactly (apps, packages, files, songs)",
     "numbers": "Numbers",
@@ -376,6 +381,9 @@ class Score:
     misses: list[tuple[str, str, list[str]]] = field(default_factory=list)  # (line id, heard, missed keys)
     audio_seconds: float = 0.0
     with_sonu: Tally = field(default_factory=Tally)  # after SONU matched names by sound (D107)
+    chosen: int = 0  # answers to a list that SONU turned into the right choice (D109) ...
+    chosen_of: int = 0  # ... out of the answers recorded
+    wrong_choices: list[tuple[str, str]] = field(default_factory=list)  # (line id, heard)
 
 
 def score(
@@ -395,7 +403,25 @@ def score(
             result.with_sonu.add(line, expected[line.id], meant(text), seconds)
         if missed:
             result.misses.append((line.id, text, missed))
+        if line.id in CHOSEN:
+            result.chosen_of += 1
+            if _chose(line, text) == CHOSEN[line.id]:
+                result.chosen += 1
+            else:
+                result.wrong_choices.append((line.id, text))
     return result
+
+
+def _chose(line: Line, heard: str) -> int | str | None:
+    """The place SONU would pick for ``heard`` (None: "none"; "?": it would ask again). A wrong pick is
+    worse than a missed word: it is counted the same, but listed on its own."""
+    from sonu.tools.base import Choice
+    from sonu.voice.choosing import pick
+
+    picked = pick(heard, [Choice(label, str(i)) for i, label in enumerate(line.options)])
+    if picked.kind == "pick":
+        return int(picked.value or 0)
+    return None if picked.kind == "none" else "?"
 
 
 # What a request costs (vendor prices, 2026-10): per second of audio, and the currency.
@@ -451,6 +477,7 @@ def as_json(scores: Iterable[Score]) -> list[dict[str, Any]]:
                 "key_words": s.all.key_score,
                 "key_words_with_sonu": s.with_sonu.key_score,
                 "answers": s.groups["answers"].key_score if "answers" in s.groups else None,
+                "choices_understood": s.chosen / s.chosen_of if s.chosen_of else None,
                 "wer": s.all.wer,
                 "seconds": s.all.mean_seconds,
                 "lines": s.all.lines,

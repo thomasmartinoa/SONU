@@ -347,6 +347,7 @@ def _report(ctx: typer.Context, folder: Path, names: list[str], *, misses: bool)
     table.add_column("heard", justify="right")
     table.add_column("KEY WORDS", justify="right", style="bold")
     table.add_column("+ SONU", justify="right")
+    table.add_column("CHOICES", justify="right")
     for group in ("names", "numbers", "answers", "talk", "wake"):
         table.add_column(group, justify="right")
     table.add_column("WER", justify="right")
@@ -359,6 +360,7 @@ def _report(ctx: typer.Context, folder: Path, names: list[str], *, misses: bool)
             f"{s.all.lines}/{total}",
             _pct(s.all.key_score),
             _pct(s.with_sonu.key_score),
+            _pct(s.chosen / s.chosen_of if s.chosen_of else None),
             *(
                 _pct(s.groups[g].key_score) if g in s.groups else "–"
                 for g in ("names", "numbers", "answers", "phrasing", "wake")
@@ -372,6 +374,7 @@ def _report(ctx: typer.Context, folder: Path, names: list[str], *, misses: bool)
     console.print(
         "KEY WORDS: the app / number / package / file / song in each line, exact — the main score. "
         "+ SONU: after SONU matched names by sound to your apps and projects. "
+        'CHOICES: answers to a list ("the second one") that SONU turns into the right choice. '
         "talk: your way of talking · WER: word errors · s: seconds per request · per 1000: requests' cost"
     )
     if misses:
