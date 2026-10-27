@@ -62,6 +62,8 @@ class FakeOllama:
             if body.get("model") not in self.models:
                 return httpx.Response(404, json={"error": f"model '{body.get('model')}' not found"})
             self.keep_alive[body["model"]] = str(body.get("keep_alive"))
+            if str(body.get("keep_alive")) == "0":  # unloaded, as the real one does
+                self.loaded = [m for m in self.loaded if m["name"] != body["model"]]
             return httpx.Response(200, json={"model": body["model"], "response": "", "done": True})
         if request.method == "POST" and path == "/api/me":
             if self.cloud_user is None:

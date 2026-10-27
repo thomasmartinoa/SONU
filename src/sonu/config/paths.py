@@ -59,6 +59,11 @@ class SonuPaths:
     def audit_file(self) -> Path:
         return self.audit_dir / "audit.jsonl"
 
+    @property
+    def off_file(self) -> Path:
+        """There while the user has turned SONU off (`sonu off`): no request runs until `sonu on`."""
+        return self.state_dir / "off"
+
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> SonuPaths:
         env = os.environ if env is None else env

@@ -13,6 +13,7 @@ from rich.markup import escape
 from rich.prompt import Confirm, Prompt
 from rich.status import Status
 
+from sonu.cli.daemon_cmd import stop_if_off
 from sonu.cli.state import AppState, env_snapshot, get_state
 from sonu.core.engine import Chooser, Confirmer, ConfirmRequest, Observer
 from sonu.core.planning import Plan
@@ -201,6 +202,7 @@ def run_request(
     confirm_mode: ConfirmMode,
 ) -> None:
     state.require_valid_config()
+    stop_if_off(state, desktop=notify)  # turned off: the model isn't loaded for this either
     console = state.console
     confirmer, how = pick_confirmer(confirm_mode, state.err)
     chooser = pick_chooser(confirm_mode, state.err)
@@ -289,6 +291,7 @@ def prompt(
     Made for keybinds, e.g. in Hyprland: hl.bind("XF86Launch1", hl.dsp.exec_cmd("sonu prompt"))
     """
     state = get_state(ctx)
+    stop_if_off(state, desktop=True)
     picker = Picker.detect()
     if picker is None:
         state.err.print("[red]✖ `sonu prompt` needs rofi, fuzzel or wofi[/]")
