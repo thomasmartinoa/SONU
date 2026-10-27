@@ -40,6 +40,12 @@ missing.
 - [ ] "delete <a file you don't need>" from the key: the question appears with **Yes / No** buttons on the HUD
 - [ ] switch the rice's theme: the HUD follows its colours
 
+## On / off (#124)
+
+- [ ] Control Center → the switch next to "SONU" (top left): off → it says "off · nothing loaded"; `ollama ps` is empty
+- [ ] while off, press the SONU key: a notification says "SONU is off"; log out and back in: SONU stays off
+- [ ] the switch on again (or `sonu on`): "on · starts at login"; the SONU key answers after a few seconds
+
 ## Try by voice (or typed)
 
 ### Phase 2: hearing you right (#115–#122)

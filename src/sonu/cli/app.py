@@ -45,6 +45,8 @@ app.command("ask")(ask_cmd.ask)
 app.command("prompt")(ask_cmd.prompt)
 app.command("eval")(eval_cmd.eval_cmd)
 app.command("control")(control_cmd.control)
+app.command("on")(daemon_cmd.turn_on)
+app.command("off")(daemon_cmd.turn_off)
 app.add_typer(config_cmd.app, name="config")
 app.add_typer(settings_cmd.app, name="settings")
 app.add_typer(data_cmd.memory_app, name="memory")
@@ -130,6 +132,8 @@ COMMANDS = {
     "journal",
     "mcp",
     "browser",
+    "on",
+    "off",
 }
 _GLOBAL_FLAGS = {"-v", "-vv", "-vvv", "--verbose"}
 # `sonu ask` options that may come before a bare request: `sonu --dry-run open kitty`.
@@ -163,8 +167,9 @@ def rewrite_bare_request(args: list[str]) -> list[str]:
 
 
 @app.command("listen")
-def listen() -> None:
+def listen(ctx: typer.Context) -> None:
     """Talk to SONU (the SONU key runs this). Needs the daemon: it keeps the voice models loaded."""
+    daemon_cmd.stop_if_off(get_state(ctx), desktop=not sys.stdout.isatty())
     typer.echo("✖ Voice needs the SONU daemon: `sonu daemon install`, then `sonu voice setup`", err=True)
     raise typer.Exit(code=1)
 

@@ -4,6 +4,7 @@
 // a change that loosens privacy or safety asked here first, every change audited, sonud restarted once idle.
 // "Your data" shows what SONU keeps about the user (memory, conversations, the journal, the audit log) through
 // `sonu memory / conversations / journal / audit`; deleting is always asked here first.
+// The switch at the top (D110) is `sonu on` / `sonu off`: off stops sonud, unloads its model and keeps it off at login.
 // Colours, corners and font come from the rice's colors.json, live.
 import QtQuick
 import QtQuick.Layouts
@@ -31,6 +32,8 @@ ShellRoot {
     property string status: ""
     property bool busy: false
     property var asking: null        // { title, text, yes, act } waiting for "are you sure?"
+    property var power: null         // `sonu daemon status --json`: { on, installed, running, at_login }
+    readonly property bool sonuOn: root.power !== null && root.power.on && root.power.running
 
     // the rice's palette (Orrery): the same file its own shell watches
     property var c: ({
@@ -86,7 +89,11 @@ ShellRoot {
     function sure(title, text, yes, command) {  // deleting: always asked here first
         root.asking = { title: title, text: text, yes: yes, act: () => root.run(command, "Working…") }
     }
-    function reload() { lister.running = true; modeReader.running = true; providerLister.running = true }
+    function reload() { lister.running = true; modeReader.running = true; providerLister.running = true; powerReader.running = true }
+    function toggleSonu() {  // one switch: now and at login (D110)
+        if (root.busy || root.power === null) return
+        run([root.sonu, root.sonuOn ? "off" : "on"], root.sonuOn ? "Turning SONU off…" : "Turning SONU on…")
+    }
     function choosePreset(name) {  // more cloud is asked first; going local isn't (D99)
         if (name === root.mode) return
         const command = [root.sonu, "settings", "preset", name, "--yes"]
@@ -129,6 +136,12 @@ ShellRoot {
             }
         }
         stderr: StdioCollector { onStreamFinished: if (text.trim()) root.status = text.trim() }
+    }
+    Process {
+        id: powerReader
+        command: [root.sonu, "daemon", "status", "--json"]
+        running: true
+        stdout: StdioCollector { onStreamFinished: { try { root.power = JSON.parse(text) } catch (e) {} } }
     }
     Process {
         id: modeReader
@@ -265,10 +278,43 @@ ShellRoot {
                 ColumnLayout {
                     anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
                     spacing: 6
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "SONU"
+                            color: root.c.accentBright; font.family: root.font; font.pixelSize: 18; font.bold: true
+                        }
+                        Item { Layout.fillWidth: true }
+                        // on / off: now and at login (D110)
+                        Rectangle {
+                            implicitWidth: 40
+                            implicitHeight: 22
+                            radius: height / 2
+                            color: root.sonuOn ? root.c.accentMid : root.c.bg3
+                            border.width: 1
+                            border.color: root.c.border
+                            opacity: root.busy || root.power === null ? 0.5 : 1
+                            Rectangle {
+                                width: 16; height: 16; radius: 8
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: root.sonuOn ? parent.width - width - 3 : 3
+                                color: root.sonuOn ? root.c.bg0 : root.c.accentDim
+                                Behavior on x { NumberAnimation { duration: 120 } }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.toggleSonu()
+                            }
+                        }
+                    }
                     Text {
-                        text: "SONU"
-                        color: root.c.accentBright; font.family: root.font; font.pixelSize: 18; font.bold: true
+                        Layout.fillWidth: true
                         Layout.bottomMargin: 10
+                        text: root.power === null ? ""
+                            : root.sonuOn ? (root.power.at_login ? "on · starts at login" : "on · not at login")
+                            : "off · nothing loaded"
+                        color: root.c.accentDim; font.family: root.font; font.pixelSize: 10
                     }
                     Repeater {
                         model: root.groups

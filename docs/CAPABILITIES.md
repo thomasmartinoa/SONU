@@ -118,6 +118,7 @@ works:
 | Ability | State | How |
 |---|---|---|
 | Faster replies: the model stays loaded, `sonu` hands requests to the daemon (~0.8 s instead of 1.6–2.5 s) | ✅ M2 part 1 | `sonud` (`sonu daemon install`), a thin client |
+| One switch: SONU off (stopped, its models unloaded, not at login) or on (now and at login) | 🧪 #124 | `sonu off` / `sonu on`, the switch in the Control Center (D110) |
 | Natural replies after everything ("Kitty's up on workspace 2.", "I couldn't find a recipes folder…"), small talk, one conversation ("move **it** to 4", "play it again") | ✅ M2 part 2 | a reply written from the verified results and checked in code; the last few turns go to the planner |
 | "Remember …": what an app name means ("when I say editor I mean Visual Studio Code"), your name ("call me …"), notes; "what do you remember?", "forget …" | ✅ M2 part 3 | a local memory file; aliases feed the app resolver |
 | Conversations remembered: "what did we talk about yesterday?", "what did I ask you this morning?", "what did you tell me about kestrels?", "forget our conversations" | 🧪 #77 | your words and what SONU told you, kept 30 days on the laptop (0600); read back privately; forgetting asks ([D86](DECISIONS.md)) |

@@ -36,6 +36,8 @@ _COMMANDS = {
     "journal",
     "mcp",
     "browser",
+    "on",
+    "off",
 }
 _FLAGS = {"--dry-run", "--json", "--notify", "-v", "-vv", "-vvv", "--verbose"}
 _COLOURS = {
