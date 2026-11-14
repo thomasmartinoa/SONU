@@ -111,7 +111,9 @@ def _pick_folder(ctx: ToolContext, place: str | None, choice: str | None) -> Pat
     found = find_folders(place, home)
     if not found:
         return ToolOutcome(
-            StepStatus.FAILED, f"I couldn't find a folder called '{place}' in your home folder"
+            StepStatus.FAILED,
+            f"I couldn't find a folder called '{place}' in your home folder",
+            data={"unresolved": place},  # a name that matched nothing: a misheard one? (D111)
         )
     if len(found) > 1:
         options = tuple(Choice(_where(ctx, path), str(path)) for path in found[:6])

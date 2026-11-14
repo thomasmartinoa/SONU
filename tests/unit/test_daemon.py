@@ -123,6 +123,11 @@ async def rig(
         "stop listening for hey sonu": WAKE_OFF,
         "Listen for Hey Sonu": WAKE_ON,
         "which kitty?": {"kind": "ask", "message": "Did you mean kitty or Kitty URL Launcher?", "steps": []},
+        "open zorbulax": {
+            "kind": "steps",
+            "message": "Opening Zorbulax.",
+            "steps": [{"tool": "apps.launch", "args": {"app": "zorbulax"}}],
+        },
         "open vs code": {
             "kind": "steps",
             "message": "Opening VS Code.",
@@ -882,3 +887,62 @@ async def test_a_spoken_answer_closes_the_buttons(rig: Rig) -> None:
     choose = rig.daemon._voice_chooser(session, buttons, buttons=True)
     picked = await choose(Choices("Which one?", (Choice("Apple", "a"), Choice("Banana", "b"))))
     assert picked == "b" and waiting.is_set() and cancelled.is_set()
+
+
+# ---------------------------------------------------------------- a second opinion on a name (D111)
+class SecondEars:
+    def __init__(self, heard: str) -> None:
+        self.heard, self.seen = heard, list[str]()
+
+    def transcribe(self, pcm16: bytes, hint: str = "") -> str:
+        self.seen.append(hint)
+        return self.heard
+
+
+@pytest.mark.anyio
+async def test_a_name_that_matched_nothing_is_heard_again_by_gemini(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The first step failed ("'zorbulax' is not installed"), so nothing ran: the same recording goes to the
+    second opinion and the request is tried again with what it heard."""
+    from sonu.daemon import server
+
+    second = SecondEars("open kitty on 2")
+    monkeypatch.setattr(server, "second_opinion_ears", lambda settings, audit, *a, **k: second)
+    voice = voice_rig(rig, "open zorbulax")
+    _, out = await rig.run("listen")
+    lines = out.splitlines()
+    assert "You: open zorbulax" in lines and "You: open kitty on 2" in lines
+    assert "✔ Opened kitty on workspace 2" in out
+    assert len(second.seen) == 1 and second.seen[0].startswith("Hey Sonu.")  # SONU's app names went with it
+    assert "BuildFlow" not in second.seen[0] and "dev_works" not in second.seen[0]  # never folder names
+    assert rig.daemon.audit is not None
+    assert [r.kind for r in rig.daemon.audit.records() if r.kind == "voice.second_opinion"] == [
+        "voice.second_opinion"
+    ]
+    for _ in range(40):
+        if voice.said[-1:] == ["Done, kitty's on 2."]:
+            break
+        await asyncio.sleep(0.05)
+    assert voice.said[-1] == "Done, kitty's on 2."
+
+
+@pytest.mark.anyio
+async def test_the_second_opinion_is_only_for_a_name_nothing_matched(
+    rig: Rig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sonu.daemon import server
+
+    second = SecondEars("Open zorbulax.")
+    monkeypatch.setattr(server, "second_opinion_ears", lambda settings, audit, *a, **k: second)
+    voice_rig(rig, "open kitty on 2")  # worked: nothing to listen to again
+    await rig.run("listen")
+    assert second.seen == []
+    voice_rig(rig, "open zorbulax")  # failed, and Gemini heard the same words: tried once, not twice
+    _, out = await rig.run("listen")
+    assert len(second.seen) == 1 and out.count("You:") == 1
+    off = lambda settings, audit, *a, **k: None  # noqa: E731 — not turned on, or no key: nothing is sent
+    monkeypatch.setattr(server, "second_opinion_ears", off)
+    voice_rig(rig, "open zorbulax")
+    _, out = await rig.run("listen")
+    assert len(second.seen) == 1 and out.count("You:") == 1

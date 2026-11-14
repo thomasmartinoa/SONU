@@ -88,7 +88,11 @@ def resolve_app(app: str, ctx: ToolContext) -> AppEntry | ToolOutcome:
             ),
         )
     if resolution.entry is None:
-        return ToolOutcome(StepStatus.FAILED, f"'{app}' is not installed ({resolution.reason})")
+        return ToolOutcome(
+            StepStatus.FAILED,
+            f"'{app}' is not installed ({resolution.reason})",
+            data={"unresolved": app},  # a name that matched nothing: a misheard one? (D111)
+        )
     return resolution.entry
 
 

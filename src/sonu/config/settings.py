@@ -134,6 +134,11 @@ class VoiceSettings(_Section):
     # Installing by voice: say the password as well as type it (off: only type it). SONU enters it into its
     # own install window and never shows, logs or keeps it — but anyone nearby hears it.
     password_by_voice: bool = False
+    # A second opinion (D111): when a spoken request fails at its first step because a name matched nothing
+    # ("'Cloud Code' is not installed"), the same recording goes to Gemini 3.5 Transcribe, which knows names
+    # better, and the request is tried again with what it heard. Needs a Gemini key, [privacy] cloud =
+    # "allow" and "hearing" in [cloud] use_for. Only requests: never "Hey Sonu", a choice or a password.
+    second_opinion: bool = False
 
 
 class JournalSettings(_Section):
@@ -433,6 +438,7 @@ DEFAULT_CONFIG_TEMPLATE = """\
 # follow_up_s = 6.0              # keep listening after a reply for the next request (0: off)
 # barge_in = true                # talk over SONU to stop it (a PipeWire echo canceller)
 # password_by_voice = false      # installs by voice: say the password too (anyone nearby hears it)
+# second_opinion = false         # a name that matched nothing: Gemini listens again (needs cloud hearing)
 
 [journal]
 # Which window had the focus and when, kept on this computer only ("what was I doing yesterday?").

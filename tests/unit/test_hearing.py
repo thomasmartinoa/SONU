@@ -193,3 +193,39 @@ def test_a_spoken_password_never_goes_to_the_cloud() -> None:
     assert asyncio.run(session.hear()) == "open kitty"  # a request: the cloud hears it
     assert asyncio.run(session.hear_secret("Say your password.")) == "heardonthislaptop"  # a password: never
     assert len(cloud_heard) == 1 and len(local.heard) == 1
+
+
+def test_the_second_opinion_needs_the_setting_cloud_hearing_and_a_key(tmp_path: Any) -> None:
+    from sonu.llm.providers import key_file
+    from sonu.voice.cloud_ears import second_opinion_ears
+
+    allowed = {"privacy": PrivacySettings(cloud="allow"), "cloud": CloudSettings(use_for=["hearing"])}
+    asked = Settings(voice=VoiceSettings(second_opinion=True)).model_copy(update=allowed)
+    key = {"HOME": str(tmp_path), "PATH": ""}  # the key is a private file, as on the owner's laptop
+    stored = key_file("gemini", key)
+    assert stored is not None
+    stored.parent.mkdir(parents=True)
+    stored.write_text("sk")
+    heard = second_opinion_ears(asked, None, env=key)
+    assert heard is not None and heard.model == "gemini-3.5-transcribe"
+    assert second_opinion_ears(Settings().model_copy(update=allowed), None, env=key) is None  # not turned on
+    assert second_opinion_ears(Settings(voice=VoiceSettings(second_opinion=True)), None, env=key) is None
+    assert second_opinion_ears(asked, None, env={"HOME": str(tmp_path / "nobody"), "PATH": ""}) is None
+
+
+def test_the_second_opinion_only_listens_after_a_name_matched_nothing() -> None:
+    from sonu.core.report import StepRecord, TaskReport
+    from sonu.tools.base import StepStatus, ToolOutcome
+    from sonu.voice.second_opinion import unmatched_name, worth_trying_again
+
+    def report(status: StepStatus, **data: str) -> TaskReport:
+        outcome = ToolOutcome(status, "x", data=data)
+        return TaskReport(request="r", steps=[StepRecord(0, "apps.launch", {}, "", outcome)])
+
+    assert unmatched_name(report(StepStatus.FAILED, unresolved="vs code")) == "vs code"
+    assert unmatched_name(report(StepStatus.FAILED)) is None  # failed for another reason
+    assert unmatched_name(report(StepStatus.DONE, unresolved="x")) is None
+    assert unmatched_name(TaskReport(request="r", error="timed out")) is None
+    assert worth_trying_again("open Cloud Code", "Open Claude Code.")
+    assert not worth_trying_again("open vs code", "Open VS code.")  # the same words
+    assert not worth_trying_again("open vs code", "")

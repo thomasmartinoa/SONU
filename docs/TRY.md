@@ -53,6 +53,10 @@ missing.
 - [ ] "is yay installed?" · "do I have obs?"
 - [ ] By voice: "install a video editor" (or any request with several matches) — SONU says the choices; answer "the second
   one", "number one", "the last one" or "none"; the HUD's buttons work too
+- [ ] **Second opinion** (D111, off by default): add `second_opinion = true` under `[voice]` (or the Control Center →
+  Voice), with a Gemini key and `hearing` in `[cloud] use_for`; `systemctl --user restart sonud`. Then say a name
+  Whisper gets wrong that matches nothing ("open <an app you don't have>" works too): the first try fails, then
+  the HUD shows what Gemini heard and tries once more. `sonu audit tail` shows `cloud.send` and `voice.second_opinion`.
 
 ### Projects and terminals (#52, #53)
 - [ ] "open my SONU project" · "open planner.py in SONU at line 40"

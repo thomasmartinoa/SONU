@@ -81,7 +81,7 @@ from sonu.ui.desktop_ui import Picker
 from sonu.ui.hud import Hud, hud_chooser, hud_confirmer, hud_folder
 from sonu.voice.audio import RECORD_ARGV, Endpointing
 from sonu.voice.choosing import Picked, hint_for, pick, spoken_list
-from sonu.voice.cloud_ears import request_ears
+from sonu.voice.cloud_ears import CloudHearingError, request_ears, second_opinion_ears
 from sonu.voice.cloud_voice import cloud_voice
 from sonu.voice.echo import SINK as ECHO_SINK
 from sonu.voice.echo import EchoCanceller
@@ -96,6 +96,7 @@ from sonu.voice.engines import (
 )
 from sonu.voice.interrupt import user_talked
 from sonu.voice.meant import known_names
+from sonu.voice.second_opinion import unmatched_name, worth_trying_again
 from sonu.voice.session import VoiceSession
 from sonu.voice.speech import shorten_list
 from sonu.voice.wake import LEARNED_FILE, WakeListener, after_wake_word, fix_name, load_learned
@@ -707,6 +708,7 @@ class Daemon:
         if self.settings.voice.password_by_voice:  # D57: this spoken request's install may ask
             engine.ctx.ask_secret = voice.hear_secret
         text = str(request.get("heard") or "")  # "Hey Sonu, open kitty": already heard
+        voice.last_audio = None  # (a "Hey Sonu" request has no recording to listen to again)
         if not text:
             if self.settings.voice.greet:
                 await voice.greet(self._user_name())
@@ -719,11 +721,21 @@ class Daemon:
             return
         while True:
             speaks = self.settings.voice.speak_replies and not request.get("dry_run")
+            heard_audio = voice.last_audio  # kept for a second opinion; the run may listen for answers
             report = await self._run(
                 engine, session, relay, text, confirm, choose, request, voice=voice if speaks else None
             )
             if report is None:
                 return
+            better = await self._second_opinion(engine, voice, text, report, heard_audio)
+            if better is not None:  # a name matched nothing: Gemini heard it another way (D111)
+                await session.send({"type": "heard", "text": better})
+                text = better
+                report = await self._run(
+                    engine, session, relay, text, confirm, choose, request, voice=voice if speaks else None
+                )
+                if report is None:
+                    return
             follow_up = self.settings.voice.follow_up_s > 0 and not request.get("dry_run")
             await session.send({**final_message(report), "more": follow_up})
             if self.settings.voice.speak_replies:
@@ -736,6 +748,30 @@ class Daemon:
             if follow is None:
                 return
             text = follow
+
+    async def _second_opinion(
+        self, engine: Engine, voice: VoiceSession, text: str, report: TaskReport, audio: bytes | None
+    ) -> str | None:
+        """A spoken request stopped at its first step because a name matched nothing: Gemini 3.5 Transcribe
+        listens to that recording again (opt-in, audited as a cloud send), and what it heard is matched by
+        sound like any request (D111). The new words, or None to keep the first answer."""
+        if audio is None or unmatched_name(report) is None:
+            return None
+        ears = second_opinion_ears(self.settings, self.audit)
+        if ears is None:
+            return None
+        try:  # the same app names as any cloud hearing (D96), never the user's folder or file names
+            heard = await asyncio.to_thread(ears.transcribe, audio, voice.hint)
+        except CloudHearingError as exc:
+            logger.info("second opinion: %s — keeping what was heard", exc)
+            return None
+        better = self._meant(engine, after_wake_word(fix_name(heard)) or fix_name(heard))
+        if not worth_trying_again(text, better):
+            return None
+        if self.audit is not None:
+            with contextlib.suppress(OSError, AuditError):
+                self.audit.append("voice.second_opinion", {"heard": text, "then": better})
+        return better
 
     def _meant(self, engine: Engine, heard: str) -> str:
         """The names the user meant, matched by sound against what exists ("Cloud Code" → Claude Code,

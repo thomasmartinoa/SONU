@@ -282,3 +282,25 @@ def request_ears(
     key = lookup_key(provider, os.environ if env is None else env)
     cloud = CloudEars(provider, key, settings.voice.hearing_model, audit=audit, transport=transport)
     return FallbackEars(cloud, local)
+
+
+SECOND_OPINION_MODEL = "gemini-3.5-transcribe"
+
+
+def second_opinion_ears(
+    settings: Settings,
+    audit: AuditLog | None,
+    env: Mapping[str, str] | None = None,
+    transport: httpx.BaseTransport | None = None,
+) -> CloudEars | None:
+    """Who listens again when a name matched nothing (D111): Gemini 3.5 Transcribe, when the user turned the
+    second opinion on, allowed cloud "hearing", and has a Gemini key. None otherwise — and nothing is sent."""
+    if not settings.voice.second_opinion or not cloud_allowed(settings, "hearing"):
+        return None
+    from sonu.runtime import provider_for
+
+    provider = provider_for(settings, "gemini")
+    key = lookup_key(provider, os.environ if env is None else env)
+    if key is None:
+        return None
+    return CloudEars(provider, key, SECOND_OPINION_MODEL, audit=audit, transport=transport)

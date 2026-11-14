@@ -70,6 +70,9 @@ class VoiceSession:
     # Who hears the user's requests (D96): a cloud service, when chosen and allowed. None: the local ears.
     # "Hey Sonu", talking over SONU and a spoken password always use the local ears.
     request_ears: Any = None
+    # The last request's recording, kept in memory only until the next one: the second opinion (D111) listens
+    # to it again when a name matched nothing. Never written anywhere; a password is never kept here.
+    last_audio: bytes | None = field(default=None, init=False)
     # SONU's voice from the cloud (D98), when chosen and allowed. None: Kokoro. say(local=True) always Kokoro.
     cloud_voice: Any = None
 
@@ -79,12 +82,14 @@ class VoiceSession:
         """Record until the user stops talking; their words ("" if nothing was said). ``hint``: instead
         of the usual one ("" for a password, so app names can't bend it). ``local``: never the cloud."""
         utterance = await self.recorder(endpointing, self.detector)
+        self.last_audio = None
         if not utterance.spoke:
             return ""
+        audio = utterance.audio()
+        if not local:
+            self.last_audio = audio
         ears = self.ears if local or self.request_ears is None else self.request_ears
-        return await asyncio.to_thread(
-            ears.transcribe, utterance.audio(), self.hint if hint is None else hint
-        )
+        return await asyncio.to_thread(ears.transcribe, audio, self.hint if hint is None else hint)
 
     async def hear_secret(self, prompt: str) -> str | None:
         """Ask for a password and hear it (D57): nothing but the caller ever gets the words — not the

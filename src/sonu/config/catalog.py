@@ -240,6 +240,15 @@ CATALOG: tuple[Entry, ...] = (
         "bool",
         loosens=(True,),
     ),
+    Entry(
+        "voice.second_opinion",
+        "Voice",
+        "Second opinion on names",
+        "When a name you said matches nothing on this laptop, Gemini listens to that one recording again "
+        "(needs a Gemini key and cloud hearing allowed).",
+        "bool",
+        loosens=(True,),
+    ),
     # ---------------------------------------------------------------- Proactive
     Entry(
         "heads_up.enabled",
