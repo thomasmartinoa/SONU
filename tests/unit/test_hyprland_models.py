@@ -58,3 +58,14 @@ def test_version_parsing() -> None:
     assert version.display == "0.56.2"
     assert HyprlandVersion.model_validate({"tag": "v0.54.1-b"}).parsed == (0, 54, 1)
     assert HyprlandVersion.model_validate({"tag": "weird"}).parsed is None
+
+
+def test_monitor_with_no_special_workspace_id() -> None:
+    # found on real hardware: Hyprland 0.57.2 sends no "id" for an unused special workspace,
+    # which made every request fail with "unexpected shape for 'monitors': Field required".
+    raw = make_monitor("eDP-1", active_workspace=2)
+    raw["specialWorkspace"] = {"address": "", "type": "", "name": ""}
+    assert Monitor.model_validate(raw).special_workspace is None
+    raw["specialWorkspace"] = {"id": -98, "name": "special:magic"}
+    special = Monitor.model_validate(raw).special_workspace
+    assert special is not None and special.id == -98

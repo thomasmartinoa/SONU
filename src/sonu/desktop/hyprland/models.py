@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 ConfigProvider = Literal["lua", "hyprlang"]
 
@@ -92,6 +92,14 @@ class Monitor(_HyprModel):
     scale: float
     focused: bool
     disabled: bool = False
+
+    @field_validator("special_workspace", mode="before")
+    @classmethod
+    def _no_special_workspace(cls, value: object) -> object:
+        # Hyprland 0.57 sends {"address": "", "type": "", "name": ""} (no id) when none is open.
+        if isinstance(value, dict) and "id" not in value:
+            return None
+        return value
 
 
 _VERSION_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
