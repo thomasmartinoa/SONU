@@ -70,11 +70,11 @@ recordings become the test set for phase 7's model of the owner's voice.
 
 The other ✖ from the test page, grouped. Each becomes a regression test ("found on real hardware") and a fix.
 
-- **Windows:** "move this window to workspace 2" moved it but didn't follow it there; "what's open?" lists every
+- **Windows:** ✅ (D112) "move this window to workspace 2" moved it but didn't follow it there; "what's open?" lists every
   workspace even when asked about the current one.
 - **The rice:** "switch to the tokyo night theme" cycles themes instead of choosing that one; "change my
   wallpaper" does nothing (read the rice's real Quickshell IPC names first).
-- **The laptop:** "why is my fan so loud?" names busy programs but not the temperature and fan speed (the
+- **The laptop:** ✅ (checked 2026-11-14) "why is my fan so loud?" names busy programs but not the temperature and fan speed (the
   "slow" answer already has them).
 - **Files — search the whole PC,** not only home: mounted drives (`/mnt/storage`, Games, E_files…), asked first
   for folders outside home. "open claude code in sonu-test" opened the SONU project; another time it made a new

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, cast
@@ -10,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from sonu.desktop.apps.classes import window_matches
 from sonu.desktop.apps.entry import AppEntry
+from sonu.desktop.apps.resolver import normalize
 from sonu.desktop.hyprland.dialect import WorkspaceTarget
 from sonu.desktop.hyprland.errors import HyprlandError
 from sonu.desktop.hyprland.models import Window
@@ -385,6 +387,18 @@ async def _move_and_verify(
 
 
 # ---------------------------------------------------------------------------- windows.move
+# "move this window to 2": the user is looking at it, so the view goes with it (found on real hardware: it
+# moved and the user stayed behind). Their words decide, not the model — and "stay" / "in the background"
+# keep the old quiet move.
+_THIS_WINDOW = re.compile(
+    r"\b(?:this|the focused|the current|my current)\s+(?:window|one)\b|\b(?:move|put|send)\s+this\b"
+)
+_STAY_BEHIND = re.compile(
+    r"\b(?:stay|without (?:going|following|switching)|(?:don'?t|do not) (?:go|follow|switch)"
+    r"|in the background|silently|quietly)\b"
+)
+
+
 class MoveArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -396,7 +410,8 @@ class MoveArgs(BaseModel):
 class MoveWindow(Tool):
     name = "windows.move"
     description = (
-        "Move an open window to another workspace ('move/put/send X to N'); the user stays where they are."
+        "Move an open window to another workspace ('move/put/send X to N'); the user stays where they are, "
+        "except for 'this window', which they follow."
     )
     risk = Risk.LOW
     effects = frozenset({Effect.WINDOW_MOVE})
@@ -416,23 +431,48 @@ class MoveWindow(Tool):
         if isinstance(windows, ToolOutcome):
             return windows
         labels = ", ".join(window_label(w) for w in windows)
-        return Prepared(f"Move {labels} to workspace {target.value}", (windows, target))
+        words = normalize(ctx.request_text)
+        follow = (
+            a.window.focused
+            and not a.all
+            and len(windows) == 1
+            and bool(_THIS_WINDOW.search(words))
+            and not _STAY_BEHIND.search(words)
+        )
+        suffix = " and follow it" if follow else ""
+        return Prepared(f"Move {labels} to workspace {target.value}{suffix}", (windows, target, follow))
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
-        windows, target = cast(tuple[tuple[Window, ...], WorkspaceTarget], prepared.payload)
+        windows, target, follow = cast(tuple[tuple[Window, ...], WorkspaceTarget, bool], prepared.payload)
         checks: list[Check] = []
         for window in windows:
             moved = await _move_and_verify(ctx, window, target, window.window_class)
             if isinstance(moved, ToolOutcome):
                 return moved
             checks.extend(moved)
+        followed = follow and all(check.passed for check in checks)
+        if followed:  # the screen goes where the window went, and it has the focus
+            window = windows[0]
+            try:
+                await ctx.desktop.focus(window)
+            except HyprlandError as exc:
+                return failed_dispatch(f"follow {window.window_class}", exc)
+            ref = WindowRef.of(window)
+            _, snapshot = await ctx.desktop.wait_for(
+                lambda s: window_focused(s, ref, window.window_class).passed or None,
+                timeout_s=ctx.settings.verify.timeout_s,
+            )
+            checks += [
+                workspace_active(snapshot, target.value),
+                window_focused(snapshot, ref, window.window_class),
+            ]
         names = ", ".join(sorted({w.window_class for w in windows}))
         # Found on real hardware: a window already there was reported "Moved" (and the reply said so).
         already = all(w.workspace.name == target.value for w in windows)
         success = (
             f"{names} was already on workspace {target.value}"
             if already
-            else f"Moved {names} to workspace {target.value}"
+            else f"Moved {names} to workspace {target.value}" + (" and went there" if followed else "")
         )
         return outcome_from_checks(
             checks,
@@ -574,6 +614,10 @@ class CloseWindow(Tool):
 
 
 # ---------------------------------------------------------------------------- desktop.describe
+# The user saying "this workspace": only their own words decide, never the model.
+THIS_WORKSPACE = re.compile(r"\b(?:this|the current|my current|current) workspace\b")
+
+
 class DescribeArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -592,7 +636,13 @@ class DescribeDesktop(Tool):
 
     async def execute(self, prepared: Prepared, ctx: ToolContext) -> ToolOutcome:
         snapshot = await ctx.desktop.snapshot()
-        return ToolOutcome(StepStatus.DONE, snapshot.describe(include_titles=True), private=True)
+        # Found on real hardware: "what's open on this workspace?" listed every workspace. The user's words
+        # decide (as for saving a layout), not the model.
+        here = bool(THIS_WORKSPACE.search(normalize(ctx.request_text)))
+        only = snapshot.active_workspace_name if here else None
+        return ToolOutcome(
+            StepStatus.DONE, snapshot.describe(include_titles=True, only_workspace=only), private=True
+        )
 
 
 DEFAULT_TOOLS: tuple[Tool, ...] = (

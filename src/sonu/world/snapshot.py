@@ -85,9 +85,11 @@ class WorldSnapshot:
         include_titles: bool = True,
         max_title: int = 60,
         labels: Mapping[str, str] | None = None,
+        only_workspace: str | None = None,
     ) -> str:
         """Compact text for the planner. Titles are app/web content, so they're quoted as data.
 
+        ``only_workspace``: list that workspace's windows only.
         ``labels`` maps window classes to app names ("zen" → "Zen Browser, your default browser").
         """
         labels = labels or {}
@@ -99,9 +101,14 @@ class WorldSnapshot:
             lines.append(f"focused window: {active.window_class} on workspace {active.workspace.name}")
         by_ws: dict[str, list[Window]] = {}
         for window in self.windows:
-            by_ws.setdefault(window.workspace.name, []).append(window)
+            if only_workspace is None or window.workspace.name == only_workspace:
+                by_ws.setdefault(window.workspace.name, []).append(window)
         if not by_ws:
-            lines.append("no windows are open")
+            lines.append(
+                "no windows are open"
+                if only_workspace is None
+                else f"no windows are open on workspace {only_workspace}"
+            )
 
         def sort_key(name: str) -> tuple[int, int | str]:
             return (0, int(name)) if name.isdigit() else (1, name)

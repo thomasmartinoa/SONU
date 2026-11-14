@@ -319,6 +319,60 @@ async def test_move_focus_show_and_describe(harness: Harness) -> None:
 
 
 @pytest.mark.anyio
+async def test_describe_only_this_workspace_when_the_user_says_so(harness: Harness) -> None:
+    # found on real hardware: "what's open on this workspace?" listed every workspace
+    harness.fake.windows = [
+        make_window("0xa1", "zen", "GitHub", workspace_id=1, stable_id="a1"),
+        make_window("0xb2", "kitty", "zsh", workspace_id=2, stable_id="b2"),
+    ]
+    plan = {"r": steps_plan(("desktop.describe", {}))}
+    here = await harness.engine({"what's open on this workspace?": plan["r"]}).run(
+        "what's open on this workspace?", confirm=Confirmations(False)
+    )
+    text = here.steps[0].outcome.summary
+    assert "workspace 1: zen" in text and "kitty" not in text  # the active one only
+    everywhere = await harness.engine(plan).run("r", confirm=Confirmations(False))
+    assert "workspace 2: kitty" in everywhere.steps[0].outcome.summary  # "what's open?" still lists all
+    harness.fake.windows = [make_window("0xb2", "kitty", "zsh", workspace_id=2, stable_id="b2")]
+    empty = await harness.engine({"is this workspace empty?": plan["r"]}).run(
+        "is this workspace empty?", confirm=Confirmations(False)
+    )
+    assert "no windows are open on workspace 1" in empty.steps[0].outcome.summary
+
+
+@pytest.mark.anyio
+async def test_moving_this_window_follows_it_but_only_when_the_user_says_so(harness: Harness) -> None:
+    # found on real hardware: "move this window to workspace 2" moved it and left the user behind
+    def windows() -> None:
+        harness.fake.windows = [
+            make_window("0xa1", "zen", "GitHub", workspace_id=1, stable_id="a1"),
+            make_window("0xb2", "kitty", "zsh", workspace_id=1, stable_id="b2"),
+        ]
+        harness.fake.monitors[0]["activeWorkspace"] = {"id": 1, "name": "1"}
+        harness.fake.active_address = "0xa1"  # the browser has the focus
+
+    async def move(request: str, window: dict[str, Any]) -> Any:
+        windows()
+        return await harness.engine(
+            {request: steps_plan(("windows.move", {"window": window, "workspace": 2}))}
+        ).run(request, confirm=Confirmations(False))
+
+    followed = await move("move this window to workspace 2", {"focused": True})
+    assert followed.status == "done", followed.lines()
+    assert harness.fake.active_workspace == 2  # the screen went with it
+    assert "and went there" in followed.steps[0].outcome.summary
+    quiet: list[tuple[str, dict[str, Any]]] = [
+        ("move this window to workspace 2 and stay here", {"focused": True}),
+        ("move this window to workspace 2 in the background", {"focused": True}),
+        ("move zen to workspace 2", {"app": "zen"}),  # another window: the user stays where they are
+    ]
+    for request, window in quiet:
+        report = await move(request, window)
+        assert report.status == "done", report.lines()
+        assert harness.fake.active_workspace == 1, request
+
+
+@pytest.mark.anyio
 async def test_move_by_title(harness: Harness) -> None:
     harness.fake.windows = [
         make_window("0xa1", "zen", "GitHub - SONU", workspace_id=1, stable_id="a1"),

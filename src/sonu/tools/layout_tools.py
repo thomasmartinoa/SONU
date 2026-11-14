@@ -9,7 +9,6 @@ checked on its workspace. Restoring never closes anything.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -26,14 +25,12 @@ from sonu.desktop.hyprland.models import Window
 from sonu.integrations.kitty import TITLE_PREFIX
 from sonu.tools.base import Effect, Prepared, Risk, StepStatus, Tool, ToolOutcome
 from sonu.tools.context import ToolContext
-from sonu.tools.desktop_tools import _move_and_verify
+from sonu.tools.desktop_tools import THIS_WORKSPACE, _move_and_verify
 from sonu.tools.file_tools import home_relative, inside_home
 from sonu.tools.grounding import ungrounded_words
 from sonu.tools.project_tools import TERMINAL_FOLDER, shell_started_in, terminal_argv
 from sonu.verify.checks import Check
 from sonu.world.snapshot import WorldSnapshot
-
-_THIS_WORKSPACE = re.compile(r"\b(?:this|the current|my current|current) workspace\b")
 
 
 def _layouts(ctx: ToolContext) -> Layouts:
@@ -106,7 +103,7 @@ class SaveLayout(Tool):
             return problem
         # Found on the laptop (dry run): the model set "this workspace" for "save this setup as coding".
         # The user's words decide.
-        this_workspace = bool(_THIS_WORKSPACE.search(normalize(ctx.request_text)))
+        this_workspace = bool(THIS_WORKSPACE.search(normalize(ctx.request_text)))
         active = snapshot.active_workspace_id
         windows = [
             w
