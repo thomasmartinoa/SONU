@@ -23,10 +23,10 @@ classifiers = [
 # Keep runtime dependencies few: every one of them is supply-chain surface (see docs/threat-model.md).
 dependencies = [
     "httpx>=0.28,<1",
-    "pydantic>=2.11,<3",
+    "pydantic>=2.14.2,<3",
     "rich>=15.0.0,<16",
-    "tomlkit>=0.13,<1",
-    "typer>=0.16,<1",
+    "tomlkit>=0.15.2,<1",
+    "typer>=0.27.3,<1",
 ]
 
 [project.urls]
@@ -43,20 +43,20 @@ voice = [
     "faster-whisper>=1.2,<2",
     "kokoro-onnx>=0.6,<1",
     "onnx-asr[hub]>=0.12,<0.13",       # Parakeet, for `sonu voice bench` (phase 2)
-    "nvidia-cublas-cu12>=12.9,<13",   # CTranslate2's CUDA 12 math library (the system has CUDA 13)
-    "nvidia-cudnn-cu12>=9.27.0.42,<10",
+    "nvidia-cublas-cu12>=12.9.3.13,<13",   # CTranslate2's CUDA 12 math library (the system has CUDA 13)
+    "nvidia-cudnn-cu12>=9.28.0.42,<10",
 ]
 
 [dependency-groups]
 dev = [
-    "mypy>=1.17",
-    "pytest>=8.4",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
     "pytest-cov>=6.2",
-    "ruff>=0.16.9",
+    "ruff>=0.17.3",
 ]
 
 [build-system]
-requires = ["hatchling>=1.32.4"]
+requires = ["hatchling>=1.33.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
